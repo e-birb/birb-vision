@@ -23,16 +23,16 @@ fn main() {
     println!("Found {} MVS devices", devices.len());
 
     for device_info in devices {
-    println!("{:?}", device_info);
+        println!("{:?}", device_info);
 
-    let device = device_info
-        .into_device(true)
-        .expect("Failed to create a device handle");
+        let device = device_info
+            .into_device(true)
+            .expect("Failed to create a device handle");
 
-    if device.open(AccessMode::Exclusive, None).is_ok() {
-        println!("Device opened successfully");
-    } else {
-        println!("Failed to open device");
-    }
+        if device.open(AccessMode::Exclusive, None).is_ok() {
+            println!("Device opened successfully");
+        } else {
+            println!("Failed to open device");
+        }
     }
 }

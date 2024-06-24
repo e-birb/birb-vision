@@ -7,7 +7,7 @@ pub use log;
 
 pub mod property; use property::*;
 pub mod device;
-mod error; pub use error::MVSError;
+pub mod error; pub use error::MVSError;
 mod version; pub use version::MVSVersion;
 mod ctx; pub use ctx::{MVSContext, MVSContextCreationError};
 pub use mvs_sys;
@@ -36,7 +36,7 @@ pub mod ext {
 /// Note that creating a device handle does not open the camera. You need to call [`MVSDevice::open()`] to do that.
 ///
 /// # Thread Safety
-/// The device handle is not thread-safe and implments `!Send` and `!Sync`.
+/// The device handle is not thread-safe and is `!Send` and `!Sync`.
 pub struct MVSDevice {
     cx: MVSContext,
     /// The actual device handle

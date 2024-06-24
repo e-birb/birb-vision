@@ -30,6 +30,45 @@ macro_rules! define_sub_error {
                 $name = $value,
             )*
         }
+
+        impl $error {
+            #[inline(always)]
+            pub fn native_from_code(code: u32) -> Option<Self> {
+                match code {
+                    $(
+                        $value => Some($error::$name),
+                    )*
+                    _ => None,
+                }
+            }
+
+            #[inline(always)]
+            pub fn native_code(&self) -> u32 {
+                match self {
+                    $(
+                        $error::$name => $value,
+                    )*
+                }
+            }
+
+            #[inline(always)]
+            pub fn native_name(&self) -> &'static str {
+                match self {
+                    $(
+                        $error::$name => stringify!($name),
+                    )*
+                }
+            }
+
+            #[inline(always)]
+            pub fn mv_native_name(&self) -> &'static str {
+                match self {
+                    $(
+                        $error::$name => stringify!($value),
+                    )*
+                }
+            }
+        }
     };
 }
 
@@ -65,7 +104,7 @@ macro_rules! define_error_enum {
 
         impl $error {
             #[inline(always)]
-            fn native_from_code(code: u32) -> Option<Self> {
+            pub fn native_from_code(code: u32) -> Option<Self> {
                 match code {
                     $(
                         $value => Some($error::$name),
@@ -75,7 +114,7 @@ macro_rules! define_error_enum {
             }
 
             #[inline(always)]
-            fn native_code(&self) -> Option<u32> {
+            pub fn native_code(&self) -> Option<u32> {
                 match self {
                     $(
                         $error::$name => Some($value),
@@ -85,7 +124,7 @@ macro_rules! define_error_enum {
             }
 
             #[inline(always)]
-            fn native_name(&self) -> Option<&'static str> {
+            pub fn native_name(&self) -> Option<&'static str> {
                 match self {
                     $(
                         $error::$name => Some(concat!($prefix, stringify!($name))),
@@ -95,7 +134,7 @@ macro_rules! define_error_enum {
             }
 
             #[inline(always)]
-            fn mv_native_name(&self) -> Option<&'static str> {
+            pub fn mv_native_name(&self) -> Option<&'static str> {
                 match self {
                     $(
                         $error::$name => Some(stringify!($value)),
@@ -105,7 +144,7 @@ macro_rules! define_error_enum {
             }
 
             #[inline(always)]
-            fn is_native(&self) -> bool {
+            pub fn is_native(&self) -> bool {
                 self.native_code().is_some()
             }
         }
@@ -176,6 +215,10 @@ define_error_enum! {
         other: {
             GenICam(GenICamError),
             Usb(UsbError),
+            Upg(UpgError),
+            Alg(AlgError),
+            GigE(GigEError),
+            Exception(ExceptionError),
             Other(u32) = 0,
         }
     }
@@ -209,8 +252,12 @@ impl MVSError {
         } else {
             match self {
                 MVSError::Other(code) => *code,
-                MVSError::GenICam(genicam) => genicam.native_code().unwrap(),
-                MVSError::Usb(usb) => usb.native_code().unwrap(),
+                MVSError::GenICam(genicam) => genicam.native_code(),
+                MVSError::Usb(usb) => usb.native_code(),
+                MVSError::Upg(upg) => upg.native_code(),
+                MVSError::Alg(alg) => alg.native_code(),
+                MVSError::GigE(gige) => gige.native_code(),
+                MVSError::Exception(exception) => exception.native_code(),
                 _ => unreachable!(),
             }
         }
@@ -222,8 +269,12 @@ impl MVSError {
         } else {
             match self {
                 MVSError::Other(_) => "Other",
-                MVSError::GenICam(genicam) => genicam.native_name().unwrap(),
-                MVSError::Usb(usb) => usb.native_name().unwrap(),
+                MVSError::GenICam(genicam) => genicam.native_name(),
+                MVSError::Usb(usb) => usb.native_name(),
+                MVSError::Upg(upg) => upg.native_name(),
+                MVSError::Alg(alg) => alg.native_name(),
+                MVSError::GigE(gige) => gige.native_name(),
+                MVSError::Exception(exception) => exception.native_name(),
                 _ => unreachable!(),
             }
         }
@@ -235,8 +286,12 @@ impl MVSError {
         } else {
             match self {
                 MVSError::Other(_) => None,
-                MVSError::GenICam(genicam) => genicam.mv_native_name(),
-                MVSError::Usb(usb) => usb.mv_native_name(),
+                MVSError::GenICam(genicam) => Some(genicam.mv_native_name()),
+                MVSError::Usb(usb) => Some(usb.mv_native_name()),
+                MVSError::Upg(upg) => Some(upg.mv_native_name()),
+                MVSError::Alg(alg) => Some(alg.mv_native_name()),
+                MVSError::GigE(gige) => Some(gige.mv_native_name()),
+                MVSError::Exception(exception) => Some(exception.mv_native_name()),
                 _ => unreachable!(),
             }
         }
