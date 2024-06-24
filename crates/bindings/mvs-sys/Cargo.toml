@@ -4,3 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+libloading = { version = "0.8", optional = true }
+
+[build-dependencies]
+bindgen = "0.69.2"
+doxygen-rs = "0.4.2"
+
+[features]
+default = [ "libloading" ]
+libloading = [ "dep:libloading" ]
