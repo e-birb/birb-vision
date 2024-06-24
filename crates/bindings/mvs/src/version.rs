@@ -1,11 +1,17 @@
-
 /// Version of the MVS SDK
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MVSVersion(u32);
 
 impl std::fmt::Display for MVSVersion {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}.{}.{}-test.{}", self.main(), self.sub(), self.rev(), self.test())
+        write!(
+            f,
+            "{}.{}.{}-test.{}",
+            self.main(),
+            self.sub(),
+            self.rev(),
+            self.test()
+        )
     }
 }
 

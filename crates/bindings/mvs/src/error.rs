@@ -1,5 +1,3 @@
-
-
 macro_rules! define_sub_error {
     (
         $short:literal

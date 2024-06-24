@@ -8,8 +8,7 @@ fn main() {
     // everything for you.
     // You can call this function multiple times, or use the `MVSContext::current()`
     // method to get the context instance in the current thread.
-    let cx = MVSContext::new(None)
-    .expect("Failed to initialize a MVS context");
+    let cx = MVSContext::new(None).expect("Failed to initialize a MVS context");
 
     println!("MVS SDK version: {}", cx.sdk_version());
 
@@ -17,8 +16,8 @@ fn main() {
     // This will give us a list of device info, which we can use to create
     // a device handles.
     let devices = cx
-    .enumerate_devices([TransportLayerType::Usb])
-    .expect("Failed to enumerate devices");
+        .enumerate_devices([TransportLayerType::Usb])
+        .expect("Failed to enumerate devices");
 
     println!("Found {} MVS devices", devices.len());
 

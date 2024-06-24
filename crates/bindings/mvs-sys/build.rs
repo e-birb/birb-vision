@@ -20,8 +20,10 @@ fn main() {
         //.clang_arg("-xc++")
         .clang_args([
             format!("-I{}", sdk_target.include_dir().display()),
-            "-x".to_string(), "c++".to_string(),
-            "-target".to_string(), sdk_target.target_triple.clone(),
+            "-x".to_string(),
+            "c++".to_string(),
+            "-target".to_string(),
+            sdk_target.target_triple.clone(),
         ]);
 
     if fetaure_libloading {
@@ -53,17 +55,32 @@ fn main() {
 
 - local [MVS SDK Development Dir](file:///{development_dir_url}): `{development_dir}`
 "###,
-            development_dir_url = sdk_target.development_dir.display().to_string().replace("\\", "/").replace(" ", "%20"),
-            development_dir = sdk_target.development_dir.display().to_string().replace("\\", "/"),
+            development_dir_url = sdk_target
+                .development_dir
+                .display()
+                .to_string()
+                .replace("\\", "/")
+                .replace(" ", "%20"),
+            development_dir = sdk_target
+                .development_dir
+                .display()
+                .to_string()
+                .replace("\\", "/"),
         ),
-    ).unwrap();
+    )
+    .unwrap();
 
     let config_file = out_path.join("mvs_config.rs");
     let mut config_file = std::fs::File::create(&config_file).unwrap();
 
     // write pub const DYNAMIC_LIBRARY_NAME: &str = "MvCameraControl";
-    writeln!(config_file, "pub const DYNAMIC_LIBRARY_NAME: &str = \"{}\";\n", sdk_target.dynamic_library_name()).unwrap();
-    
+    writeln!(
+        config_file,
+        "pub const DYNAMIC_LIBRARY_NAME: &str = \"{}\";\n",
+        sdk_target.dynamic_library_name()
+    )
+    .unwrap();
+
     //std::fs::write(
     //    &errors_file,
     //    format!("define_error! {{\n{errors}}}"),
@@ -142,10 +159,7 @@ struct Cb;
 impl ParseCallbacks for Cb {
     fn process_comment(&self, comment: &str) -> Option<String> {
         let comment = if comment.contains("@~english") {
-            comment
-                .split("@~english")
-                .last().unwrap()
-                .to_string()
+            comment.split("@~english").last().unwrap().to_string()
         } else {
             'a: {
                 let lines = comment.lines().collect::<Vec<_>>();
@@ -160,8 +174,8 @@ impl ParseCallbacks for Cb {
                 comment.to_string()
             }
         }
-            .replace("[", "\\[")
-            .replace("]", "\\]");
+        .replace("[", "\\[")
+        .replace("]", "\\]");
 
         Some(doxygen_rs::transform(&comment))
     }

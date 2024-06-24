@@ -1,4 +1,3 @@
-
 use std::fmt::Debug;
 
 use crate::*;
@@ -53,7 +52,7 @@ impl Debug for DeviceInfo {
 }
 
 /// Information about the type of a device.
-/// 
+///
 /// Bytes:
 /// - From inline documentation:
 ///   * 7 - 0 bit: Reserved
@@ -74,9 +73,18 @@ impl Debug for DeviceTypeInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DeviceTypeInfo")
             .field("bits", &format_args!("{:#010x}", self.0))
-            .field("product_subcategory", &format_args!("{:#04x}", self.product_subcategory()))
-            .field("product_category", &format_args!("{:#04x}", self.product_category()))
-            .field("product_line", &format_args!("{:#04x}", self.product_line()))
+            .field(
+                "product_subcategory",
+                &format_args!("{:#04x}", self.product_subcategory()),
+            )
+            .field(
+                "product_category",
+                &format_args!("{:#04x}", self.product_category()),
+            )
+            .field(
+                "product_line",
+                &format_args!("{:#04x}", self.product_line()),
+            )
             .finish()
     }
 }

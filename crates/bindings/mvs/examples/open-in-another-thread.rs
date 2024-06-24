@@ -8,9 +8,7 @@ fn main() {
 
     std::thread::spawn(move || {
         for device_info in devices {
-            let _device = device_info
-                .into_device(true)
-                .unwrap();
+            let _device = device_info.into_device(true).unwrap();
         }
     });
 }

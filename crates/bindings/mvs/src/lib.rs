@@ -5,28 +5,28 @@ use std::{ffi::c_void, path::Path};
 use device::{AccessMode, DeviceInfo};
 pub use log;
 
-pub mod property; use property::*;
+pub mod property;
+use property::*;
 pub mod device;
-pub mod error; pub use error::MVSError;
-mod version; pub use version::MVSVersion;
-mod ctx; pub use ctx::{MVSContext, MVSContextCreationError};
+pub mod error;
+pub use error::MVSError;
+mod version;
+pub use version::MVSVersion;
+mod ctx;
+pub use ctx::{MVSContext, MVSContextCreationError};
 pub use mvs_sys;
 
 pub mod prelude {
     pub use crate::{
-        MVSContext,
-        MVSDevice,
-        device::{
-            TransportLayerType,
-            AccessMode,
-        },
+        device::{AccessMode, TransportLayerType},
+        MVSContext, MVSDevice,
     };
 }
 
 pub mod ext {
+    pub use log;
     pub use mvs_sys;
     pub use semver;
-    pub use log;
 }
 
 /// A Device Handle.
@@ -54,10 +54,7 @@ impl MVSDevice {
     ///
     /// # Notes
     /// The SDK logs messages to a file. The path can be specified with [`MVSContext::set_sdk_log_path()`].
-    pub fn new(
-        device_info: DeviceInfo,
-        log: bool,
-    ) -> Result<Self, MVSError> {
+    pub fn new(device_info: DeviceInfo, log: bool) -> Result<Self, MVSError> {
         let mut handle = std::ptr::null_mut();
         let cx = device_info.cx.clone();
 
@@ -73,12 +70,13 @@ impl MVSDevice {
             ))?;
         }
 
-        assert_ne!(handle, std::ptr::null_mut(), "MV_CC_CreateHandle succeeded but returned a null handle");
-
-        Ok(Self {
-            cx,
+        assert_ne!(
             handle,
-        })
+            std::ptr::null_mut(),
+            "MV_CC_CreateHandle succeeded but returned a null handle"
+        );
+
+        Ok(Self { cx, handle })
     }
 
     pub fn cx(&self) -> &MVSContext {
@@ -103,11 +101,7 @@ impl MVSDevice {
     /// > You can find the specific device and connect according to inputted device parameters.  
     /// > When calling the interface, the parameters nAccessMode and nSwitchoverKey are optional, and the device access mode is exclusive by default. Currently the device does not support the following preemption modes: MV_ACCESS_ExclusiveWithSwitch, MV_ACCESS_ControlWithSwitch, MV_ACCESS_ControlSwitchEnableWithKey.  
     /// For USB3Vision device, the parameters nAccessMode and nSwitchoverKey are invalid.
-    pub fn open(
-        &self,
-        mode: AccessMode,
-        switchover_key: Option<u16>,
-    ) -> Result<(), MVSError> {
+    pub fn open(&self, mode: AccessMode, switchover_key: Option<u16>) -> Result<(), MVSError> {
         let switchover_key = switchover_key.unwrap_or(0);
         mvs_try!(self.cx => MV_CC_OpenDevice(self.handle, mode as u32, switchover_key))
     }
@@ -264,6 +258,7 @@ impl Drop for MVSDevice {
         // we don't know if the camera is open or closed at this point, so we ignore the result
         let _ = self.close();
 
-        mvs_try!(self.cx => MV_CC_DestroyHandle(self.handle)).expect("Failed to destroy camera handle")
+        mvs_try!(self.cx => MV_CC_DestroyHandle(self.handle))
+            .expect("Failed to destroy camera handle")
     }
 }

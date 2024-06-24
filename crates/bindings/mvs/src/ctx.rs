@@ -1,8 +1,12 @@
-
 use crate::*;
 use mvs_sys::ext::libloading;
 
-use std::{cell::RefCell, error::Error, fmt::{Debug, Display}, sync::{Arc, Mutex}};
+use std::{
+    cell::RefCell,
+    error::Error,
+    fmt::{Debug, Display},
+    sync::{Arc, Mutex},
+};
 
 use self::device::{AccessMode, TransportLayerType};
 
@@ -14,7 +18,7 @@ use self::device::{AccessMode, TransportLayerType};
 /// # let ctx = MVSContext::new(None).unwrap();
 /// # let mut list = unsafe { std::mem::zeroed() };
 /// mvs_try!(ctx => MV_CC_EnumDevices(
-///     mvs_sys::MV_USB_DEVICE, 
+///     mvs_sys::MV_USB_DEVICE,
 ///     &mut list,
 /// )).unwrap();
 /// ```
@@ -46,7 +50,7 @@ macro_rules! mvs_try {
 /// ```
 /// # use mvs::{ MVSContext, mvs_try };
 /// let ctx = MVSContext::new(None).unwrap();
-/// 
+///
 /// println!("MVS SDK version: {}", ctx.sdk_version());
 /// ```
 ///
@@ -54,7 +58,7 @@ macro_rules! mvs_try {
 /// - The context is reference-counted, so you can clone it and pass it around as needed.
 /// - [`MV_CC_Initialize`] and [`MV_CC_Finalize`] are called when the first context is created and when the last context is dropped,
 ///   you SHALL NOT CALL these functions MANUALLY, the context will take care of it.
-/// 
+///
 /// [`MV_CC_Initialize`]: mvs_sys::MVS::MV_CC_Initialize
 /// [`MV_CC_Finalize`]: mvs_sys::MVS::MV_CC_Finalize
 #[derive(Clone)]
@@ -83,17 +87,19 @@ impl MVSContext {
     /// let ctx = MVSContext::new(None).unwrap();
     /// let ctx = MVSContext::new(Some(">=4.0")).unwrap();
     /// ```
-    /// 
+    ///
     /// # Arguments
     /// * `additional_version_requirements`: optional additional version requirements for the MVS SDK in semver format.
-    /// 
+    ///
     /// # Panics
     /// This function will panic if the required version is not a valid semver string.
     pub fn new(
         additional_version_requirements: Option<&'static str>,
     ) -> Result<Self, MVSContextCreationError> {
         let ctx = {
-            let lock = CURRENT_CONTEXT_INNER.lock().expect("Failed to lock the CURRENT_CONTEXT_INNER mutex");
+            let lock = CURRENT_CONTEXT_INNER
+                .lock()
+                .expect("Failed to lock the CURRENT_CONTEXT_INNER mutex");
             let current_inner = lock.borrow().upgrade();
             if let Some(inner) = current_inner {
                 Self { inner }
@@ -113,10 +119,13 @@ impl MVSContext {
 
         let required = Self::REQUIRED_SDK_VERSION.to_string() + &additional;
 
-        let required = semver::VersionReq::parse(&required).expect("Invalid version requirement passed to MVSContext::new");
+        let required = semver::VersionReq::parse(&required)
+            .expect("Invalid version requirement passed to MVSContext::new");
 
         if !required.matches(&version.as_semver()) {
-            log::error!("Incompatible MVS SDK version. Required by: {required} but found {version}");
+            log::error!(
+                "Incompatible MVS SDK version. Required by: {required} but found {version}"
+            );
             return Err(MVSContextCreationError::IncompatibleVersion {
                 required,
                 found: version.as_semver(),
@@ -142,11 +151,11 @@ impl MVSContext {
     /// # use mvs::MVSContext;
     /// // Create a new context and keep it alive
     /// let _ctx = MVSContext::new(None).unwrap();
-    /// 
+    ///
     /// // anywhere else in the code, we can get the current context:
     /// let ctx = MVSContext::current().unwrap();
     /// ```
-    /// 
+    ///
     /// This other example will fail because there is no current context:
     /// ```should_panic no_run
     /// # use mvs::MVSContext;
@@ -161,24 +170,24 @@ impl MVSContext {
     /// // return None if no suitable version is found.
     /// log::trace!("Trying to load the MVS SDK...");
     /// let mvs = MVSContext::new(Some("~4.3")).ok();
-    /// 
+    ///
     /// if mvs.is_some() {
     ///     log::info!("MVS SDK loaded successfully");
     /// } else {
     ///     log::warn!("MVS SDK not found, some features will be disabled");
     /// }
-    /// 
+    ///
     /// // ---
-    /// 
+    ///
     /// // Later in the code we don't want to try to load the MVS SDK again,
     /// // we just want to use it if it is available and continue if it is not:
-    /// 
+    ///
     /// let mut devices_count = 0;
-    /// 
+    ///
     /// if let Some(cx) = MVSContext::current() {
     ///    devices_count += cx.enumerate_all_devices().unwrap().len();
     /// }
-    /// 
+    ///
     /// log::info!("Found {} devices", devices_count);
     /// ```
     pub fn current() -> Option<Self> {
@@ -214,10 +223,7 @@ impl MVSContext {
 
         log::info!("Setting MVS SDK log path to {:?}", path.as_ref());
 
-        let path = path
-            .as_ref()
-            .to_str()
-            .ok_or("Invalid path")?;
+        let path = path.as_ref().to_str().ok_or("Invalid path")?;
         let c_path = std::ffi::CString::new(path)?;
 
         mvs_try!(self => MV_CC_SetSDKLogPath(c_path.as_ptr()))?;
@@ -250,11 +256,11 @@ impl MVSContext {
     /*/// Call an FFI function and check the result.
     ///
     /// This function should be used to call FFI functions that return an error code.
-    /// 
+    ///
     /// # Warning!
     /// **Inside the closure, you should only perform a single call to a ONE ffi function**, it is not adviced to perform other operations inside the closure
     /// because this method is designed to just provide a convienient way to call FFI functions and check the result. Performing other operations inside the closure
-    /// **eludes the purpose of this method**.  
+    /// **eludes the purpose of this method**.
     /// Prefer [`mvs_try`](crate::mvs_try) and only use this method to get better editor suggestions while **prototypeing**.
     ///
     /// # Example
@@ -292,7 +298,8 @@ impl MVSContext {
         transport_layers: impl IntoIterator<Item = TransportLayerType>,
     ) -> Result<Vec<DeviceInfo>, MVSError> {
         // TODO reference the issue about multithreading
-        let _lock = self.inner
+        let _lock = self
+            .inner
             .enumerate_devices_lock
             .lock()
             .expect("Failed to lock the enumerate_devices_lock mutex");
@@ -312,12 +319,13 @@ impl MVSContext {
             &mut list,
         ))?;
 
-        Ok(
-            (0..list.nDeviceNum)
-                .map(|i| unsafe { *list.pDeviceInfo[i as usize] })
-                .map(|info| DeviceInfo { cx: self.clone(), info })
-                .collect(),
-        )
+        Ok((0..list.nDeviceNum)
+            .map(|i| unsafe { *list.pDeviceInfo[i as usize] })
+            .map(|info| DeviceInfo {
+                cx: self.clone(),
+                info,
+            })
+            .collect())
     }
 
     /// Enumerate all devices connected to the system.
@@ -330,10 +338,8 @@ impl MVSContext {
     /// Check if a device is accessible.
     pub fn is_accessible(&self, info: &DeviceInfo, mode: AccessMode) -> bool {
         unsafe {
-            self.ffi().MV_CC_IsDeviceAccessible(
-                &info.info as *const _ as *mut _,
-                mode as _,
-            )
+            self.ffi()
+                .MV_CC_IsDeviceAccessible(&info.info as *const _ as *mut _, mode as _)
         }
     }
 }
@@ -346,10 +352,14 @@ struct MVSContextInner {
 impl MVSContextInner {
     fn load() -> Result<Arc<Self>, MVSContextCreationError> {
         let lib_result = unsafe { mvs_sys::MVS::load() };
-        log::debug!("loaded MVS SDK library: {:?}", lib_result.as_ref().map(|_| ()));
+        log::debug!(
+            "loaded MVS SDK library: {:?}",
+            lib_result.as_ref().map(|_| ())
+        );
         let lib = lib_result.map_err(MVSContextCreationError::Loading)?;
 
-        MVSError::result_from_code(unsafe { lib.MV_CC_Initialize() }).map_err(MVSContextCreationError::InitializationFailed)?;
+        MVSError::result_from_code(unsafe { lib.MV_CC_Initialize() })
+            .map_err(MVSContextCreationError::InitializationFailed)?;
 
         Ok(Arc::new(Self {
             lib,
@@ -360,15 +370,18 @@ impl MVSContextInner {
 
 impl Drop for MVSContextInner {
     fn drop(&mut self) {
-        log::debug!("dropping MVSContextInner (Finalizing MVS SDK) in thread {:?}", std::thread::current().id());
+        log::debug!(
+            "dropping MVSContextInner (Finalizing MVS SDK) in thread {:?}",
+            std::thread::current().id()
+        );
 
-        MVSError::result_from_code(unsafe {
-            self.lib.MV_CC_Finalize()
-        }).expect("Failed to finalize MVS SDK");
+        MVSError::result_from_code(unsafe { self.lib.MV_CC_Finalize() })
+            .expect("Failed to finalize MVS SDK");
     }
 }
 
-static CURRENT_CONTEXT_INNER: Mutex<RefCell<std::sync::Weak<MVSContextInner>>> = Mutex::new(RefCell::new(std::sync::Weak::new()));
+static CURRENT_CONTEXT_INNER: Mutex<RefCell<std::sync::Weak<MVSContextInner>>> =
+    Mutex::new(RefCell::new(std::sync::Weak::new()));
 
 pub enum MVSContextCreationError {
     Loading(libloading::Error),
@@ -396,7 +409,10 @@ impl Debug for MVSContextCreationError {
                 .field("required", &required.to_string())
                 .field("found", &found.to_string())
                 .field("required_by_mvs_crate", required_by_mvs_crate)
-                .field("additional_version_requirement", additional_version_requirement)
+                .field(
+                    "additional_version_requirement",
+                    additional_version_requirement,
+                )
                 .finish(),
         }
     }
@@ -412,7 +428,10 @@ impl Display for MVSContextCreationError {
                 found,
                 required_by_mvs_crate: _,
                 additional_version_requirements: _,
-            } => write!(f, "Incompatible MVS library version. Required by: {required} but found {found}"),
+            } => write!(
+                f,
+                "Incompatible MVS library version. Required by: {required} but found {found}"
+            ),
         }
     }
 }

@@ -2,9 +2,6 @@ use std::fmt::Debug;
 
 use mvs_sys::{MVCC_ENUMENTRY, MVCC_STRINGVALUE, MV_MAX_XML_SYMBOLIC_NUM};
 
-
-
-
 pub trait PropId {
     fn property_name(&self) -> &str;
 }
@@ -193,7 +190,6 @@ impl XmlAccessMode {
         }
     }
 }
-
 
 #[derive(Debug, Clone, Copy)]
 #[repr(i32)]
