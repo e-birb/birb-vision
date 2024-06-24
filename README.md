@@ -12,4 +12,5 @@
 - [`birb-vision-bundle`](./crates/birb-vision-bundle/): wraps all the interfaces into a single crate
 - [`birb-vision-explorer`](./crates/birb-vision-explorer/): ...
 - [`bindings/`](./crates/bindings/): bindings for some camera interfaces
-  - [`mvs-sys`](./crates/bindings/mvs-sys): sys crate for the MVS cameras
+  - [`mvs`](./crates/bindings/mvs): bindings for the MVS SDK
+  - [`mvs-sys`](./crates/bindings/mvs-sys): sys crate for the MVS SDK
