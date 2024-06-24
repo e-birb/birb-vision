@@ -1,0 +1,10 @@
+[package]
+name = "birb-vision-bundle"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+birb-vision = { version = "0.1.0", path = "../birb-vision" }
+birb-vision-icube = { version = "0.1.0", path = "../birb-vision-icube" }
+birb-vision-mvs = { version = "0.1.0", path = "../birb-vision-mvs" }
+birb-vision-nokhwa = { version = "0.1.0", path = "../birb-vision-nokhwa" }
