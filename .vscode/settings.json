@@ -8,11 +8,13 @@
         "genicam",
         "gige",
         "Hasher",
+        "libloading",
         "NETER",
         "NODATA",
         "NOENOUGH",
         "NOOUTBUF",
         "OPENFILE",
+        "println",
         "UNKNOW"
     ]
 }

@@ -12,8 +12,6 @@ MVSError::result_from_code(mvs.MV_CC_Initialize()).expect("Failed to initialize 
 
 // ...
 
-println!("Found {} devices", device_list.nDeviceNum);
-
 MVSError::result_from_code(mvs.MV_CC_Finalize()).expect("Failed to finalize camera sdk");
 ```
 
