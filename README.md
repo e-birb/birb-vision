@@ -1,6 +1,8 @@
 # birb-vision
  Birb Vision
 
+## Crates
+
 - [`birb-vision`](./crates/birb-vision/): the core crate
 - **interfaces**: some provided interfaces
   - [`birb-vision-fake`](./crates/birb-vision-icube/): fake cameras for testing
@@ -9,3 +11,5 @@
   - [`birb-vision-nokhwa`](./crates/birb-vision-nokhwa/): the interface for the `nokhwa` crate
 - [`birb-vision-bundle`](./crates/birb-vision-bundle/): wraps all the interfaces into a single crate
 - [`birb-vision-explorer`](./crates/birb-vision-explorer/): ...
+- [`bindings/`](./crates/bindings/): bindings for some camera interfaces
+  - [`mvs-sys`](./crates/bindings/mvs-sys): sys crate for the MVS cameras
