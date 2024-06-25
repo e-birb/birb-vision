@@ -1,14 +1,62 @@
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
+use std::borrow::Cow;
+
+use birb_vision::{image::DynamicImage, AsyncTask, CameraDevice, DeviceError};
+use nokhwa::{pixel_format::RgbFormat, Buffer, FormatDecoder, NokhwaError};
+
+pub use birb_vision;
+pub use image;
+
+
+pub struct NokhwaCamera {
+    format_decoder: Box<dyn Fn(Buffer) -> Result<DynamicImage, NokhwaError>>,
+    pub camera: nokhwa::Camera,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+impl NokhwaCamera {
+    pub fn new<Decoder: FormatDecoder>(camera: nokhwa::Camera) -> Self
+    where
+        DynamicImage: From<image::ImageBuffer<<Decoder as FormatDecoder>::Output, Vec<u8>>>,
+    {
+        Self {
+            format_decoder: Box::new(|buffer| {
+                buffer.decode_image::<Decoder>().map(|img| img.into())
+            }),
+            camera,
+        }
+    }
+}
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
+impl CameraDevice for NokhwaCamera {
+    fn open(&mut self) -> AsyncTask<birb_vision::DeviceResult<()>> {
+        Box::pin(async move {
+            Ok(())
+        })
+    }
+
+    fn close(&mut self) -> AsyncTask<birb_vision::DeviceResult<()>> {
+        Box::pin(async move {
+            Err(DeviceError::Unsupported)
+        })
+    }
+
+    fn start_video_stream(&mut self) -> AsyncTask<birb_vision::DeviceResult<()>> {
+        Box::pin(async move {
+            self.camera.open_stream().map_err(|e| DeviceError::other(e))
+        })
+    }
+
+    fn stop_video_stream(&mut self) -> AsyncTask<birb_vision::DeviceResult<()>> {
+        Box::pin(async move {
+            self.camera.stop_stream().map_err(|e| DeviceError::other(e))
+        })
+    }
+
+    fn receive_frame(&mut self) -> AsyncTask<birb_vision::DeviceResult<std::borrow::Cow<'_, DynamicImage>>> {
+        Box::pin(async move {
+            let frame = self.camera.frame().map_err(|e| DeviceError::other(e))?;
+            //let decoded = frame.decode_image::<RgbFormat>().map_err(|e| DeviceError::other(e))?;
+            let decoded = (self.format_decoder)(frame).map_err(|e| DeviceError::other(e))?;
+            Ok(Cow::Owned(decoded))
+        })
     }
 }
