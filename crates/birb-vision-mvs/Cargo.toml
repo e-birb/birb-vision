@@ -5,3 +5,4 @@ edition = "2021"
 
 [dependencies]
 birb-vision = { version = "0.1.0", path = "../birb-vision" }
+mvs = { version = "0.1.0", path = "../bindings/mvs" }

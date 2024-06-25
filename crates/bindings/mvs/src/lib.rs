@@ -1,6 +1,6 @@
 #![doc = include_str!("../README.md")]
 
-use std::{ffi::c_void, path::Path};
+use std::{ffi::c_void, path::Path, time::Duration};
 
 use device::{AccessMode, DeviceInfo};
 pub use log;
@@ -249,6 +249,27 @@ impl MVSDevice {
         let mut interface_type = 0;
         mvs_try!(self.cx => MV_XML_GetNodeInterfaceType(self.handle, prop_id_to_c_string(key).as_ptr(), &mut interface_type))?;
         Ok(XmlInterfaceType::from_i32(interface_type))
+    }
+
+    // TOOD from here on it is a mess, to tidy up
+
+    pub fn start_grabbing(&self) -> Result<(), MVSError> {
+        mvs_try!(self.cx => MV_CC_StartGrabbing(self.handle))
+    }
+
+    pub fn stop_grabbing(&self) -> Result<(), MVSError> {
+        mvs_try!(self.cx => MV_CC_StopGrabbing(self.handle))
+    }
+
+    pub fn get_one_frame_timeout(&self, data: &mut [u8], timeout: Duration) -> Result<(), MVSError> {
+        let mut info = unsafe { std::mem::zeroed() };
+        mvs_try!(self.cx => MV_CC_GetOneFrameTimeout(
+            self.handle,
+            data.as_mut_ptr() as *mut _,
+            data.len() as u32,
+            &mut info,
+            timeout.as_millis() as u32,
+        ))
     }
 }
 
