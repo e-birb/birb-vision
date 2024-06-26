@@ -17,6 +17,7 @@
         "NOOUTBUF",
         "OPENFILE",
         "println",
-        "UNKNOW"
+        "UNKNOW",
+        "viuer"
     ]
 }

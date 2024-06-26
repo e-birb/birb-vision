@@ -6,9 +6,13 @@ edition = "2021"
 [dependencies]
 birb-vision = { version = "0.1.0", path = "../birb-vision" }
 image = "0.24.1"
+log = "0.4.21"
+log-once = "0.4.1"
 nokhwa = "0.10.4"
 
 [dev-dependencies]
+clap = { version = "4.5.7", features = ["derive"] }
+env_logger = "0.11.3"
 nokhwa = { version = "0.10.4", features = ["input-native"]}
 pollster = "0.3.0"
 viuer = "0.7.1"

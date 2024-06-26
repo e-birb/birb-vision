@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 
 use birb_vision::{image::DynamicImage, AsyncTask, CameraDevice, DeviceError, Frame};
+use log_once::{error_once, warn_once};
 use nokhwa::{Buffer, FormatDecoder, NokhwaError};
 
 pub use birb_vision;
@@ -29,12 +30,14 @@ impl NokhwaCamera {
 impl CameraDevice for NokhwaCamera {
     fn open(&mut self) -> AsyncTask<birb_vision::DeviceResult<()>> {
         AsyncTask::new(async move {
+            warn_once!("nokhwa cameras are opened automatically when created, calling open is a no-op.");
             Ok(())
         })
     }
 
     fn close(&mut self) -> AsyncTask<birb_vision::DeviceResult<()>> {
         AsyncTask::new(async move {
+            error_once!("nokhwa cameras are closed automatically ONLY when dropped, calling close is a no-op.");
             Err(DeviceError::Unsupported)
         })
     }
