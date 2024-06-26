@@ -16,6 +16,7 @@ mod ctx;
 pub use ctx::{MVSContext, MVSContextCreationError};
 pub use mvs_sys;
 
+#[cfg(feature = "birb-vision")]
 mod birb_vision_impl;
 
 pub mod prelude {

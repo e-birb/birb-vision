@@ -5,6 +5,11 @@ The goal of this wrapper is to abstract the usage of the API provide a high leve
 
 This crates specifically targets MVS cameras, if you need a more generic support for [GenICam](https://www.emva.org/standards-technology/genicam/) devices, [`cameleon`](https://crates.io/crates/cameleon) may be worth checking out.
 
+## Features
+
+Crate features:
+- `birb-vision` (default): implement `birb-vision` traits
+
 ## Usage
 
 The usage of this crate begins with the creation of a [`MVSContext`], which is responsible for loading and initializing the MVS library.
