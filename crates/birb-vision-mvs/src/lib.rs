@@ -16,6 +16,8 @@ mod ctx;
 pub use ctx::{MVSContext, MVSContextCreationError};
 pub use mvs_sys;
 
+mod birb_vision_impl;
+
 pub mod prelude {
     pub use crate::{
         device::{AccessMode, TransportLayerType},

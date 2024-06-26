@@ -1,13 +1,13 @@
-use std::{any::Any, sync::Arc};
+use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 pub struct Node {
     //Group(NodeList),
     //Text(String),
-    friendly_name: String,
-    id: Option<PropertyId>,
-    help: Option<String>,
-    variant: NodeVariant,
+    pub friendly_name: String,
+    pub id: Option<PropertyId>,
+    pub help: Option<String>,
+    pub variant: NodeVariant,
 }
 
 #[derive(Debug, Clone)]

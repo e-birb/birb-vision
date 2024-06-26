@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
-use birb_vision::{image::DynamicImage, AsyncTask, CameraDevice, DeviceError};
-use nokhwa::{pixel_format::RgbFormat, Buffer, FormatDecoder, NokhwaError};
+use birb_vision::{image::DynamicImage, AsyncTask, CameraDevice, DeviceError, Frame};
+use nokhwa::{Buffer, FormatDecoder, NokhwaError};
 
 pub use birb_vision;
 pub use image;
@@ -28,35 +28,35 @@ impl NokhwaCamera {
 
 impl CameraDevice for NokhwaCamera {
     fn open(&mut self) -> AsyncTask<birb_vision::DeviceResult<()>> {
-        Box::pin(async move {
+        AsyncTask::new(async move {
             Ok(())
         })
     }
 
     fn close(&mut self) -> AsyncTask<birb_vision::DeviceResult<()>> {
-        Box::pin(async move {
+        AsyncTask::new(async move {
             Err(DeviceError::Unsupported)
         })
     }
 
     fn start_video_stream(&mut self) -> AsyncTask<birb_vision::DeviceResult<()>> {
-        Box::pin(async move {
+        AsyncTask::new(async move {
             self.camera.open_stream().map_err(|e| DeviceError::other(e))
         })
     }
 
     fn stop_video_stream(&mut self) -> AsyncTask<birb_vision::DeviceResult<()>> {
-        Box::pin(async move {
+        AsyncTask::new(async move {
             self.camera.stop_stream().map_err(|e| DeviceError::other(e))
         })
     }
 
-    fn receive_frame(&mut self) -> AsyncTask<birb_vision::DeviceResult<std::borrow::Cow<'_, DynamicImage>>> {
-        Box::pin(async move {
+    fn receive_frame(&mut self) -> AsyncTask<birb_vision::DeviceResult<std::borrow::Cow<'_, Frame>>> {
+        AsyncTask::new(async move {
             let frame = self.camera.frame().map_err(|e| DeviceError::other(e))?;
             //let decoded = frame.decode_image::<RgbFormat>().map_err(|e| DeviceError::other(e))?;
             let decoded = (self.format_decoder)(frame).map_err(|e| DeviceError::other(e))?;
-            Ok(Cow::Owned(decoded))
+            Ok(Cow::Owned(Frame::Image(decoded)))
         })
     }
 }

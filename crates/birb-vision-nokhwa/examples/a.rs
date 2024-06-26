@@ -1,5 +1,4 @@
 use birb_vision_nokhwa::NokhwaCamera;
-use image::DynamicImage;
 use nokhwa::{pixel_format::RgbFormat, utils::{CameraIndex, RequestedFormat, RequestedFormatType}, Camera as NCamera};
 use birb_vision::CameraDevice;
 
@@ -39,7 +38,7 @@ async fn async_main() {
             height: None,
             ..Default::default()
         };
-        viuer::print(&frame, &conf).unwrap();
+        viuer::print(&frame.as_image().unwrap(), &conf).unwrap();
     }
 
     camera.close().await.unwrap_or_else(|e| {
