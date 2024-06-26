@@ -5,8 +5,12 @@ use std::{borrow::Cow, future::Future, ops::{Deref, DerefMut}, rc::Rc};
 pub use image;
 
 mod frame;
+//mod device_properties;
+//mod pixel_format;
 
 pub use frame::*;
+//pub use device_properties::*;
+//pub use pixel_format::*;
 
 //pub type AsyncTask<'a, T = ()> = std::pin::Pin<Box<dyn Future<Output = T> + 'a>>;
 pub struct AsyncTask<'a, T = ()> {
@@ -51,12 +55,6 @@ impl<'a, T> Future for AsyncTask<'a, T> {
         Future::poll(self.get_mut().inner.as_mut(), cx)
     }
 }
-
-mod device_properties;
-mod pixel_format;
-
-pub use device_properties::*;
-pub use pixel_format::*;
 
 pub trait CameraDevice {
     fn open(&mut self) -> AsyncTask<DeviceResult<()>>;
