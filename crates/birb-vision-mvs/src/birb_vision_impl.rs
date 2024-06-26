@@ -36,10 +36,12 @@ impl CameraDevice for MVSDevice {
 
     fn receive_frame(&mut self) -> AsyncTask<DeviceResult<std::borrow::Cow<'_, Frame>>> {
         AsyncTask::new(async move {
+            // TODO HANDLE DIFFERENT PIXEL FORMATS
+
             let w = self.get_int_value("Width").map_err(|e| DeviceError::other(e))?.current();
             let h = self.get_int_value("Height").map_err(|e| DeviceError::other(e))?.current();
-
-            // TODO CHECK PIXEL FORMAT
+            let pitch = self.get_int_value("LinePitch").map_err(|e| DeviceError::other(e))?.current();
+            assert_eq!(pitch, w, "LinePitch != Width");
 
             let mut buf = ImageBuffer::<Luma<u8>, Vec<u8>>::new(w as u32, h as u32).into_raw();
 
