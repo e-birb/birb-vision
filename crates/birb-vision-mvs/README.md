@@ -14,7 +14,7 @@ From a context, you can enumerate, access and open devices ([`MVSDevice`]).
 ## Example
 
 ```rust no_run
-use mvs::prelude::*;
+use birb_vision_mvs::prelude::*;
 
 // Initialize a context.
 // You can call this function multiple times, but `MVSContext::current()`
@@ -56,7 +56,7 @@ See [`MVSContext::current`](crate::MVSContext::current) for a better context han
 [`MVSContext`] is thread-safe, but [`MVSDevice`] is not!
 Devices cannot be shared or sent between threads and this is enforced at compile time so you don't have to worry. You can just send the [`DeviceInfo`] and create a new device handle in the other thread:
 ```rust no_run
-use mvs::prelude::*;
+use birb_vision_mvs::prelude::*;
 
 let devices = MVSContext::new(None)
     .expect("Failed to initialize a MVS context")

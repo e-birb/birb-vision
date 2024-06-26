@@ -1,9 +1,10 @@
 [workspace]
 resolver = "2"
-members = [ "crates/bindings/mvs",
+members = [
     "crates/bindings/mvs-sys",
     "crates/birb-vision",
-    "crates/birb-vision-bundle", "crates/birb-vision-explorer",
+    "crates/birb-vision-bundle",
+    "crates/birb-vision-explorer",
     "crates/birb-vision-fake",
     "crates/birb-vision-icube",
     "crates/birb-vision-mvs",

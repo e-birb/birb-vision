@@ -13,8 +13,8 @@ use self::device::{AccessMode, TransportLayerType};
 /// A macro to simplify calling FFI functions and checking the result.
 ///
 /// # Example
-/// ```
-/// # use mvs::*;
+/// ```no_run
+/// # use birb_vision_mvs::*;
 /// # let ctx = MVSContext::new(None).unwrap();
 /// # let mut list = unsafe { std::mem::zeroed() };
 /// mvs_try!(ctx => MV_CC_EnumDevices(
@@ -48,7 +48,7 @@ macro_rules! mvs_try {
 ///
 /// # Example
 /// ```
-/// # use mvs::{ MVSContext, mvs_try };
+/// # use birb_vision_mvs::{ MVSContext, mvs_try };
 /// let ctx = MVSContext::new(None).unwrap();
 ///
 /// println!("MVS SDK version: {}", ctx.sdk_version());
@@ -83,7 +83,7 @@ impl MVSContext {
     ///
     /// # Example
     /// ```
-    /// # use mvs::MVSContext;
+    /// # use birb_vision_mvs::MVSContext;
     /// let ctx = MVSContext::new(None).unwrap();
     /// let ctx = MVSContext::new(Some(">=4.0")).unwrap();
     /// ```
@@ -148,7 +148,7 @@ impl MVSContext {
     /// # Example
     /// Correct usage:
     /// ```no_run
-    /// # use mvs::MVSContext;
+    /// # use birb_vision_mvs::MVSContext;
     /// // Create a new context and keep it alive
     /// let _ctx = MVSContext::new(None).unwrap();
     ///
@@ -158,13 +158,13 @@ impl MVSContext {
     ///
     /// This other example will fail because there is no current context:
     /// ```should_panic no_run
-    /// # use mvs::MVSContext;
+    /// # use birb_vision_mvs::MVSContext;
     /// let _ = MVSContext::current().expect("No current context");
     /// ```
     ///
     /// A typical usage example might be the following:
     /// ```no_run
-    /// # use mvs::prelude::*;
+    /// # use birb_vision_mvs::prelude::*;
     /// // Startup section of your program:
     /// // we try to load a specific version of the MVS SDK, this will
     /// // return None if no suitable version is found.
@@ -203,7 +203,7 @@ impl MVSContext {
     ///
     /// # Example
     /// ```no_run
-    /// # use mvs::prelude::*;
+    /// # use birb_vision_mvs::prelude::*;
     /// # let cx = MVSContext::new(None).unwrap();
     /// println!("MVS SDK version: {}", cx.sdk_version());
     /// ```
@@ -265,13 +265,13 @@ impl MVSContext {
     ///
     /// # Example
     /// ```
-    /// # use mvs::MVSContext;
-    /// # use mvs::ffi::MVSError;
+    /// # use birb_vision_mvs::MVSContext;
+    /// # use birb_vision_mvs::ffi::MVSError;
     /// # let ctx = MVSContext::new(None).unwrap();
     /// # let mut list = unsafe { std::mem::zeroed() };
     /// unsafe {
     ///     ctx.try_ffi(|lib| unsafe { lib.MV_CC_EnumDevices(
-    ///         mvs::ffi::MV_USB_DEVICE,
+    ///         birb_vision_mvs::ffi::MV_USB_DEVICE,
     ///         &mut list,
     ///     )})
     /// }.unwrap();
@@ -284,7 +284,7 @@ impl MVSContext {
     ///
     /// # Examples
     /// ```no_run
-    /// # use mvs::{ MVSContext, device::TransportLayerType };
+    /// # use birb_vision_mvs::{ MVSContext, device::TransportLayerType };
     /// # let ctx = MVSContext::new(None).unwrap();
     /// let devices = ctx.enumerate_devices(TransportLayerType::ALL).unwrap();
     /// let devices = ctx.enumerate_devices([TransportLayerType::Usb]).unwrap();

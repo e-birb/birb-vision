@@ -4,5 +4,11 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+log = "0.4.21"
+mvs-sys = { version = "0.1.0", path = "../bindings/mvs-sys" }
+quick-xml = "0.33.0"
+semver = "1.0.23"
 birb-vision = { version = "0.1.0", path = "../birb-vision" }
-mvs = { version = "0.1.0", path = "../bindings/mvs" }
+
+[dev-dependencies]
+env_logger = "0.11.3"

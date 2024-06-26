@@ -1,4 +1,4 @@
-use mvs::prelude::*;
+use birb_vision_mvs::prelude::*;
 
 fn main() {
     env_logger::init();

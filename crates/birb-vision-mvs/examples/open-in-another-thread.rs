@@ -1,4 +1,4 @@
-use mvs::prelude::*;
+use birb_vision_mvs::prelude::*;
 
 fn main() {
     let devices = MVSContext::new(None)
