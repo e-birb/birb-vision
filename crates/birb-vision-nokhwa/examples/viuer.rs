@@ -24,9 +24,14 @@ async fn async_main() {
 
     let mut last_frame = std::time::Instant::now();
 
+    println!("Available cameras:");
+    for camera in nokhwa::query(nokhwa::native_api_backend().unwrap()).unwrap() {
+        println!("  - {} - {}", camera.human_name(), camera.description());
+    }
+
     let camera = NCamera::new(
         CameraIndex::Index(0),
-        RequestedFormat::new::<RgbFormat>(RequestedFormatType::AbsoluteHighestFrameRate),
+        RequestedFormat::new::<RgbFormat>(RequestedFormatType::None),
     ).unwrap();
 
     let mut camera = NokhwaCamera::new::<RgbFormat>(camera);
@@ -57,9 +62,9 @@ async fn async_main() {
         let conf = viuer::Config {
             // set offset
             x: 1,
-            y: 1,
+            y: 0,
             // set dimensions
-            width: Some(40),
+            width: None,
             height: None,
             ..Default::default()
         };
