@@ -13,6 +13,7 @@ pub use frame::*;
 //pub use pixel_format::*;
 
 //pub type AsyncTask<'a, T = ()> = std::pin::Pin<Box<dyn Future<Output = T> + 'a>>;
+#[must_use]
 pub struct AsyncTask<'a, T = ()> {
     inner: std::pin::Pin<Box<dyn Future<Output = T> + 'a>>,
 }

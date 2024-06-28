@@ -5,3 +5,8 @@ edition = "2021"
 
 [dependencies]
 birb-vision = { version = "0.1.0", path = "../birb-vision" }
+icube-sdk-sys = "0.2.1"
+log = "0.4.21"
+
+[dev-dependencies]
+env_logger = "0.11.3"
