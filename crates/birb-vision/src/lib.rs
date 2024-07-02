@@ -3,6 +3,7 @@
 use std::{borrow::Cow, future::Future, ops::{Deref, DerefMut}, rc::Rc};
 
 pub use image;
+pub mod decoders;
 
 mod frame;
 //mod device_properties;

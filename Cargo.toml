@@ -3,12 +3,14 @@ resolver = "2"
 members = [
     "crates/bindings/mvs-sys",
     "crates/birb-vision",
-    "crates/birb-vision-bundle",
+    #"crates/birb-vision-bundle",
     "crates/birb-vision-explorer",
     "crates/birb-vision-fake",
     "crates/birb-vision-icube",
+    "crates/birb-vision-media-foundation",
+    #"crates/birb-vision-media-uvc",
     "crates/birb-vision-mvs",
-    "crates/birb-vision-nokhwa",
+    #"crates/birb-vision-nokhwa",
 ]
 default-members = [
     "crates/birb-vision",

@@ -1,16 +1,25 @@
 {
     "cSpell.words": [
+        "ARGB",
+        "AYUV",
         "birb",
         "BUFOVER",
         "CALLORDER",
         "CPUID",
         "DENOISE",
+        "DVHD",
+        "DVSD",
+        "DVSL",
         "DYNAMICCAST",
         "genicam",
         "gige",
         "Hasher",
+        "HDCP",
+        "hresult",
         "icube",
+        "IYUV",
         "libloading",
+        "MJPG",
         "NETCAM",
         "NETER",
         "NODATA",
@@ -18,8 +27,14 @@
         "Nokhwa",
         "NOOUTBUF",
         "OPENFILE",
+        "ORAW",
         "println",
+        "scopeguard",
+        "Theora",
         "UNKNOW",
-        "viuer"
+        "UYVY",
+        "viuer",
+        "yuyv",
+        "YVYU"
     ]
 }

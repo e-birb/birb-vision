@@ -7,6 +7,8 @@ use nokhwa::{Buffer, FormatDecoder, NokhwaError};
 pub use birb_vision;
 pub use image;
 
+pub use nokhwa;
+
 
 pub struct NokhwaCamera {
     format_decoder: Box<dyn Fn(Buffer) -> Result<DynamicImage, NokhwaError>>,

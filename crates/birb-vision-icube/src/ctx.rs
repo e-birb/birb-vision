@@ -88,7 +88,12 @@ impl iCubeContextInner {
         log::trace!("Loading iCube SDK");
 
         unsafe {
-            iCubeError::result_from_code(icube_sdk_sys::load()).map_err(ContextCreationError::iCubeError)?;
+            iCubeError::result_from_code(icube_sdk_sys::load()).map_err(|ic_error| {
+                match ic_error {
+                    iCubeError::Error => ContextCreationError::NotFound,
+                    _ => ContextCreationError::iCubeError(ic_error),
+                }
+            })?;
         }
 
         Ok(Arc::new(Self {
@@ -111,6 +116,7 @@ impl Drop for iCubeContextInner {
 pub enum ContextCreationError {
     #[allow(non_camel_case_types)]
     iCubeError(iCubeError),
+    NotFound,
     // TODO version mismatch
 }
 
@@ -118,6 +124,7 @@ impl std::fmt::Display for ContextCreationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::iCubeError(e) => write!(f, "iCube error: {}", e),
+            Self::NotFound => write!(f, "iCube SDK not found"),
         }
     }
 }

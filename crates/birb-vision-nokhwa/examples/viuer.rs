@@ -30,7 +30,7 @@ async fn async_main() {
     }
 
     let camera = NCamera::new(
-        CameraIndex::Index(0),
+        CameraIndex::Index(1),
         RequestedFormat::new::<RgbFormat>(RequestedFormatType::None),
     ).unwrap();
 
