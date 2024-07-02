@@ -1,7 +1,3 @@
-use std::error::Error;
-
-use image::RgbImage;
-
 mod mjpg;
 mod bgr;
 mod yuy;
