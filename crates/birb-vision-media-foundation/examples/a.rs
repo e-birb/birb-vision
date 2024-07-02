@@ -1,7 +1,5 @@
-use std::error::Error;
 
-use birb_vision_media_foundation::{CompressedFrame, MediaFoundationContext, PixelFormat, VideoFormatQuery, VideoSubtype};
-use windows::Win32::Media::MediaFoundation::MEDIASUBTYPE_RGB24;
+use birb_vision_media_foundation::{MediaFoundationContext, VideoFormatQuery};
 
 
 fn main() {

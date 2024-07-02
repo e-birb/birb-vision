@@ -1,6 +1,6 @@
 use std::error::Error;
 
-use windows::{core::{Result as WinResult, HRESULT, Error as WinError}, Win32::System::Com::{self, COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE}};
+use windows::core::{HRESULT, Error as WinError};
 
 
 mod ctx;

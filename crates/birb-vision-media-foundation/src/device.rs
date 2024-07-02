@@ -1,8 +1,8 @@
-use std::{borrow::Cow, error::Error};
+use std::error::Error;
 
 use birb_vision::decoders::{buf_yuyv422_to_rgb, decode_mjpg, nv12_to_rgb_image};
-use image::{DynamicImage, Rgb, RgbImage};
-use windows::{core::{GUID, PWSTR}, Win32::Media::{KernelStreaming::KSCAMERA_EXTENDEDPROP_FOCUSSTATE, MediaFoundation::{IMFAttributes, IMFMediaSource, IMFMediaType, IMFSourceReader, IMFTransform, MFCreateAttributes, MFCreateSample, MFCreateSampleCopierMFT, MFCreateSourceReaderFromMediaSource, MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK, MF_MT_FRAME_RATE, MF_MT_FRAME_RATE_RANGE_MAX, MF_MT_FRAME_RATE_RANGE_MIN, MF_MT_FRAME_SIZE, MF_MT_SUBTYPE, MF_READWRITE_DISABLE_CONVERTERS}}};
+use image::{DynamicImage, RgbImage};
+use windows::{core::PWSTR, Win32::Media::MediaFoundation::{IMFAttributes, IMFMediaSource, IMFSourceReader, MFCreateAttributes, MFCreateSample, MFCreateSourceReaderFromMediaSource, MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK, MF_READWRITE_DISABLE_CONVERTERS, MF_SOURCE_READER_FIRST_VIDEO_STREAM}};
 
 use crate::*;
 
@@ -80,16 +80,16 @@ impl MFDeviceInfo {
                 MFCreateSourceReaderFromMediaSource(&media_source, &source_reader_attributes)?
             };
 
-            let media_type = unsafe {
-                source_reader.GetCurrentMediaType(MEDIA_FOUNDATION_FIRST_VIDEO_STREAM)?
-            };
-
-            return Ok(MFDevice {
-                cx,
+            let device = MFDevice {
+                _cx: cx,
                 info: self.clone(),
                 is_open: false,
                 source_reader,
-            });
+            };
+
+            // TODO maybe select a default format here?
+
+            return Ok(device);
         }
 
         Err(MFError::Other("No device not present anymore".into()))
@@ -97,7 +97,7 @@ impl MFDeviceInfo {
 }
 
 pub struct MFDevice {
-    cx: MediaFoundationContext,
+    _cx: MediaFoundationContext,
     info: MFDeviceInfo,
     is_open: bool,
     source_reader: IMFSourceReader,
@@ -113,7 +113,7 @@ impl MFDevice {
 
         let mut index = 0;
         while let Ok(media_type) = unsafe {
-            self.source_reader.GetNativeMediaType(MEDIA_FOUNDATION_FIRST_VIDEO_STREAM, index)
+            self.source_reader.GetNativeMediaType(FIRST_VIDEO_STREAM, index)
         } {
             index += 1;
 
@@ -130,7 +130,7 @@ impl MFDevice {
 
     pub fn get_current_format(&self) -> MFResult<VideoFormat> {
         let media_type = unsafe {
-            self.source_reader.GetCurrentMediaType(MEDIA_FOUNDATION_FIRST_VIDEO_STREAM)?
+            self.source_reader.GetCurrentMediaType(FIRST_VIDEO_STREAM)?
         };
 
         VideoFormat::from_media_type(&media_type)
@@ -149,7 +149,7 @@ impl MFDevice {
 
         let mut index = 0;
         while let Ok(media_type) = unsafe {
-            self.source_reader.GetNativeMediaType(MEDIA_FOUNDATION_FIRST_VIDEO_STREAM, index)
+            self.source_reader.GetNativeMediaType(FIRST_VIDEO_STREAM, index)
         } {
             index += 1;
 
@@ -161,7 +161,7 @@ impl MFDevice {
             // TODO use query.matches(&format) instead for better methods organization
             if format.satisfies(&query) {
                 unsafe {
-                    self.source_reader.SetCurrentMediaType(MEDIA_FOUNDATION_FIRST_VIDEO_STREAM, None, &media_type)?;
+                    self.source_reader.SetCurrentMediaType(FIRST_VIDEO_STREAM, None, &media_type)?;
                 }
 
                 log::debug!("Selected format: {format:?}");
@@ -175,7 +175,7 @@ impl MFDevice {
 
     pub fn start_stream(&mut self) -> MFResult<()> {
         unsafe {
-            self.source_reader.SetStreamSelection(MEDIA_FOUNDATION_FIRST_VIDEO_STREAM, true)?
+            self.source_reader.SetStreamSelection(FIRST_VIDEO_STREAM, true)?
         };
 
         self.is_open = true;
@@ -192,7 +192,7 @@ impl MFDevice {
         loop {
             unsafe {
                 self.source_reader.ReadSample(
-                    MEDIA_FOUNDATION_FIRST_VIDEO_STREAM,
+                    FIRST_VIDEO_STREAM,
                     0,
                     None,
                     Some(&mut stream_flags),
@@ -289,7 +289,7 @@ impl MFDevice {
 
     pub fn flush(&mut self) -> MFResult<()> {
         unsafe {
-            self.source_reader.Flush(MEDIA_FOUNDATION_FIRST_VIDEO_STREAM)?
+            self.source_reader.Flush(FIRST_VIDEO_STREAM)?
         };
 
         Ok(())
@@ -312,35 +312,4 @@ impl MFDevice {
 //    }
 //}
 
-const MEDIA_FOUNDATION_FIRST_VIDEO_STREAM: u32 = 0xFFFF_FFFC;
-
-const MF_VIDEO_FORMAT_YUY2: GUID = GUID::from_values(
-    0x3259_5559,
-    0x0000,
-    0x0010,
-    [0x80, 0x00, 0x00, 0xAA, 0x00, 0x38, 0x9B, 0x71],
-);
-const MF_VIDEO_FORMAT_MJPEG: GUID = GUID::from_values(
-    0x4750_4A4D,
-    0x0000,
-    0x0010,
-    [0x80, 0x00, 0x00, 0xAA, 0x00, 0x38, 0x9B, 0x71],
-);
-const MF_VIDEO_FORMAT_GRAY: GUID = GUID::from_values(
-    0x3030_3859,
-    0x0000,
-    0x0010,
-    [0x80, 0x00, 0x00, 0xAA, 0x00, 0x38, 0x9B, 0x71],
-);
-const MF_VIDEO_FORMAT_NV12: GUID = GUID::from_values(
-    0x3231_564E,
-    0x0000,
-    0x0010,
-    [0x80, 0x00, 0x00, 0xAA, 0x00, 0x38, 0x9B, 0x71],
-);
-const MF_VIDEO_FORMAT_RGB24: GUID = GUID::from_values(
-    0x0000_0014,
-    0x0000,
-    0x0010,
-    [0x80, 0x00, 0x00, 0xAA, 0x00, 0x38, 0x9B, 0x71],
-);
+const FIRST_VIDEO_STREAM: u32 = MF_SOURCE_READER_FIRST_VIDEO_STREAM.0 as u32;

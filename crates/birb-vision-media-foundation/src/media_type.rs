@@ -274,9 +274,9 @@ impl VideoSubtype {
         match subtype {
             &MFVideoFormat_RGB24 | &MEDIASUBTYPE_RGB24 => Some(Self::Uncompressed(PixelFormat::RGB24)),
             &MFVideoFormat_RGB32 | &MEDIASUBTYPE_RGB32 => Some(Self::Uncompressed(PixelFormat::RGB32)),
-            &MFVideoFormat_YUY2 | &MEDIASUBTYPE_YUY2 => Some(Self::Uncompressed(PixelFormat::YUY2)),
-            &MFVideoFormat_NV12 | &MEDIASUBTYPE_NV12 => Some(Self::Uncompressed(PixelFormat::NV12)),
-            &MFVideoFormat_MJPG | &MEDIASUBTYPE_MJPG => Some(Self::CompressedFrame(CompressedFrame::MJpeg)),
+            &MFVideoFormat_YUY2 /*| &MEDIASUBTYPE_YUY2*/ => Some(Self::Uncompressed(PixelFormat::YUY2)),
+            &MFVideoFormat_NV12 /*| &MEDIASUBTYPE_NV12*/ => Some(Self::Uncompressed(PixelFormat::NV12)),
+            &MFVideoFormat_MJPG /*| &MEDIASUBTYPE_MJPG*/ => Some(Self::CompressedFrame(CompressedFrame::MJpeg)),
             _ => None,
         }
     }
