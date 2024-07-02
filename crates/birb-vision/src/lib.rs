@@ -92,6 +92,8 @@ impl std::fmt::Display for DeviceError {
     }
 }
 
+// TODO conversions!
+
 impl std::error::Error for DeviceError {}
 
 pub type DeviceResult<T> = Result<T, DeviceError>;

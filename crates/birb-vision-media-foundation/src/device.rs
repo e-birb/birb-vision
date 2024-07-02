@@ -1,6 +1,6 @@
-use std::error::Error;
+use std::{borrow::Cow, error::Error};
 
-use birb_vision::decoders::{buf_yuyv422_to_rgb, decode_mjpg, nv12_to_rgb_image};
+use birb_vision::{decoders::{buf_yuyv422_to_rgb, decode_mjpg, nv12_to_rgb_image}, AsyncTask, CameraDevice, DeviceError, DeviceResult, Frame};
 use image::{DynamicImage, RgbImage};
 use windows::{core::PWSTR, Win32::Media::MediaFoundation::{IMFAttributes, IMFMediaSource, IMFSourceReader, MFCreateAttributes, MFCreateSample, MFCreateSourceReaderFromMediaSource, MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK, MF_READWRITE_DISABLE_CONVERTERS, MF_SOURCE_READER_FIRST_VIDEO_STREAM}};
 
@@ -15,7 +15,7 @@ pub struct MFDeviceInfo {
 }
 
 impl MFDeviceInfo {
-    pub fn name(&self) -> &str {
+    pub fn friendly_name(&self) -> &str {
         &self.name
     }
 
@@ -296,20 +296,43 @@ impl MFDevice {
     }
 }
 
-//struct Decoder {
-//    transform: IMFTransform,
-//}
-//
-//impl Decoder {
-//    fn new(input_type: IMFMediaType) -> MFResult<Self> {
-//        let transform = unsafe {
-//            //MFCreateSampleCopierMFT(&input_type, &MF_VIDEO_FORMAT_YUY2, &MF_VIDEO_FORMAT_MJPEG)?
-//        };
-//        
-//        Ok(Self {
-//            transform,
-//        })
-//    }
-//}
-
 const FIRST_VIDEO_STREAM: u32 = MF_SOURCE_READER_FIRST_VIDEO_STREAM.0 as u32;
+
+impl CameraDevice for MFDevice {
+    fn open(&mut self) -> AsyncTask<DeviceResult<()>> {
+        // TODO
+        AsyncTask::new(async move {
+            log::error!("Not implemented");
+            Ok(())
+        })
+    }
+
+    fn close(&mut self) -> AsyncTask<DeviceResult<()>> {
+        // TODO
+        AsyncTask::new(async move {
+            log::error!("Not implemented");
+            Ok(())
+        })
+    }
+
+    fn start_video_stream(&mut self) -> AsyncTask<DeviceResult<()>> {
+        AsyncTask::new(async move {
+            self.start_stream().unwrap(); // TODO handle error
+            Ok(())
+        })
+    }
+
+    fn stop_video_stream(&mut self) -> AsyncTask<DeviceResult<()>> {
+        AsyncTask::new(async move {
+            // TODO ...
+            Ok(())
+        })
+    }
+
+    fn receive_frame(&mut self) -> AsyncTask<DeviceResult<std::borrow::Cow<'_, birb_vision::Frame>>> {
+        AsyncTask::new(async move {
+            let img = self.receive_and_decode_frame().unwrap(); // TODO handle error
+            Ok(Cow::Owned(Frame::Image(img)))
+        })
+    }
+}
