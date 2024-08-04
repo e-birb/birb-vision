@@ -59,13 +59,14 @@ impl<'a, T> Future for AsyncTask<'a, T> {
 }
 
 pub trait CameraDevice {
-    fn open(&mut self) -> AsyncTask<DeviceResult<()>>;
-    fn close(&mut self) -> AsyncTask<DeviceResult<()>>;
+    fn open(&self) -> AsyncTask<DeviceResult<()>>;
+    fn close(&self) -> AsyncTask<DeviceResult<()>>;
 
-    fn start_video_stream(&mut self) -> AsyncTask<DeviceResult<()>>;
-    fn stop_video_stream(&mut self) -> AsyncTask<DeviceResult<()>>;
+    fn start_video_stream(&self) -> AsyncTask<DeviceResult<()>>;
+    fn stop_video_stream(&self) -> AsyncTask<DeviceResult<()>>;
 
-    fn receive_frame(&mut self) -> AsyncTask<DeviceResult<Cow<'_, Frame>>>;
+    fn flush(&self) -> AsyncTask<DeviceResult<()>>;
+    fn receive_frame(&self) -> AsyncTask<DeviceResult<Cow<'_, Frame>>>;
 }
 
 #[derive(Debug, Clone)]

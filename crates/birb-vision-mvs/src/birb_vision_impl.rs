@@ -6,7 +6,7 @@ use birb_vision::{image::{DynamicImage, ImageBuffer, Luma}, AsyncTask, CameraDev
 use crate::prelude::*;
 
 impl CameraDevice for MVSDevice {
-    fn open(&mut self) -> AsyncTask<DeviceResult<()>> {
+    fn open(&self) -> AsyncTask<DeviceResult<()>> {
         AsyncTask::new(async move {
             MVSDevice::open(
                 self,
@@ -16,25 +16,30 @@ impl CameraDevice for MVSDevice {
         })
     }
 
-    fn close(&mut self) -> AsyncTask<DeviceResult<()>> {
+    fn close(&self) -> AsyncTask<DeviceResult<()>> {
         AsyncTask::new(async move {
             MVSDevice::close(self).map_err(|e| DeviceError::other(e))
         })
     }
 
-    fn start_video_stream(&mut self) -> AsyncTask<DeviceResult<()>> {
+    fn start_video_stream(&self) -> AsyncTask<DeviceResult<()>> {
         AsyncTask::new(async move {
             self.start_grabbing().map_err(|e| DeviceError::other(e))
         })
     }
 
-    fn stop_video_stream(&mut self) -> AsyncTask<DeviceResult<()>> {
+    fn stop_video_stream(&self) -> AsyncTask<DeviceResult<()>> {
         AsyncTask::new(async move {
             self.stop_grabbing().map_err(|e| DeviceError::other(e))
         })
     }
 
-    fn receive_frame(&mut self) -> AsyncTask<DeviceResult<std::borrow::Cow<'_, Frame>>> {
+    fn flush(&self) -> AsyncTask<DeviceResult<()>> {
+        log::error!("flush not implemented for MVSDevice");
+        AsyncTask::new(async { Ok(()) })
+    }
+
+    fn receive_frame(&self) -> AsyncTask<DeviceResult<std::borrow::Cow<'_, Frame>>> {
         AsyncTask::new(async move {
             // TODO HANDLE DIFFERENT PIXEL FORMATS
 

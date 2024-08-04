@@ -1,14 +1,15 @@
-use std::{borrow::Cow, error::Error};
+use std::{borrow::Cow, cell::RefCell, error::Error};
 
-use birb_vision::{decoders::{buf_yuyv422_to_rgb, decode_mjpg, nv12_to_rgb_image}, AsyncTask, CameraDevice, DeviceError, DeviceResult, Frame};
+use birb_vision::{decoders::{decode_mjpg, nv12_to_rgb_image, yuyv422_to_rgb}, AsyncTask, CameraDevice, DeviceResult, Frame};
 use image::{DynamicImage, RgbImage};
+use serde::{Deserialize, Serialize};
 use windows::{core::PWSTR, Win32::Media::MediaFoundation::{IMFAttributes, IMFMediaSource, IMFSourceReader, MFCreateAttributes, MFCreateSample, MFCreateSourceReaderFromMediaSource, MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK, MF_READWRITE_DISABLE_CONVERTERS, MF_SOURCE_READER_FIRST_VIDEO_STREAM}};
 
 use crate::*;
 
 
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MFDeviceInfo {
     pub(crate) name: String,
     pub(crate) symlink: String,
@@ -83,7 +84,7 @@ impl MFDeviceInfo {
             let device = MFDevice {
                 _cx: cx,
                 info: self.clone(),
-                is_open: false,
+                is_open: RefCell::new(false),
                 source_reader,
             };
 
@@ -99,7 +100,7 @@ impl MFDeviceInfo {
 pub struct MFDevice {
     _cx: MediaFoundationContext,
     info: MFDeviceInfo,
-    is_open: bool,
+    is_open: RefCell<bool>,
     source_reader: IMFSourceReader,
 }
 
@@ -137,7 +138,7 @@ impl MFDevice {
     }
 
     pub fn is_open(&self) -> bool {
-        self.is_open
+        self.is_open.borrow().clone()
     }
 
     pub fn select_format(&mut self, query: impl Into<VideoFormatQuery>) -> MFResult<VideoFormat> {
@@ -173,17 +174,17 @@ impl MFDevice {
         Err(MFError::Other("No matching format found".into()))
     }
 
-    pub fn start_stream(&mut self) -> MFResult<()> {
+    pub fn start_stream(&self) -> MFResult<()> {
         unsafe {
             self.source_reader.SetStreamSelection(FIRST_VIDEO_STREAM, true)?
         };
 
-        self.is_open = true;
+        self.is_open.replace(true);
         Ok(())
     }
 
     //pub fn raw_bytes(&mut self) -> MFResult<Cow<[u8]>> {
-    pub fn receive_raw_bytes<R>(&mut self, f: impl FnOnce(&[u8]) -> R) -> MFResult<R> {
+    pub fn receive_raw_bytes<R>(&self, f: impl FnOnce(&[u8]) -> R) -> MFResult<R> {
         let mut imf_sample = unsafe {
             Some(MFCreateSample()?)
         };
@@ -246,7 +247,7 @@ impl MFDevice {
         //todo!()
     }
 
-    pub fn receive_and_decode_frame(&mut self) -> MFResult<DynamicImage> {
+    pub fn receive_and_decode_frame(&self) -> MFResult<DynamicImage> {
         let format = self.get_current_format()?;
         let subtype = format.recognize_supported_media_subtype()
             .ok_or(MFError::Other("No supported media subtype".into()))?;
@@ -272,8 +273,7 @@ impl MFDevice {
                     }
                     PixelFormat::NV12 => Ok(DynamicImage::ImageRgb8(nv12_to_rgb_image(format.width(), format.height(), &bytes, false)?)),
                     PixelFormat::YUY2 => {
-                        let mut pixels = vec![0u8; format.width() as usize * format.height() as usize * 3];
-                        buf_yuyv422_to_rgb(&bytes, &mut pixels, true)?;
+                        let pixels = yuyv422_to_rgb(&bytes, false)?; // TODO true or false????
                         Ok(DynamicImage::ImageRgb8(RgbImage::from_raw(format.width(), format.height(), pixels).unwrap()))
                     }
                     _ => todo!("Uncompressed pixel format: {pixel_format:?}"),
@@ -287,7 +287,7 @@ impl MFDevice {
         }
     }
 
-    pub fn flush(&mut self) -> MFResult<()> {
+    pub fn flush(&self) -> MFResult<()> {
         unsafe {
             self.source_reader.Flush(FIRST_VIDEO_STREAM)?
         };
@@ -299,7 +299,7 @@ impl MFDevice {
 const FIRST_VIDEO_STREAM: u32 = MF_SOURCE_READER_FIRST_VIDEO_STREAM.0 as u32;
 
 impl CameraDevice for MFDevice {
-    fn open(&mut self) -> AsyncTask<DeviceResult<()>> {
+    fn open(&self) -> AsyncTask<DeviceResult<()>> {
         // TODO
         AsyncTask::new(async move {
             log::error!("Not implemented");
@@ -307,7 +307,7 @@ impl CameraDevice for MFDevice {
         })
     }
 
-    fn close(&mut self) -> AsyncTask<DeviceResult<()>> {
+    fn close(&self) -> AsyncTask<DeviceResult<()>> {
         // TODO
         AsyncTask::new(async move {
             log::error!("Not implemented");
@@ -315,21 +315,28 @@ impl CameraDevice for MFDevice {
         })
     }
 
-    fn start_video_stream(&mut self) -> AsyncTask<DeviceResult<()>> {
+    fn start_video_stream(&self) -> AsyncTask<DeviceResult<()>> {
         AsyncTask::new(async move {
             self.start_stream().unwrap(); // TODO handle error
             Ok(())
         })
     }
 
-    fn stop_video_stream(&mut self) -> AsyncTask<DeviceResult<()>> {
+    fn stop_video_stream(&self) -> AsyncTask<DeviceResult<()>> {
         AsyncTask::new(async move {
             // TODO ...
             Ok(())
         })
     }
 
-    fn receive_frame(&mut self) -> AsyncTask<DeviceResult<std::borrow::Cow<'_, birb_vision::Frame>>> {
+    fn flush(&self) -> AsyncTask<DeviceResult<()>> {
+        AsyncTask::new(async move {
+            self.flush().unwrap();
+            Ok(())
+        })
+    }
+
+    fn receive_frame(&self) -> AsyncTask<DeviceResult<std::borrow::Cow<'_, birb_vision::Frame>>> {
         AsyncTask::new(async move {
             let img = self.receive_and_decode_frame().unwrap(); // TODO handle error
             Ok(Cow::Owned(Frame::Image(img)))
