@@ -287,7 +287,7 @@ impl MFDevice {
         }
     }
 
-    pub fn flush(&self) -> MFResult<()> {
+    pub fn flush_reader(&self) -> MFResult<()> {
         unsafe {
             self.source_reader.Flush(FIRST_VIDEO_STREAM)?
         };
@@ -331,7 +331,7 @@ impl CameraDevice for MFDevice {
 
     fn flush(&self) -> AsyncTask<DeviceResult<()>> {
         AsyncTask::new(async move {
-            self.flush().unwrap();
+            self.flush_reader().unwrap();
             Ok(())
         })
     }
