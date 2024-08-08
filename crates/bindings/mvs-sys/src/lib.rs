@@ -7,6 +7,10 @@
 include!("./mvs.rs");
 include!(concat!(env!("OUT_DIR"), "/mvs_config.rs"));
 
+pub mod ext {
+    pub use libloading;
+}
+
 impl MVS {
     /// Loads [`DYNAMIC_LIBRARY_NAME`]
     pub unsafe fn load() -> Result<Self, libloading::Error> {

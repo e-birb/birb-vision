@@ -5,3 +5,4 @@
 #endif
 
 #include <MvCameraControl.h>
+//#include <MvSdkExport.h>
