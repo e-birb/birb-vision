@@ -3,14 +3,8 @@
 #![allow(non_snake_case)]
 #![cfg(not(doctest))]
 #![doc = include_str!("../README.md")]
-#![doc = include_str!(concat!(env!("OUT_DIR"), "/mvs_additional_doc.md"))]
 
-pub mod ext {
-    #[cfg(feature = "libloading")]
-    pub use libloading;
-}
-
-include!(concat!(env!("OUT_DIR"), "/mvs_bindings.rs"));
+include!("./mvs.rs");
 include!(concat!(env!("OUT_DIR"), "/mvs_config.rs"));
 
 impl MVS {
