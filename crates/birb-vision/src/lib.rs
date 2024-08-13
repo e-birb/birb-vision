@@ -1,6 +1,6 @@
 
 
-use std::{borrow::Cow, future::Future, ops::{Deref, DerefMut}, rc::Rc};
+use std::{borrow::Cow, future::Future, rc::Rc, task::Poll};
 
 pub use image;
 pub mod decoders;
@@ -13,66 +13,52 @@ pub use frame::*;
 //pub use device_properties::*;
 //pub use pixel_format::*;
 
-//pub type AsyncTask<'a, T = ()> = std::pin::Pin<Box<dyn Future<Output = T> + 'a>>;
-#[must_use]
-pub struct AsyncTask<'a, T = ()> {
-    inner: std::pin::Pin<Box<dyn Future<Output = T> + 'a>>,
+pub trait Context {
+    
 }
 
-impl<'a, T> AsyncTask<'a, T> {
-    pub fn new<F>(f: F) -> Self
-    where
-        F: Future<Output = T> + 'a,
-    {
-        Self {
-            inner: Box::pin(f),
-        }
-    }
-}
-
-impl<'a, T> Deref for AsyncTask<'a, T> {
-    type Target = std::pin::Pin<Box<dyn Future<Output = T> + 'a>>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
-}
-
-impl<'a, T> DerefMut for AsyncTask<'a, T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.inner
-    }
-}
-
-impl<'a, T> From<std::pin::Pin<Box<dyn Future<Output = T> + 'a>>> for AsyncTask<'a, T> {
-    fn from(inner: std::pin::Pin<Box<dyn Future<Output = T> + 'a>>) -> Self {
-        Self { inner }
-    }
-}
-
-impl<'a, T> Future for AsyncTask<'a, T> {
-    type Output = T;
-
-    fn poll(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Self::Output> {
-        Future::poll(self.get_mut().inner.as_mut(), cx)
-    }
-}
+pub type FrameCallback = dyn for<'a> Fn(Cow<'a, Frame>) + Send + Sync + 'static;
 
 pub trait CameraDevice {
-    fn open(&self) -> AsyncTask<DeviceResult<()>>;
-    fn close(&self) -> AsyncTask<DeviceResult<()>>;
+    fn open(&self) -> DeviceResult;
+    fn close(&self) -> DeviceResult;
 
-    fn start_video_stream(&self) -> AsyncTask<DeviceResult<()>>;
-    fn stop_video_stream(&self) -> AsyncTask<DeviceResult<()>>;
+    fn start_video_stream(&self) -> DeviceResult;
+    fn stop_video_stream(&self) -> DeviceResult;
 
-    fn flush(&self) -> AsyncTask<DeviceResult<()>>;
-    fn receive_frame(&self) -> AsyncTask<DeviceResult<Cow<'_, Frame>>>;
+    fn flush(&self) -> DeviceResult;
+
+    /// Similar to [futures::stream::Stream::poll_next] but with no Pin requirement
+    // TODO Is this "no Pin requirement" good?
+    fn poll_frame(&self, ctx: &mut std::task::Context) -> Poll<DeviceResult<Cow<Frame>>>;
 }
+
+// TODO consider using futures::stream::Next instead of this
+pub struct NextFrame<'a, T: CameraDevice + ?Sized> { // TODO pub not needed?
+    device: &'a T,
+}
+
+impl<'a, T: CameraDevice + ?Sized> Future for NextFrame<'a, T> {
+    type Output = DeviceResult<Cow<'a, Frame>>;
+
+    fn poll(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context) -> Poll<Self::Output> {
+        self.device.poll_frame(cx)
+    }
+}
+
+pub trait CameraDeviceEx: CameraDevice {
+    fn get_frame(&self) -> impl Future<Output = DeviceResult<Cow<Frame>>> {
+        NextFrame { device: self }
+    }
+}
+
+impl<T: CameraDevice + ?Sized> CameraDeviceEx for T {}
 
 #[derive(Debug, Clone)]
 pub enum DeviceError {
     Unsupported,
     Other(Rc<dyn std::error::Error + Send + Sync>),
+    OtherString(Cow<'static, str>),
 }
 
 impl DeviceError {
@@ -89,7 +75,20 @@ impl std::fmt::Display for DeviceError {
         match self {
             DeviceError::Unsupported => write!(f, "Operation is not supported"),
             DeviceError::Other(e) => write!(f, "Error: {}", e),
+            DeviceError::OtherString(s) => write!(f, "{}", s),
         }
+    }
+}
+
+impl From<&'static str> for DeviceError {
+    fn from(s: &'static str) -> Self {
+        DeviceError::OtherString(s.into())
+    }
+}
+
+impl From<String> for DeviceError {
+    fn from(s: String) -> Self {
+        DeviceError::OtherString(s.into())
     }
 }
 
@@ -97,4 +96,4 @@ impl std::fmt::Display for DeviceError {
 
 impl std::error::Error for DeviceError {}
 
-pub type DeviceResult<T> = Result<T, DeviceError>;
+pub type DeviceResult<T = ()> = Result<T, DeviceError>;

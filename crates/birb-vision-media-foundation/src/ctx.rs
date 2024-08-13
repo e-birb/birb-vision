@@ -1,4 +1,4 @@
-use std::{cell::RefCell, mem::MaybeUninit, rc::{Rc, Weak}};
+use std::{cell::RefCell, mem::MaybeUninit, sync::{Arc, Weak}};
 
 use windows::{core::PWSTR, Win32::{Media::MediaFoundation::{IMFActivate, IMFAttributes, MFCreateAttributes, MFEnumDeviceSources, MF_DEVSOURCE_ATTRIBUTE_FRIENDLY_NAME, MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE, MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_GUID, MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK}, System::Com::{self, COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE}}};
 
@@ -6,7 +6,7 @@ use crate::*;
 
 
 pub struct MediaFoundationContext {
-    _inner: Rc<CtxInner>,
+    _inner: Arc<CtxInner>,
 }
 
 impl MediaFoundationContext {
@@ -15,13 +15,13 @@ impl MediaFoundationContext {
             static CTX: RefCell<Weak<CtxInner>> = RefCell::new(Weak::new());
         }
 
-        let ctx = CTX.with(|ctx| -> MFResult<Rc<CtxInner>> {
+        let ctx = CTX.with(|ctx| -> MFResult<Arc<CtxInner>> {
             let mut ctx = ctx.borrow_mut();
             if let Some(ctx) = ctx.upgrade() {
                 return Ok(ctx);
             }
-            let cx = Rc::new(CtxInner::new()?);
-            *ctx = Rc::downgrade(&cx);
+            let cx = Arc::new(CtxInner::new()?);
+            *ctx = Arc::downgrade(&cx);
             Ok(cx)
         })?;
 

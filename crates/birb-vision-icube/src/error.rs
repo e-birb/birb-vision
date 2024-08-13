@@ -1,132 +1,119 @@
 
 use std::error::Error;
 
-use icube_sdk_sys::ffi;
+use icube_sdk_sys::{v1, v2};
 
 #[allow(non_camel_case_types)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[repr(i32)]
+//#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug)]
 pub enum iCubeError {
     /// Generic error
-    Error = ffi::IC_ERROR as _,
+    Error,
 
-    IF_NOT_OPEN = ffi::IC_IF_NOT_OPEN,
-    WRONG_PARAM = ffi::IC_WRONG_PARAM,
-    OUT_OF_MEMORY = ffi::IC_OUT_OF_MEMORY,
-    ALREADY_DONE = ffi::IC_ALREADY_DONE,
-    WRONG_CLOCK_VAL = ffi::IC_WRONG_CLOCK_VAL,
-    COM_LIB_INIT = ffi::IC_COM_LIB_INIT,
-    NOT_IF_STARTED = ffi::IC_NOT_IF_STARTED,
-    WRONG_ROI_ID = ffi::IC_WRONG_ROI_ID,
-    IF_NOT_ENABLED = ffi::IC_IF_NOT_ENABLED,
-    COLOR_CAM_ONLY = ffi::IC_COLOR_CAM_ONLY,
-    DRIVER_VERSION = ffi::IC_DRIVER_VERSION,
-    D3D_INIT = ffi::IC_D3D_INIT,
-    BAD_POINTER = ffi::IC_BAD_POINTER,
-    ERROR_FILE_SIZE = ffi::IC_ERROR_FILE_SIZE,
-    RECONNECTION_ACTIVE = ffi::IC_RECONNECTION_ACTIVE,
-    USB_REQUEST_FAIL = ffi::IC_USB_REQUEST_FAIL,
-    RESOURCE_IN_USE = ffi::IC_RESOURCE_IN_USE,
-    DEVICE_GONE = ffi::IC_DEVICE_GONE,
-    DLL_MISMATCH = ffi::IC_DLL_MISMATCH,
-    WRONG_FW_VERSION = ffi::IC_WRONG_FW_VERSION,
-    NO_RGB_CALLBACK = ffi::IC_NO_RGB_CALLBACK,
-    NO_USB30_CAMERA = ffi::IC_NO_USB30_CAMERA,
-    ERR_FIX_RELATION = ffi::IC_ERR_FIX_RELATION,
-    CRC_CONFIG_DATA = ffi::IC_CRC_CONFIG_DATA,
-    CONFIG_DATA = ffi::IC_CONFIG_DATA,
-    ERR_START_PNP = ffi::IC_ERR_START_PNP,
-    INVALID_CAM_TYPE = ffi::IC_INVALID_CAM_TYPE,
-    NOT_IF_STREAMING = ffi::IC_NOT_IF_STREAMING,
-    USB_STARTUP = ffi::IC_USB_STARTUP,
+    IF_NOT_OPEN,
+    WRONG_PARAM,
+    OUT_OF_MEMORY,
+    ALREADY_DONE,
+    WRONG_CLOCK_VAL,
+    COM_LIB_INIT,
+    NOT_IF_STARTED,
+    WRONG_ROI_ID,
+    IF_NOT_ENABLED,
+    COLOR_CAM_ONLY,
+    DRIVER_VERSION,
+    D3D_INIT,
+    BAD_POINTER,
+    ERROR_FILE_SIZE,
+    RECONNECTION_ACTIVE,
+    USB_REQUEST_FAIL,
+    RESOURCE_IN_USE,
+    DEVICE_GONE,
+    DLL_MISMATCH,
+    WRONG_FW_VERSION,
+    NO_RGB_CALLBACK,
+    NO_USB30_CAMERA,
+    ERR_FIX_RELATION,
+    CRC_CONFIG_DATA,
+    CONFIG_DATA,
+    ERR_START_PNP,
+    INVALID_CAM_TYPE,
+    NOT_IF_STREAMING,
+    USB_STARTUP,
 
     /// Unknown error
     ///
     /// This variant is used when the error code is not recognized.
-    Unknown(u8) = 0x00FFFFFF - 1, // TODO check this, maybe use a better choice
+    Unknown(u8),
+
+    Unimplemented,
+    Other(Box<dyn Error>),
 }
 
 impl iCubeError {
-    pub fn from_code(code: i32) -> Self {
-        const IC_ERROR: i32 = ffi::IC_ERROR as _;
+    pub fn result_from_code_v2(code: i32) -> Result<(), Self> {
+        use v2::*;
 
-        match code {
+        if code == IC_SUCCESS {
+            return Ok(());
+        }
+
+        let e = match code {
             IC_ERROR => Self::Error,
-            ffi::IC_IF_NOT_OPEN => Self::IF_NOT_OPEN,
-            ffi::IC_WRONG_PARAM => Self::WRONG_PARAM,
-            ffi::IC_OUT_OF_MEMORY => Self::OUT_OF_MEMORY,
-            ffi::IC_ALREADY_DONE => Self::ALREADY_DONE,
-            ffi::IC_WRONG_CLOCK_VAL => Self::WRONG_CLOCK_VAL,
-            ffi::IC_COM_LIB_INIT => Self::COM_LIB_INIT,
-            ffi::IC_NOT_IF_STARTED => Self::NOT_IF_STARTED,
-            ffi::IC_WRONG_ROI_ID => Self::WRONG_ROI_ID,
-            ffi::IC_IF_NOT_ENABLED => Self::IF_NOT_ENABLED,
-            ffi::IC_COLOR_CAM_ONLY => Self::COLOR_CAM_ONLY,
-            ffi::IC_DRIVER_VERSION => Self::DRIVER_VERSION,
-            ffi::IC_D3D_INIT => Self::D3D_INIT,
-            ffi::IC_BAD_POINTER => Self::BAD_POINTER,
-            ffi::IC_ERROR_FILE_SIZE => Self::ERROR_FILE_SIZE,
-            ffi::IC_RECONNECTION_ACTIVE => Self::RECONNECTION_ACTIVE,
-            ffi::IC_USB_REQUEST_FAIL => Self::USB_REQUEST_FAIL,
-            ffi::IC_RESOURCE_IN_USE => Self::RESOURCE_IN_USE,
-            ffi::IC_DEVICE_GONE => Self::DEVICE_GONE,
-            ffi::IC_DLL_MISMATCH => Self::DLL_MISMATCH,
-            ffi::IC_WRONG_FW_VERSION => Self::WRONG_FW_VERSION,
-            ffi::IC_NO_RGB_CALLBACK => Self::NO_RGB_CALLBACK,
-            ffi::IC_NO_USB30_CAMERA => Self::NO_USB30_CAMERA,
-            ffi::IC_ERR_FIX_RELATION => Self::ERR_FIX_RELATION,
-            ffi::IC_CRC_CONFIG_DATA => Self::CRC_CONFIG_DATA,
-            ffi::IC_CONFIG_DATA => Self::CONFIG_DATA,
-            ffi::IC_ERR_START_PNP => Self::ERR_START_PNP,
-            ffi::IC_INVALID_CAM_TYPE => Self::INVALID_CAM_TYPE,
-            ffi::IC_NOT_IF_STREAMING => Self::NOT_IF_STREAMING,
-            ffi::IC_USB_STARTUP => Self::USB_STARTUP,
+            IC_IF_NOT_OPEN => Self::IF_NOT_OPEN,
+            IC_WRONG_PARAM => Self::WRONG_PARAM,
+            IC_OUT_OF_MEMORY => Self::OUT_OF_MEMORY,
+            IC_ALREADY_DONE => Self::ALREADY_DONE,
+            IC_WRONG_CLOCK_VAL => Self::WRONG_CLOCK_VAL,
+            IC_COM_LIB_INIT => Self::COM_LIB_INIT,
+            IC_NOT_IF_STARTED => Self::NOT_IF_STARTED,
+            IC_WRONG_ROI_ID => Self::WRONG_ROI_ID,
+            IC_IF_NOT_ENABLED => Self::IF_NOT_ENABLED,
+            IC_COLOR_CAM_ONLY => Self::COLOR_CAM_ONLY,
+            IC_DRIVER_VERSION => Self::DRIVER_VERSION,
+            IC_D3D_INIT => Self::D3D_INIT,
+            IC_BAD_POINTER => Self::BAD_POINTER,
+            IC_ERROR_FILE_SIZE => Self::ERROR_FILE_SIZE,
+            IC_RECONNECTION_ACTIVE => Self::RECONNECTION_ACTIVE,
+            IC_USB_REQUEST_FAIL => Self::USB_REQUEST_FAIL,
+            IC_RESOURCE_IN_USE => Self::RESOURCE_IN_USE,
+            IC_DEVICE_GONE => Self::DEVICE_GONE,
+            IC_DLL_MISMATCH => Self::DLL_MISMATCH,
+            IC_WRONG_FW_VERSION => Self::WRONG_FW_VERSION,
+            IC_NO_RGB_CALLBACK => Self::NO_RGB_CALLBACK,
+            IC_NO_USB30_CAMERA => Self::NO_USB30_CAMERA,
+            IC_ERR_FIX_RELATION => Self::ERR_FIX_RELATION,
+            IC_CRC_CONFIG_DATA => Self::CRC_CONFIG_DATA,
+            IC_CONFIG_DATA => Self::CONFIG_DATA,
+            IC_ERR_START_PNP => Self::ERR_START_PNP,
+            IC_INVALID_CAM_TYPE => Self::INVALID_CAM_TYPE,
+            IC_NOT_IF_STREAMING => Self::NOT_IF_STREAMING,
+            IC_USB_STARTUP => Self::USB_STARTUP,
             _ => Self::Unknown(code as u8),
-        }
+        };
+
+        Err(e)
     }
 
-    pub fn sdk_code(&self) -> i32 {
-        match self {
-            Self::Error => ffi::IC_ERROR as _,
-            Self::IF_NOT_OPEN => ffi::IC_IF_NOT_OPEN,
-            Self::WRONG_PARAM => ffi::IC_WRONG_PARAM,
-            Self::OUT_OF_MEMORY => ffi::IC_OUT_OF_MEMORY,
-            Self::ALREADY_DONE => ffi::IC_ALREADY_DONE,
-            Self::WRONG_CLOCK_VAL => ffi::IC_WRONG_CLOCK_VAL,
-            Self::COM_LIB_INIT => ffi::IC_COM_LIB_INIT,
-            Self::NOT_IF_STARTED => ffi::IC_NOT_IF_STARTED,
-            Self::WRONG_ROI_ID => ffi::IC_WRONG_ROI_ID,
-            Self::IF_NOT_ENABLED => ffi::IC_IF_NOT_ENABLED,
-            Self::COLOR_CAM_ONLY => ffi::IC_COLOR_CAM_ONLY,
-            Self::DRIVER_VERSION => ffi::IC_DRIVER_VERSION,
-            Self::D3D_INIT => ffi::IC_D3D_INIT,
-            Self::BAD_POINTER => ffi::IC_BAD_POINTER,
-            Self::ERROR_FILE_SIZE => ffi::IC_ERROR_FILE_SIZE,
-            Self::RECONNECTION_ACTIVE => ffi::IC_RECONNECTION_ACTIVE,
-            Self::USB_REQUEST_FAIL => ffi::IC_USB_REQUEST_FAIL,
-            Self::RESOURCE_IN_USE => ffi::IC_RESOURCE_IN_USE,
-            Self::DEVICE_GONE => ffi::IC_DEVICE_GONE,
-            Self::DLL_MISMATCH => ffi::IC_DLL_MISMATCH,
-            Self::WRONG_FW_VERSION => ffi::IC_WRONG_FW_VERSION,
-            Self::NO_RGB_CALLBACK => ffi::IC_NO_RGB_CALLBACK,
-            Self::NO_USB30_CAMERA => ffi::IC_NO_USB30_CAMERA,
-            Self::ERR_FIX_RELATION => ffi::IC_ERR_FIX_RELATION,
-            Self::CRC_CONFIG_DATA => ffi::IC_CRC_CONFIG_DATA,
-            Self::CONFIG_DATA => ffi::IC_CONFIG_DATA,
-            Self::ERR_START_PNP => ffi::IC_ERR_START_PNP,
-            Self::INVALID_CAM_TYPE => ffi::IC_INVALID_CAM_TYPE,
-            Self::NOT_IF_STREAMING => ffi::IC_NOT_IF_STREAMING,
-            Self::USB_STARTUP => ffi::IC_USB_STARTUP,
-            Self::Unknown(code) => *code as i32,
-        }
-    }
+    pub fn result_from_code_v1(code: i32) -> Result<(), Self> {
+        use v1::*;
 
-    pub fn result_from_code(code: i32) -> Result<(), Self> {
-        if code == ffi::IC_SUCCESS as _ {
-            Ok(())
-        } else {
-            Err(Self::from_code(code))
+        if code == IC_SUCCESS {
+            return Ok(());
         }
+
+        let e = match code {
+            IC_ERROR => Self::Error,
+            IC_IF_NOT_OPEN => Self::IF_NOT_OPEN,
+            IC_WRONG_PARAM => Self::WRONG_PARAM,
+            IC_OUT_OF_MEMORY => Self::OUT_OF_MEMORY,
+            IC_ALREADY_DONE => Self::ALREADY_DONE,
+            IC_WRONG_CLOCK_VAL => Self::WRONG_CLOCK_VAL,
+            IC_COM_LIB_INIT => Self::COM_LIB_INIT,
+            IC_NOT_IF_STARTED => Self::NOT_IF_STARTED,
+            _ => Self::Unknown(code as u8),
+        };
+
+        Err(e)
     }
 }
 
@@ -165,6 +152,8 @@ impl std::fmt::Display for iCubeError {
             Self::NOT_IF_STREAMING => "Interface not streaming",
             Self::USB_STARTUP => "USB startup",
             Self::Unknown(code) => return write!(f, "Unknown error code: {}", code),
+            Self::Unimplemented => "Unimplemented",
+            Self::Other(e) => return write!(f, "Other error: {}", e),
         };
 
         write!(f, "{}", msg)
@@ -172,3 +161,24 @@ impl std::fmt::Display for iCubeError {
 }
 
 impl Error for iCubeError {}
+
+pub(crate) trait IntoICubeResult {
+    fn v1_result(self) -> Result<(), iCubeError>;
+    fn v2_result(self) -> Result<(), iCubeError>;
+}
+
+impl IntoICubeResult for i32 {
+    fn v1_result(self) -> Result<(), iCubeError> {
+        iCubeError::result_from_code_v1(self)
+    }
+
+    fn v2_result(self) -> Result<(), iCubeError> {
+        iCubeError::result_from_code_v2(self)
+    }
+}
+
+impl From<Box<dyn Error>> for iCubeError {
+    fn from(e: Box<dyn Error>) -> Self {
+        Self::Other(e)
+    }
+}

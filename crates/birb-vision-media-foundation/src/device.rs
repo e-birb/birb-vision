@@ -1,6 +1,6 @@
 use std::{borrow::Cow, cell::RefCell, error::Error};
 
-use birb_vision::{decoders::{decode_mjpg, nv12_to_rgb_image, yuyv422_to_rgb}, AsyncTask, CameraDevice, DeviceResult, Frame};
+use birb_vision::{decoders::{decode_mjpg, nv12_to_rgb_image, yuyv422_to_rgb}, CameraDevice, DeviceResult, Frame};
 use image::{DynamicImage, RgbImage};
 use serde::{Deserialize, Serialize};
 use windows::{core::PWSTR, Win32::Media::MediaFoundation::{IMFAttributes, IMFMediaSource, IMFSourceReader, MFCreateAttributes, MFCreateSample, MFCreateSourceReaderFromMediaSource, MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK, MF_READWRITE_DISABLE_CONVERTERS, MF_SOURCE_READER_FIRST_VIDEO_STREAM}};
@@ -299,47 +299,50 @@ impl MFDevice {
 const FIRST_VIDEO_STREAM: u32 = MF_SOURCE_READER_FIRST_VIDEO_STREAM.0 as u32;
 
 impl CameraDevice for MFDevice {
-    fn open(&self) -> AsyncTask<DeviceResult<()>> {
+    fn open(&self) -> DeviceResult<()> {
         // TODO
-        AsyncTask::new(async move {
-            log::error!("Not implemented");
-            Ok(())
-        })
+        log::error!("Not implemented");
+        Ok(())
     }
 
-    fn close(&self) -> AsyncTask<DeviceResult<()>> {
+    fn close(&self) -> DeviceResult<()> {
         // TODO
-        AsyncTask::new(async move {
-            log::error!("Not implemented");
-            Ok(())
-        })
+        log::error!("Not implemented");
+        Ok(())
     }
 
-    fn start_video_stream(&self) -> AsyncTask<DeviceResult<()>> {
-        AsyncTask::new(async move {
-            self.start_stream().unwrap(); // TODO handle error
-            Ok(())
-        })
+    fn start_video_stream(&self) -> DeviceResult<()> {
+        self.start_stream().unwrap(); // TODO handle error
+        Ok(())
     }
 
-    fn stop_video_stream(&self) -> AsyncTask<DeviceResult<()>> {
-        AsyncTask::new(async move {
-            // TODO ...
-            Ok(())
-        })
+    fn stop_video_stream(&self) -> DeviceResult<()> {
+        // TODO ...
+        Ok(())
     }
 
-    fn flush(&self) -> AsyncTask<DeviceResult<()>> {
-        AsyncTask::new(async move {
-            self.flush_reader().unwrap();
-            Ok(())
-        })
+    fn flush(&self) -> DeviceResult<()> {
+        self.flush_reader().unwrap();
+        Ok(())
     }
 
-    fn receive_frame(&self) -> AsyncTask<DeviceResult<std::borrow::Cow<'_, birb_vision::Frame>>> {
-        AsyncTask::new(async move {
-            let img = self.receive_and_decode_frame().unwrap(); // TODO handle error
-            Ok(Cow::Owned(Frame::Image(img)))
-        })
+    //async fn receive_frame(&self) -> DeviceResult<std::borrow::Cow<'_, birb_vision::Frame>> {
+    //    let img = self.receive_and_decode_frame().unwrap(); // TODO handle error
+    //    Ok(Cow::Owned(Frame::Image(img)))
+    //}
+    fn poll_frame(&self, ctx: &mut std::task::Context) -> std::task::Poll<DeviceResult<Cow<Frame>>> {
+        
     }
+}
+
+
+struct Callback {
+
+}
+
+impl windows::Win32::Media::MediaFoundation::IMFSourceReaderCallback_Impl for Callback {
+}
+
+fn a() {
+    ::windows
 }

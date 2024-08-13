@@ -20,8 +20,6 @@ async fn async_main() {
 
     for _ in 0..100 {
         let frame = device.receive_frame().await.unwrap();
-        let im = frame.as_image().unwrap();
-
-        viuer::print(im, &Default::default()).unwrap();
+        let _im = frame.as_image().unwrap();
     }
 }

@@ -4,7 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+#async-trait = "0.1.81"
 enum-as-inner = "0.6.0"
+futures = "0.3.30"
 image = "0.25"
 mozjpeg = "0.10.7"
 #mozjpeg-sys = "2.2.0"

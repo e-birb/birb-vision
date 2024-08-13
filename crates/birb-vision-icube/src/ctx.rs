@@ -1,11 +1,13 @@
-use std::{cell::RefCell, sync::{Arc, Mutex}};
+use std::{cell::RefCell, ffi::*, sync::{Arc, Mutex}};
+use icube_sdk_sys::{v1, v2, SDK};
+
 use crate::*;
 
 #[derive(Clone)]
 #[must_use]
 #[allow(non_camel_case_types)]
 pub struct iCubeContext {
-    _inner: Arc<iCubeContextInner>,
+    inner: Arc<iCubeContextInner>,
 }
 
 impl iCubeContext {
@@ -19,14 +21,14 @@ impl iCubeContext {
                 .expect("Failed to lock the CURRENT_CONTEXT_INNER mutex");
             let current_inner = lock.borrow().upgrade();
             if let Some(inner) = current_inner {
-                Self { _inner: inner }
+                Self { inner }
             } else {
                 let inner = iCubeContextInner::load().map_err(|e| {
                     log::debug!("Failed to load iCube SDK: {}", e);
                     e
                 })?;
                 *lock.borrow_mut() = Arc::downgrade(&inner);
-                Self { _inner: inner }
+                Self { inner }
             }
         };
 
@@ -48,38 +50,54 @@ impl iCubeContext {
     /// [`ICubeSDK_Init`]: icube_sdk_sys::ffi::ICubeSDK_Init
     /// [`ICubeSDK_GetName`]: icube_sdk_sys::ffi::ICubeSDK_GetName
     pub fn init_device_list<R>(&self, f: impl FnOnce(Vec<DeviceIndex>) -> R) -> R {
-        let count = unsafe { sdk!(ICubeSDK_Init)() };
+        let sdk = &self.inner.sdk;
+
+        let count = unsafe {
+            match sdk {
+                SDK::V1(api) => (api.Init)(),
+                SDK::V2(api) => (api.Init)(),
+            }
+        };
 
         let _lock = self
-            ._inner
+            .inner
             .enumerate_devices_lock
             .lock()
             .expect("Failed to lock the enumerate_devices_lock mutex");
 
         let devices: Vec<DeviceIndex> = (0..count)
             .map(|index| {
-                let name = {
-                    let mut name = [0i8; ffi::NETCAM_NAME_LENGTH as usize];
-                    ic_try!(ICubeSDK_GetName(index as _, name.as_mut_ptr())).map(|_| {
-                        let name_len = name.iter().position(|&c| c == 0).unwrap_or(name.len());
-                        name[..name_len].iter().map(|&c| c as u8 as char).collect::<String>()
-                    })
+                let name = unsafe {
+                    let mut name = [0i8; v2::NETCAM_NAME_LENGTH as usize];
+                    match sdk {
+                        SDK::V1(api) => {
+                            (api.GetName)(index as _, name.as_mut_ptr(), v2::NETCAM_NAME_LENGTH as _).v2_result()
+                        },
+                        SDK::V2(api) => {
+                            (api.GetName)(index as _, name.as_mut_ptr()).v2_result()
+                        },
+                    }.map(|_| arr_to_str(&name))
                 };
 
                 if name.is_err() {
                     log::error!("Failed to get name for device {}", index)
                 }
 
-                DeviceIndex { index, name, phantom: std::marker::PhantomData }
+                DeviceIndex { index, name, ctx: &self }
             })
             .collect();
 
         f(devices)
     }
+
+    pub(crate) fn sdk(&self) -> &SDK {
+        &self.inner.sdk
+    }
 }
 
 #[allow(non_camel_case_types)]
 struct iCubeContextInner {
+    sdk: SDK,
     enumerate_devices_lock: Mutex<()>,
 }
 
@@ -87,16 +105,12 @@ impl iCubeContextInner {
     fn load() -> Result<Arc<Self>, ContextCreationError> {
         log::trace!("Loading iCube SDK");
 
-        unsafe {
-            iCubeError::result_from_code(icube_sdk_sys::load()).map_err(|ic_error| {
-                match ic_error {
-                    iCubeError::Error => ContextCreationError::NotFound,
-                    _ => ContextCreationError::iCubeError(ic_error),
-                }
-            })?;
-        }
+        let sdk = unsafe {
+            SDK::load().ok_or(ContextCreationError::NotFound)?
+        };
 
         Ok(Arc::new(Self {
+            sdk,
             enumerate_devices_lock: Mutex::new(()),
         }))
     }
@@ -105,17 +119,14 @@ impl iCubeContextInner {
 impl Drop for iCubeContextInner {
     fn drop(&mut self) {
         log::trace!("Dropping iCubeContextInner, unloading iCube SDK");
-
-        unsafe {
-            icube_sdk_sys::unload();
-        }
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug)]
 pub enum ContextCreationError {
     #[allow(non_camel_case_types)]
     iCubeError(iCubeError),
+    LoadError(icube_sdk_sys::libloading::Error), // TODO use
     NotFound,
     // TODO version mismatch
 }
@@ -124,17 +135,30 @@ impl std::fmt::Display for ContextCreationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::iCubeError(e) => write!(f, "iCube error: {}", e),
-            Self::NotFound => write!(f, "iCube SDK not found"),
+            Self::LoadError(e) => write!(f, "Failed to load iCube SDK: {}", e),
+            Self::NotFound => write!(f, "Failed to find iCube SDK"),
         }
     }
 }
 
 impl std::error::Error for ContextCreationError {}
 
+impl From<iCubeError> for ContextCreationError {
+    fn from(e: iCubeError) -> Self {
+        Self::iCubeError(e)
+    }
+}
+
+impl From<icube_sdk_sys::libloading::Error> for ContextCreationError {
+    fn from(e: icube_sdk_sys::libloading::Error) -> Self {
+        Self::LoadError(e)
+    }
+}
+
 pub struct DeviceIndex<'a> {
     index: i32,
     name: Result<String, iCubeError>,
-    phantom: std::marker::PhantomData<&'a iCubeContext>,
+    ctx: &'a iCubeContext,
 }
 
 impl<'a> DeviceIndex<'a> {
@@ -147,9 +171,18 @@ impl<'a> DeviceIndex<'a> {
     }
 
     pub fn open(self) -> Result<iCubeDevice, iCubeError> {
-        ic_try!(ICubeSDK_Open(self.index))?;
+        let sdk = &self.ctx.inner.sdk;
+
+        //ic_try!(ICubeSDK_Open(self.index))?;
+        unsafe {
+            match sdk {
+                SDK::V1(api) => (api.Open)(self.index as _).v1_result()?,
+                SDK::V2(api) => (api.Open)(self.index as _).v2_result()?,
+            }
+        };
 
         let handle = DeviceHandle {
+            ctx: self.ctx.clone(),
             index: self.index,
         };
 
@@ -158,54 +191,74 @@ impl<'a> DeviceIndex<'a> {
             let callback: Box<OptionalCallbackWrapper> = Box::new(Mutex::new(None));
 
             #[allow(non_snake_case)]
-            unsafe extern "C" fn raw_callback(
-                event_type: ::std::os::raw::c_int,
-                pBuf: *mut ffi::BYTE,
-                lBufferSize: ffi::LONG,
-                pContext: ffi::PVOID,
-            ) -> ffi::LONG {
-                assert!(!pContext.is_null());
-                let callback: *const OptionalCallbackWrapper = pContext as _;
-                let callback = &*callback;
+            extern "C" fn raw_callback_v1(buffer: *mut c_void, bufferSize: c_uint, context: *mut c_void) -> c_int {
+                assert!(!context.is_null());
+                let callback: *const OptionalCallbackWrapper = context as _;
+                let callback = unsafe { &*callback };
 
                 let callback = callback.lock().unwrap();
 
                 let Some(callback) = callback.as_ref() else {
                     // no callback, nothing to do
-                    return ffi::IC_SUCCESS as _;
+                    return v1::IC_SUCCESS as _;
                 };
 
-                let event = match event_type as u32 {
-                    ffi::EVENT_NEW_FRAME => {
+                let event = {
+                    assert!(bufferSize > 0);
+                    assert!(!buffer.is_null());
+                    let buf: &[u8] = unsafe { std::slice::from_raw_parts(buffer as *const _, bufferSize as _) };
+                    CallbackEventType::NEW_FRAME(buf)
+                };
+
+                callback(event);
+
+                v1::IC_SUCCESS as _
+            }
+
+            #[allow(non_snake_case)]
+            extern "C" fn raw_callback_ex_v2(event_type: c_int, pBuf: *mut u8, lBufferSize: c_long, pContext: *mut c_void) -> c_long {
+                assert!(!pContext.is_null());
+                let callback: *const OptionalCallbackWrapper = pContext as _;
+                let callback = unsafe { &*callback };
+
+                let callback = callback.lock().unwrap();
+
+                let Some(callback) = callback.as_ref() else {
+                    // no callback, nothing to do
+                    return v2::IC_SUCCESS as _;
+                };
+
+                let event = match event_type {
+                    v2::EVENT_NEW_FRAME => {
                         assert!(lBufferSize > 0);
                         assert!(!pBuf.is_null());
-                        let buf: &[u8] = std::slice::from_raw_parts(pBuf, lBufferSize as _);
+                        let buf: &[u8] = unsafe { std::slice::from_raw_parts(pBuf, lBufferSize as _) };
                         CallbackEventType::NEW_FRAME(buf)
                     },
-                    ffi::EVENT_DEV_DISCONNECTED => CallbackEventType::DEV_DISCONNECTED,
-                    ffi::EVENT_DEV_RECONNECTED => CallbackEventType::DEV_RECONNECTED,
-                    ffi::EVENT_USB_TRANSFER_FAILED => CallbackEventType::USB_TRANSFER_FAILED,
+                    v2::EVENT_DEV_DISCONNECTED => CallbackEventType::DEV_DISCONNECTED,
+                    v2::EVENT_DEV_RECONNECTED => CallbackEventType::DEV_RECONNECTED,
+                    v2::EVENT_USB_TRANSFER_FAILED => CallbackEventType::USB_TRANSFER_FAILED,
                     _ => CallbackEventType::Unknown(event_type),
                 };
 
                 callback(event);
 
-                ffi::IC_SUCCESS as _
+                v2::IC_SUCCESS as _
             }
 
             let callback_ptr: *const OptionalCallbackWrapper = &*callback;
 
-            ic_try!(ICubeSDK_SetCallbackEx(
-                self.index,
-                ffi::CALLBACK_RGB as _, // TODO maybe use raw if possible
-                Some(raw_callback),
-                callback_ptr as _,
-            ))?;
+            unsafe {
+                match sdk {
+                    SDK::V1(api) => (api.SetCallback)(self.index as _, v1::CALLBACK_RGB as _, raw_callback_v1, callback_ptr as _).v1_result()?,
+                    SDK::V2(api) => (api.SetCallbackEx)(self.index as _, v2::CALLBACK_RGB as _, raw_callback_ex_v2, callback_ptr as _).v2_result()?,
+                }
+            }
 
             callback
         };
 
-        log::trace!("Opened device {} with handle {:?}", self.index, handle);
+        log::trace!("Opened device {} with handle {:?}", self.index, handle.index);
         Ok(iCubeDevice {
             handle,
             callback,
@@ -213,10 +266,17 @@ impl<'a> DeviceIndex<'a> {
         })
     }
 
-    pub fn is_open(&self) -> bool {
-        // The non ex version checks ONLY the current process,
-        // the ex version also checks other processes
-        let r = unsafe { sdk!(ICubeSDK_IsOpenEx)(self.index) };
-        r == ffi::IC_SUCCESS as _
+    pub fn is_open(&self) -> Option<bool> {
+        let sdk = &self.ctx.inner.sdk;
+
+        unsafe {
+            match sdk {
+                SDK::V1(_) => None, // unknown, missing from the SDK
+
+                // The non ex version checks ONLY the current process,
+                // the ex version also checks other processes
+                SDK::V2(api) => Some((api.IsOpenEx)(self.index as _) == v2::IC_SUCCESS), // TODO strange, to ckeck: IC_SUCCESS is 0...
+            }
+        }
     }
 }
