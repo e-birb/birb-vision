@@ -1,5 +1,7 @@
+use std::time::Instant;
+
 use birb_vision_mvs::prelude::*;
-use birb_vision::CameraDevice;
+use birb_vision::{futures::StreamExt, CameraDevice, CameraDeviceEx};
 
 fn main() {
     pollster::block_on(async_main());
@@ -14,12 +16,16 @@ async fn async_main() {
 
     let mut device = devices.into_iter().next().unwrap().into_device(false).unwrap();
 
-    CameraDevice::open(&mut device).await.unwrap();
+    CameraDevice::open(&mut device, Default::default()).unwrap();
 
-    device.start_grabbing().await.unwrap();
+    device.start_grabbing().unwrap();
 
+    let mut image_stream = device.stream(10).unwrap();
+
+    let start = Instant::now();
     for _ in 0..100 {
-        let frame = device.receive_frame().await.unwrap();
-        let _im = frame.as_image().unwrap();
+        let frame = image_stream.next().await.unwrap().into_frame().unwrap();
+        //println!("Frame: {frame:?}");
     }
+    println!("fps: {}", 100.0 / start.elapsed().as_secs_f32())
 }

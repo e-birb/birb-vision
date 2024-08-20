@@ -1,6 +1,6 @@
 use std::{cell::RefCell, collections::VecDeque, error::Error, sync::{Arc, Mutex}, task::{Context, Poll, Waker}};
 
-use birb_vision::{channels::{CallbackHandle, CallbackTx}, decoders::{decode_mjpg, nv12_to_rgb_image, yuyv422_to_rgb}, CameraDevice, DeviceAccessMode, DeviceError, DeviceResult, Event, Frame};
+use birb_vision::{decoders::{decode_mjpg, nv12_to_rgb_image, yuyv422_to_rgb}, CameraDevice, DeviceAccessMode, DeviceError, DeviceResult, Event, Frame};
 use image::{DynamicImage, RgbImage};
 use serde::{Deserialize, Serialize};
 use windows::{core::PWSTR, Win32::Media::MediaFoundation::{IMFAttributes, IMFMediaSource, IMFSourceReader, IMFSourceReaderCallback, IMFSourceReaderCallback_Impl, MFCreateAttributes, MFCreateSourceReaderFromMediaSource, MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK, MF_E_NOTACCEPTING, MF_READWRITE_DISABLE_CONVERTERS, MF_SOURCE_READERF_ALLEFFECTSREMOVED, MF_SOURCE_READERF_CURRENTMEDIATYPECHANGED, MF_SOURCE_READERF_ENDOFSTREAM, MF_SOURCE_READERF_ERROR, MF_SOURCE_READERF_NATIVEMEDIATYPECHANGED, MF_SOURCE_READERF_NEWSTREAM, MF_SOURCE_READERF_STREAMTICK, MF_SOURCE_READER_ASYNC_CALLBACK, MF_SOURCE_READER_FIRST_VIDEO_STREAM, MF_SOURCE_READER_FLAG}};
@@ -322,7 +322,7 @@ impl CameraDevice for MFDevice {
     //    self.finish_poll(inner)
     //}
 
-    fn set_stream_callback(&self, f: Box<dyn Fn(Event) + Send + Sync>) -> DeviceResult<CallbackHandle> {
+    fn set_stream_callback(&self, f: Box<dyn Fn(Event) + Send + Sync>) -> DeviceResult {
         let mut inner = self.callback_inner.lock().unwrap();
         let inner = &mut *inner;
 
@@ -330,10 +330,9 @@ impl CameraDevice for MFDevice {
             self.set_format_to_callback(inner)?;
         }
 
-        let (tx, handle) = CallbackTx::new(f);
-        inner.tx = tx;
+        inner.tx = f;
 
-        Ok(handle)
+        Ok(())
     }
 
     fn grab(&self) -> DeviceResult<()> {
@@ -402,7 +401,7 @@ impl MFDevice {
 struct ReaderCallbackInner {
     format: Option<VideoFormat>,
     subtype: Option<VideoSubtype>,
-    tx: CallbackTx<dyn Fn(Event) + Send + Sync>,
+    tx: Box<dyn Fn(Event) + Send + Sync>,
     flushing: bool,
 
     //on_read_sample: Option<Box<dyn FnMut() -> windows_core::Result<()>>>,
@@ -412,7 +411,7 @@ struct ReaderCallbackInner {
 
 impl ReaderCallbackInner {
     fn send_event_impl(&mut self, event: Event) {
-        self.tx.try_call(|f| f(event));
+        (self.tx)(event);
     }
 
     fn send_sample(&mut self, sample: Result<DeviceResult<Frame>, MF_SOURCE_READER_FLAG>) {
@@ -453,7 +452,7 @@ impl ReaderCallback {
             inner: Arc::new(Mutex::new(ReaderCallbackInner {
                 format: None,
                 subtype: None,
-                tx: CallbackTx::<dyn Fn(Event) + Send + Sync>::new(Box::new(|_| ())).0,
+                tx: Box::new(|_| {}),
                 flushing: false,
                 //on_read_sample: None,
                 //on_flush: None,

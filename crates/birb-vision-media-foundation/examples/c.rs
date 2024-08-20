@@ -19,10 +19,9 @@ fn main() {
         device.start_stream().unwrap();
         device.grab();
         //device.flush_reader().unwrap();
-        let mut rx = device.set_stream_callback().unwrap();
-        rx.set_callback(|e| {
+        let mut rx = device.set_stream_callback(Box::new(|e| {
             println!("- Callback: {:?}", e);
-        });
+        })).unwrap();
 
         println!("Main Thread: {:?}", std::thread::current().id());
         println!("Waiting for events...");

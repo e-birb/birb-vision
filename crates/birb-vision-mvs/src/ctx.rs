@@ -1,14 +1,10 @@
-use crate::*;
 use mvs_sys::ext::libloading;
 
 use std::{
-    cell::RefCell,
-    error::Error,
-    fmt::{Debug, Display},
-    sync::{Arc, Mutex},
+    cell::RefCell, error::Error, fmt::{Debug, Display}, path::Path, sync::{Arc, Mutex}
 };
 
-use self::device::{AccessMode, TransportLayerType};
+use crate::{device::{AccessMode, DeviceInfo, TransportLayerType}, MVError, MVSVersion};
 
 /// A macro to simplify calling FFI functions and checking the result.
 ///

@@ -1,10 +1,10 @@
 
 
-use std::{borrow::Cow, future::Future, sync::Arc, task::Poll};
+use std::{borrow::Cow, future::Future, sync::{Arc, Mutex}, task::Poll};
 use clap::ValueEnum;
 
-use channels::{CallbackHandle, CallbackTx};
 use enum_as_inner::EnumAsInner;
+use futures::stream::BoxStream;
 pub use image;
 pub mod decoders;
 pub mod channels;
@@ -114,7 +114,7 @@ pub trait CameraDevice {
     // TODO Is this "no Pin requirement" good?
     //fn poll_events(&self, ctx: &mut std::task::Context) -> Poll<DeviceResult<Event>>;
 
-    fn set_stream_callback(&self, f: Box<dyn Fn(Event) + Send + Sync>) -> DeviceResult<CallbackHandle>;
+    fn set_stream_callback(&self, f: Box<dyn Fn(Event) + Send + Sync>) -> DeviceResult;
 }
 
 //impl<'a, T: CameraDevice + ?Sized> Future for NextFrame<'a, T> {
@@ -126,6 +126,16 @@ pub trait CameraDevice {
 //}
 
 pub trait CameraDeviceEx: CameraDevice {
+    fn stream(&self, buf: usize) -> DeviceResult<BoxStream<Event>> {
+        let (tx, rx) = futures::channel::mpsc::channel(buf);
+        let tx = Mutex::new(tx);
+        self.set_stream_callback(Box::new(move |e| {
+            // TODO maybe just clone instead of using the mutex?
+            tx.lock().unwrap().try_send(e).unwrap(); // TODO handle error
+        }))?;
+        Ok(Box::pin(rx))
+    }
+
     /*fn next_event(&self) -> impl Future<Output = DeviceResult<Event>> {
         NextFrame { device: self }
     }

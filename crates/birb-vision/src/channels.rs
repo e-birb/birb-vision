@@ -1,34 +1,6 @@
-use std::{any::Any, pin::Pin, sync::{Arc, Mutex, Weak}};
+use std::{any::Any, pin::Pin, sync::{Arc, Weak}};
 
 use futures::{stream::BoxStream, Stream, StreamExt};
-
-
-#[derive(Clone)]
-pub struct CallbackTx<F: 'static + ?Sized> {
-    callback: Weak<Box<F>>, // Note it is inside a mutex so FnMut is acceptable
-}
-
-impl<F: ?Sized> CallbackTx<F> {
-    pub fn new(f: Box<F>) -> (Self, CallbackHandle) {
-        let f = f.into();
-        let cb = Arc::new(f);
-        let weak = Arc::downgrade(&cb);
-        (Self { callback: weak }, CallbackHandle { cb })
-    }
-
-    pub fn connected(&self) -> bool {
-        self.callback.strong_count() > 0
-    }
-
-    pub fn try_call<R>(&self, f: impl FnOnce(&F) -> R) -> Option<R> {
-        self.callback.upgrade().map(|cb| f(&cb))
-    }
-}
-
-#[derive(Clone)]
-pub struct CallbackHandle {
-    cb: Arc<dyn Any>,
-}
 
 /*impl<T: 'static> CallbackHandle<T> {
     pub fn set_callback(&mut self, f: impl FnMut(T) + Send + Sync + 'static) {

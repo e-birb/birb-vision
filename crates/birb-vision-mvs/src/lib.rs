@@ -1,6 +1,6 @@
 #![doc = include_str!("../README.md")]
 
-use std::{any::Any, cell::RefCell, ffi::{c_uchar, c_void, CStr}, path::Path, pin::Pin, time::Duration};
+use std::{ffi::{c_uchar, c_void, CStr}, path::Path, pin::Pin, sync::Mutex, time::Duration};
 
 use birb_vision::image::DynamicImage;
 use device::{AccessMode, DeviceInfo};
@@ -52,8 +52,28 @@ pub struct MVDevice {
     /// Note that this correctly makes the struct `!Send` and `!Sync`
     handle: *mut c_void,
 
-    _image_callback: RefCell<Box<dyn Any>>,
+    callbacks: Pin<Box<Mutex<Callbacks>>>,
 }
+
+struct Callbacks {
+    image_callback: Box<dyn Fn(DynamicImage) + Send + Sync>,
+    event_callback: Box<dyn Fn(/*TODO*/) + Send + Sync>,
+}
+
+impl Callbacks {
+    pub fn new() -> Self {
+        Callbacks {
+            image_callback: Box::new(|_| {}),
+            event_callback: Box::new(|| {}),
+        }
+    }
+
+    pub fn clear(&mut self) {
+        *self = Self::new();
+    }
+}
+
+type CallbacksPtr = *const Mutex<Callbacks>;
 
 impl MVDevice {
     /// Create a new camera handle.
@@ -86,7 +106,11 @@ impl MVDevice {
             "MV_CC_CreateHandle succeeded but returned a null handle"
         );
 
-        Ok(Self { cx, handle, _image_callback: RefCell::new(Box::new(())) })
+        Ok(Self {
+            cx,
+            handle,
+            callbacks: Box::pin(Mutex::new(Callbacks::new())),
+        })
     }
 
     pub fn cx(&self) -> &MVContext {
@@ -113,10 +137,33 @@ impl MVDevice {
     /// For USB3Vision device, the parameters nAccessMode and nSwitchoverKey are invalid.
     pub fn open(&self, mode: AccessMode, switchover_key: Option<u16>) -> Result<(), MVError> {
         let switchover_key = switchover_key.unwrap_or(0);
-        mvs_try!(self.cx => MV_CC_OpenDevice(self.handle, mode as u32, switchover_key))
+        mvs_try!(self.cx => MV_CC_OpenDevice(self.handle, mode as u32, switchover_key))?;
+
+        // TODO defer close if any error occurs after this point
+
+        let callbacks: CallbacksPtr = &*self.callbacks;
+
+        mvs_try!(self.cx => MV_CC_RegisterImageCallBackEx(
+            self.handle,
+            Some(frame_callback),
+            callbacks as *mut _,
+        ))?;
+
+        mvs_try!(self.cx => MV_CC_RegisterAllEventCallBack(
+            self.handle,
+            Some(evtent_callback),
+            callbacks as *mut _,
+        ))?;
+
+        Ok(())
     }
 
     pub fn close(&self) -> Result<(), MVError> {
+        // TODO maybe unregister callbacks?
+
+        // destroy callbacks in order to release any associated resource
+        self.callbacks.lock().unwrap().clear();
+
         mvs_try!(self.cx => MV_CC_CloseDevice(self.handle))
     }
 
@@ -287,56 +334,14 @@ impl MVDevice {
     //}
 
     // TODO move?
-    pub fn register_image_callback(&self, f: impl Fn(DynamicImage) + Send + Sync + 'static) {
-        type F = dyn Fn(DynamicImage);
+    pub fn set_image_callback(&self, f: Box<dyn Fn(DynamicImage) + Send + Sync + 'static>) {
+        type F = dyn Fn(DynamicImage) + Send + Sync;
 
-        mvs_try!(self.cx => MV_CC_SetEnumValueByString(self.handle, c"ExposureAuto".as_ptr(), c"Continuous".as_ptr())).unwrap();
+        self.callbacks.lock().unwrap().image_callback = f;
+    }
 
-        #[allow(non_snake_case)]
-        extern "C" fn evt(pEventInfo: *mut mvs_sys::MV_EVENT_OUT_INFO, pUser: *mut c_void) {
-            assert_ne!(pEventInfo, std::ptr::null_mut());
-            let info = unsafe { &*pEventInfo };
-            let name: &[u8; 128] = unsafe { std::mem::transmute(&info.EventName) };
-            let name = CStr::from_bytes_until_nul(name).unwrap();
-            println!("EVENT: {:?}", name);
-        }
-
-        mvs_try!(self.cx => MV_CC_RegisterAllEventCallBack(
-            self.handle,
-            Some(evt),
-            std::ptr::null_mut(),
-        )).unwrap();
-
-        let callback: Pin<Box<Box<F>>> = Box::pin(Box::new(f));
-
-        #[allow(non_snake_case)]
-        extern "C" fn frame(pData: *mut c_uchar, pFrameInfo: *mut MV_FRAME_OUT_INFO_EX, pUser: *mut c_void) {
-            assert!(!pFrameInfo.is_null());
-            let info = unsafe { &*pFrameInfo };
-            let w = info.nWidth;
-            let h = info.nHeight;
-            //println!("Frame: {}x{}", w, h);
-
-            assert!(!pUser.is_null());
-            let f = pUser as *const Box<F>;
-            let callback = unsafe { &*f };
-
-            assert!(!pData.is_null());
-            let data = unsafe { std::slice::from_raw_parts(pData as *const u8, info.nFrameLen as _) };
-            let image = decode_mv_image(w as _, h as _, data, info.enPixelType);
-            callback(image);
-        }
-
-        let f: *const Box<F> = &*callback;
-
-        mvs_try!(self.cx => MV_CC_RegisterImageCallBackEx(
-            self.handle,
-            Some(frame),
-            f as *mut _,
-        )).unwrap();
-
-        // Note: we store the callback only if the registration was successful
-        self._image_callback.replace(Box::new(callback));
+    pub fn set_all_event_callback(&self, f: Box<dyn Fn(/*TODO*/) + Send + Sync + 'static>) {
+        self.callbacks.lock().unwrap().event_callback = f;
     }
 }
 
@@ -349,4 +354,37 @@ impl Drop for MVDevice {
         mvs_try!(self.cx => MV_CC_DestroyHandle(self.handle))
             .expect("Failed to destroy camera handle")
     }
+}
+
+#[allow(non_snake_case)]
+extern "C" fn frame_callback(pData: *mut c_uchar, pFrameInfo: *mut MV_FRAME_OUT_INFO_EX, pUser: *mut c_void) {
+    assert!(!pFrameInfo.is_null());
+    let info = unsafe { &*pFrameInfo };
+    let w = info.nWidth;
+    let h = info.nHeight;
+    //println!("Frame: {}x{}", w, h);
+
+    assert!(!pUser.is_null());
+    let callbacks = pUser as CallbacksPtr;
+    let callbacks = unsafe { &*callbacks };
+
+    assert!(!pData.is_null());
+    let data = unsafe { std::slice::from_raw_parts(pData as *const u8, info.nFrameLen as _) };
+    let image = decode_mv_image(w as _, h as _, data, info.enPixelType);
+    (callbacks.lock().unwrap().image_callback)(image);
+}
+
+#[allow(non_snake_case)]
+extern "C" fn evtent_callback(pEventInfo: *mut mvs_sys::MV_EVENT_OUT_INFO, pUser: *mut c_void) {
+    assert_ne!(pEventInfo, std::ptr::null_mut());
+    let info = unsafe { &*pEventInfo };
+    let name: &[u8; 128] = unsafe { std::mem::transmute(&info.EventName) };
+    let name = CStr::from_bytes_until_nul(name).unwrap();
+    println!("EVENT: {:?}", name);
+
+    assert!(!pUser.is_null());
+    let callbacks = pUser as CallbacksPtr;
+    let callbacks = unsafe { &*callbacks };
+
+    (callbacks.lock().unwrap().event_callback)();
 }

@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use birb_vision::{channels::CallbackHandle, CameraDevice};
+use birb_vision::{CameraDevice};
 use birb_vision_mvs::{device::TransportLayerType, MVContext, MVDevice};
 
 
@@ -16,10 +16,10 @@ fn main() {
 
     CameraDevice::open(&mut device, Default::default()).unwrap();
 
-    device.register_image_callback(|im| {
-        println!("Image callback {}", im.width());
+    device.set_stream_callback(Box::new(|ev| {
+        println!("Event: {ev:?}");
         //im.save("im.png").unwrap();
-    });
+    })).unwrap();
 
     device.start_grabbing().unwrap();
 

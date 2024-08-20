@@ -2,7 +2,7 @@
 
 use std::{borrow::Cow, time::Duration};
 
-use birb_vision::{channels::{CallbackHandle, CallbackTx}, image::{DynamicImage, ImageBuffer, Luma}, CameraDevice, DeviceAccessMode, DeviceError, DeviceResult, Event, Frame};
+use birb_vision::{image::{DynamicImage, ImageBuffer, Luma}, CameraDevice, DeviceAccessMode, DeviceError, DeviceResult, Event, Frame};
 use crate::{mvs_try, prelude::*};
 
 impl CameraDevice for MVDevice {
@@ -61,11 +61,16 @@ impl CameraDevice for MVDevice {
         mvs_try!(self.cx => MV_CC_TriggerSoftwareExecute(self.handle)).map_err(|e| DeviceError::other(e))
     }
 
-    fn set_stream_callback(&self, f: Box<dyn Fn(Event) + Send + Sync>) -> DeviceResult<CallbackHandle> {
-        let (tx, handle) = CallbackTx::new(f);
-        self.register_image_callback(move |img| {
-            tx.try_call(|f| f(Event::Frame(Ok(Frame::Image(img)))));
-        });
-        Ok(handle)
+    fn set_stream_callback(&self, f: Box<dyn Fn(Event) + Send + Sync>) -> DeviceResult {
+        self.set_image_callback(Box::new(move |img| {
+            f(Event::Frame(Ok(Frame::Image(img))))
+        }));
+
+        // TODO
+        //self.set_event_callback(Box::new(move |img| {
+        //    f(Event::Frame(Ok(Frame::Image(img))))
+        //}));
+
+        Ok(())
     }
 }
