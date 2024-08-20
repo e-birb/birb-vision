@@ -26,7 +26,7 @@ use self::device::{AccessMode, TransportLayerType};
 macro_rules! mvs_try {
     ($ctx:expr => $function:ident ($($args:expr),*$(,)?)) => {
         {
-            let result = $crate::MVSError::result_from_code(unsafe {
+            let result = $crate::MVError::result_from_code(unsafe {
                 $ctx.ffi().$function($($args),*)
             });
 
@@ -63,11 +63,11 @@ macro_rules! mvs_try {
 /// [`MV_CC_Finalize`]: mvs_sys::MVS::MV_CC_Finalize
 #[derive(Clone)]
 #[must_use]
-pub struct MVSContext {
+pub struct MVContext {
     inner: Arc<MVSContextInner>,
 }
 
-impl MVSContext {
+impl MVContext {
     /// The required version of the MVS SDK for this crate.
     ///
     /// [`MVSContext::new`] will check the version of the MVS SDK and ensure it is compatible with this version.  
@@ -296,7 +296,7 @@ impl MVSContext {
     pub fn enumerate_devices(
         &self,
         transport_layers: impl IntoIterator<Item = TransportLayerType>,
-    ) -> Result<Vec<DeviceInfo>, MVSError> {
+    ) -> Result<Vec<DeviceInfo>, MVError> {
         // TODO reference the issue about multithreading
         let _lock = self
             .inner
@@ -331,7 +331,7 @@ impl MVSContext {
     /// Enumerate all devices connected to the system.
     ///
     /// This is equivalent to calling [`MVSContext::enumerate_devices`] with [`TransportLayerType::ALL`].
-    pub fn enumerate_all_devices(&self) -> Result<Vec<DeviceInfo>, MVSError> {
+    pub fn enumerate_all_devices(&self) -> Result<Vec<DeviceInfo>, MVError> {
         self.enumerate_devices(TransportLayerType::ALL)
     }
 
@@ -358,7 +358,7 @@ impl MVSContextInner {
         );
         let lib = lib_result.map_err(MVSContextCreationError::Loading)?;
 
-        MVSError::result_from_code(unsafe { lib.MV_CC_Initialize() })
+        MVError::result_from_code(unsafe { lib.MV_CC_Initialize() })
             .map_err(MVSContextCreationError::InitializationFailed)?;
 
         Ok(Arc::new(Self {
@@ -375,7 +375,7 @@ impl Drop for MVSContextInner {
             std::thread::current().id()
         );
 
-        MVSError::result_from_code(unsafe { self.lib.MV_CC_Finalize() })
+        MVError::result_from_code(unsafe { self.lib.MV_CC_Finalize() })
             .expect("Failed to finalize MVS SDK");
     }
 }
@@ -385,7 +385,7 @@ static CURRENT_CONTEXT_INNER: Mutex<RefCell<std::sync::Weak<MVSContextInner>>> =
 
 pub enum MVSContextCreationError {
     Loading(libloading::Error),
-    InitializationFailed(MVSError),
+    InitializationFailed(MVError),
     IncompatibleVersion {
         required: semver::VersionReq,
         found: semver::Version,

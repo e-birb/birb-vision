@@ -6,7 +6,7 @@ fn main() {
 }
 
 async fn async_main() {
-    let cx = MVSContext::new(None).expect("Failed to initialize a MVS context");
+    let cx = MVContext::new(None).expect("Failed to initialize a MVS context");
 
     let devices = cx
         .enumerate_devices([TransportLayerType::Usb])
@@ -16,7 +16,7 @@ async fn async_main() {
 
     CameraDevice::open(&mut device).await.unwrap();
 
-    device.start_video_stream().await.unwrap();
+    device.start_grabbing().await.unwrap();
 
     for _ in 0..100 {
         let frame = device.receive_frame().await.unwrap();

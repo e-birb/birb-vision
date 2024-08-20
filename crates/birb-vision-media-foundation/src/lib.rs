@@ -1,3 +1,5 @@
+#![cfg(windows)]
+
 use std::error::Error;
 
 use windows::core::{HRESULT, Error as WinError};

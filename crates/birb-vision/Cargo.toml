@@ -4,9 +4,11 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+clap = { version = "4.5.16", features = ["derive"] }
 #async-trait = "0.1.81"
 enum-as-inner = "0.6.0"
 futures = "0.3.30"
 image = "0.25"
 mozjpeg = "0.10.7"
+serde = { version = "1", features = ["derive"] }
 #mozjpeg-sys = "2.2.0"

@@ -154,7 +154,7 @@ use std::fmt::Debug;
 use mvs_sys::*;
 
 define_error_enum! {
-    "" MVSError {
+    "" MVError {
         native: {
             "invalid handle"
             ///
@@ -222,9 +222,9 @@ define_error_enum! {
     }
 }
 
-impl MVSError {
+impl MVError {
     pub fn result_from_code(code: i32) -> Result<(), Self> {
-        match MVSError::from_code(code as u32) {
+        match MVError::from_code(code as u32) {
             Some(e) => Err(e),
             None => Ok(()),
         }
@@ -236,11 +236,11 @@ impl MVSError {
         } else if let Some(native) = Self::native_from_code(code) {
             Some(native)
         } else if let Some(genicam) = GenICamError::native_from_code(code) {
-            Some(MVSError::GenICam(genicam))
+            Some(MVError::GenICam(genicam))
         } else if let Some(usb) = UsbError::native_from_code(code) {
-            Some(MVSError::Usb(usb))
+            Some(MVError::Usb(usb))
         } else {
-            Some(MVSError::Other(code))
+            Some(MVError::Other(code))
         }
     }
 
@@ -249,13 +249,13 @@ impl MVSError {
             native
         } else {
             match self {
-                MVSError::Other(code) => *code,
-                MVSError::GenICam(genicam) => genicam.native_code(),
-                MVSError::Usb(usb) => usb.native_code(),
-                MVSError::Upg(upg) => upg.native_code(),
-                MVSError::Alg(alg) => alg.native_code(),
-                MVSError::GigE(gige) => gige.native_code(),
-                MVSError::Exception(exception) => exception.native_code(),
+                MVError::Other(code) => *code,
+                MVError::GenICam(genicam) => genicam.native_code(),
+                MVError::Usb(usb) => usb.native_code(),
+                MVError::Upg(upg) => upg.native_code(),
+                MVError::Alg(alg) => alg.native_code(),
+                MVError::GigE(gige) => gige.native_code(),
+                MVError::Exception(exception) => exception.native_code(),
                 _ => unreachable!(),
             }
         }
@@ -266,13 +266,13 @@ impl MVSError {
             native
         } else {
             match self {
-                MVSError::Other(_) => "Other",
-                MVSError::GenICam(genicam) => genicam.native_name(),
-                MVSError::Usb(usb) => usb.native_name(),
-                MVSError::Upg(upg) => upg.native_name(),
-                MVSError::Alg(alg) => alg.native_name(),
-                MVSError::GigE(gige) => gige.native_name(),
-                MVSError::Exception(exception) => exception.native_name(),
+                MVError::Other(_) => "Other",
+                MVError::GenICam(genicam) => genicam.native_name(),
+                MVError::Usb(usb) => usb.native_name(),
+                MVError::Upg(upg) => upg.native_name(),
+                MVError::Alg(alg) => alg.native_name(),
+                MVError::GigE(gige) => gige.native_name(),
+                MVError::Exception(exception) => exception.native_name(),
                 _ => unreachable!(),
             }
         }
@@ -283,20 +283,20 @@ impl MVSError {
             Some(native)
         } else {
             match self {
-                MVSError::Other(_) => None,
-                MVSError::GenICam(genicam) => Some(genicam.mv_native_name()),
-                MVSError::Usb(usb) => Some(usb.mv_native_name()),
-                MVSError::Upg(upg) => Some(upg.mv_native_name()),
-                MVSError::Alg(alg) => Some(alg.mv_native_name()),
-                MVSError::GigE(gige) => Some(gige.mv_native_name()),
-                MVSError::Exception(exception) => Some(exception.mv_native_name()),
+                MVError::Other(_) => None,
+                MVError::GenICam(genicam) => Some(genicam.mv_native_name()),
+                MVError::Usb(usb) => Some(usb.mv_native_name()),
+                MVError::Upg(upg) => Some(upg.mv_native_name()),
+                MVError::Alg(alg) => Some(alg.mv_native_name()),
+                MVError::GigE(gige) => Some(gige.mv_native_name()),
+                MVError::Exception(exception) => Some(exception.mv_native_name()),
                 _ => unreachable!(),
             }
         }
     }
 }
 
-impl std::fmt::Debug for MVSError {
+impl std::fmt::Debug for MVError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let code = self.code();
         let name = self.name();
@@ -307,7 +307,7 @@ impl std::fmt::Debug for MVSError {
     }
 }
 
-impl std::fmt::Display for MVSError {
+impl std::fmt::Display for MVError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         //#[allow(unreachable_patterns)] // <- for doc purposes, when no errors are defined
         //match self {
@@ -318,21 +318,21 @@ impl std::fmt::Display for MVSError {
     }
 }
 
-impl std::error::Error for MVSError {}
+impl std::error::Error for MVError {}
 
-impl PartialOrd for MVSError {
+impl PartialOrd for MVError {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.code().cmp(&other.code()))
     }
 }
 
-impl Ord for MVSError {
+impl Ord for MVError {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.code().cmp(&other.code())
     }
 }
 
-impl std::hash::Hash for MVSError {
+impl std::hash::Hash for MVError {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.code().hash(state)
     }

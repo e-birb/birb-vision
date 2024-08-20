@@ -8,7 +8,7 @@ fn main() {
     // everything for you.
     // You can call this function multiple times, or use the `MVSContext::current()`
     // method to get the context instance in the current thread.
-    let cx = MVSContext::new(None).expect("Failed to initialize a MVS context");
+    let cx = MVContext::new(None).expect("Failed to initialize a MVS context");
 
     println!("MVS SDK version: {}", cx.sdk_version());
 

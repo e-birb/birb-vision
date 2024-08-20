@@ -4,7 +4,7 @@ use crate::*;
 
 #[derive(Clone)]
 pub struct DeviceInfo {
-    pub(crate) cx: MVSContext,
+    pub(crate) cx: MVContext,
     pub(crate) info: mvs_sys::MV_CC_DEVICE_INFO,
 }
 
@@ -33,8 +33,8 @@ impl DeviceInfo {
         todo!()
     }
 
-    pub fn into_device(self, log: bool) -> Result<MVSDevice, MVSError> {
-        MVSDevice::new(self, log)
+    pub fn into_device(self, log: bool) -> Result<MVDevice, MVError> {
+        MVDevice::new(self, log)
     }
 }
 

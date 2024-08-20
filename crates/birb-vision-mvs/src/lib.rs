@@ -1,20 +1,25 @@
 #![doc = include_str!("../README.md")]
 
-use std::{ffi::c_void, path::Path, time::Duration};
+use std::{any::Any, cell::RefCell, ffi::{c_uchar, c_void, CStr}, path::Path, pin::Pin, time::Duration};
 
+use birb_vision::image::DynamicImage;
 use device::{AccessMode, DeviceInfo};
 pub use log;
 
 pub mod property;
+use mvs_sys::MV_FRAME_OUT_INFO_EX;
+use pixel::decode_mv_image;
 use property::*;
 pub mod device;
 pub mod error;
-pub use error::MVSError;
+pub use error::MVError;
 mod version;
 pub use version::MVSVersion;
 mod ctx;
-pub use ctx::{MVSContext, MVSContextCreationError};
+pub use ctx::{MVContext, MVSContextCreationError};
 pub use mvs_sys;
+
+pub mod pixel;
 
 #[cfg(feature = "birb-vision")]
 mod birb_vision_impl;
@@ -22,7 +27,7 @@ mod birb_vision_impl;
 pub mod prelude {
     pub use crate::{
         device::{AccessMode, TransportLayerType},
-        MVSContext, MVSDevice,
+        MVContext, MVDevice,
     };
 }
 
@@ -40,15 +45,17 @@ pub mod ext {
 ///
 /// # Thread Safety
 /// The device handle is not thread-safe and is `!Send` and `!Sync`.
-pub struct MVSDevice {
-    cx: MVSContext,
+pub struct MVDevice {
+    cx: MVContext,
     /// The actual device handle
     ///
     /// Note that this correctly makes the struct `!Send` and `!Sync`
     handle: *mut c_void,
+
+    _image_callback: RefCell<Box<dyn Any>>,
 }
 
-impl MVSDevice {
+impl MVDevice {
     /// Create a new camera handle.
     ///
     /// # Parameters
@@ -57,7 +64,7 @@ impl MVSDevice {
     ///
     /// # Notes
     /// The SDK logs messages to a file. The path can be specified with [`MVSContext::set_sdk_log_path()`].
-    pub fn new(device_info: DeviceInfo, log: bool) -> Result<Self, MVSError> {
+    pub fn new(device_info: DeviceInfo, log: bool) -> Result<Self, MVError> {
         let mut handle = std::ptr::null_mut();
         let cx = device_info.cx.clone();
 
@@ -79,10 +86,10 @@ impl MVSDevice {
             "MV_CC_CreateHandle succeeded but returned a null handle"
         );
 
-        Ok(Self { cx, handle })
+        Ok(Self { cx, handle, _image_callback: RefCell::new(Box::new(())) })
     }
 
-    pub fn cx(&self) -> &MVSContext {
+    pub fn cx(&self) -> &MVContext {
         &self.cx
     }
 
@@ -104,12 +111,12 @@ impl MVSDevice {
     /// > You can find the specific device and connect according to inputted device parameters.  
     /// > When calling the interface, the parameters nAccessMode and nSwitchoverKey are optional, and the device access mode is exclusive by default. Currently the device does not support the following preemption modes: MV_ACCESS_ExclusiveWithSwitch, MV_ACCESS_ControlWithSwitch, MV_ACCESS_ControlSwitchEnableWithKey.  
     /// For USB3Vision device, the parameters nAccessMode and nSwitchoverKey are invalid.
-    pub fn open(&self, mode: AccessMode, switchover_key: Option<u16>) -> Result<(), MVSError> {
+    pub fn open(&self, mode: AccessMode, switchover_key: Option<u16>) -> Result<(), MVError> {
         let switchover_key = switchover_key.unwrap_or(0);
         mvs_try!(self.cx => MV_CC_OpenDevice(self.handle, mode as u32, switchover_key))
     }
 
-    pub fn close(&self) -> Result<(), MVSError> {
+    pub fn close(&self) -> Result<(), MVError> {
         mvs_try!(self.cx => MV_CC_CloseDevice(self.handle))
     }
 
@@ -119,7 +126,7 @@ impl MVSDevice {
     /// From the SDK documentation:
     /// * The API is not supported by GenTL cameras
     /// * If the device is a **GigE** camera, there is a **blocking risk** when calling the API, so it is not recommended to call the API during the streaming process
-    pub fn get_info(&self) -> Result<DeviceInfo, MVSError> {
+    pub fn get_info(&self) -> Result<DeviceInfo, MVError> {
         let mut info = unsafe { std::mem::zeroed() };
         mvs_try!(self.cx => MV_CC_GetDeviceInfo(self.handle, &mut info))?;
         Ok(DeviceInfo {
@@ -128,90 +135,90 @@ impl MVSDevice {
         })
     }
 
-    pub fn invalidate_nodes(&self) -> Result<(), MVSError> {
+    pub fn invalidate_nodes(&self) -> Result<(), MVError> {
         mvs_try!(self.cx => MV_CC_InvalidateNodes(self.handle))
     }
 
-    pub fn get_int_value(&self, key: impl PropId) -> Result<IntValue, MVSError> {
+    pub fn get_int_value(&self, key: impl PropId) -> Result<IntValue, MVError> {
         let mut value = unsafe { std::mem::zeroed() };
         mvs_try!(self.cx => MV_CC_GetIntValue(self.handle, prop_id_to_c_string(key).as_ptr(), &mut value))?;
         Ok(IntValue(value))
     }
 
-    pub fn set_int_value(&self, key: impl PropId, value: u32) -> Result<(), MVSError> {
+    pub fn set_int_value(&self, key: impl PropId, value: u32) -> Result<(), MVError> {
         mvs_try!(self.cx => MV_CC_SetIntValue(self.handle, prop_id_to_c_string(key).as_ptr(), value))
     }
 
-    pub fn get_enum_value(&self, key: impl PropId) -> Result<EnumValue, MVSError> {
+    pub fn get_enum_value(&self, key: impl PropId) -> Result<EnumValue, MVError> {
         let mut value = unsafe { std::mem::zeroed() };
         mvs_try!(self.cx => MV_CC_GetEnumValue(self.handle, prop_id_to_c_string(key).as_ptr(), &mut value))?;
         Ok(EnumValue(value))
     }
 
-    pub fn set_enum_value(&self, key: impl PropId, value: u32) -> Result<(), MVSError> {
+    pub fn set_enum_value(&self, key: impl PropId, value: u32) -> Result<(), MVError> {
         mvs_try!(self.cx => MV_CC_SetEnumValue(self.handle, prop_id_to_c_string(key).as_ptr(), value))
     }
 
-    pub fn get_enum_entry_symbolic(&self, key: impl PropId) -> Result<EnumEntrySymbolic, MVSError> {
+    pub fn get_enum_entry_symbolic(&self, key: impl PropId) -> Result<EnumEntrySymbolic, MVError> {
         let mut entry = unsafe { std::mem::zeroed() };
         mvs_try!(self.cx => MV_CC_GetEnumEntrySymbolic(self.handle, prop_id_to_c_string(key).as_ptr(), &mut entry))?;
         Ok(EnumEntrySymbolic(entry))
     }
 
-    pub fn set_enum_value_by_string(&self, key: impl PropId, value: &str) -> Result<(), MVSError> {
+    pub fn set_enum_value_by_string(&self, key: impl PropId, value: &str) -> Result<(), MVError> {
         let c_string = std::ffi::CString::new(value).unwrap();
         mvs_try!(self.cx => MV_CC_SetEnumValueByString(self.handle, prop_id_to_c_string(key).as_ptr(), c_string.as_ptr()))
     }
 
-    pub fn get_float_value(&self, key: impl PropId) -> Result<FloatValue, MVSError> {
+    pub fn get_float_value(&self, key: impl PropId) -> Result<FloatValue, MVError> {
         let mut value = unsafe { std::mem::zeroed() };
         mvs_try!(self.cx => MV_CC_GetFloatValue(self.handle, prop_id_to_c_string(key).as_ptr(), &mut value))?;
         Ok(FloatValue(value))
     }
 
-    pub fn set_float_value(&self, key: impl PropId, value: f32) -> Result<(), MVSError> {
+    pub fn set_float_value(&self, key: impl PropId, value: f32) -> Result<(), MVError> {
         mvs_try!(self.cx => MV_CC_SetFloatValue(self.handle, prop_id_to_c_string(key).as_ptr(), value))
     }
 
-    pub fn get_bool_value(&self, key: impl PropId) -> Result<bool, MVSError> {
+    pub fn get_bool_value(&self, key: impl PropId) -> Result<bool, MVError> {
         let mut value = false;
         mvs_try!(self.cx => MV_CC_GetBoolValue(self.handle, prop_id_to_c_string(key).as_ptr(), &mut value))?;
         Ok(value)
     }
 
-    pub fn set_bool_value(&self, key: impl PropId, value: bool) -> Result<(), MVSError> {
+    pub fn set_bool_value(&self, key: impl PropId, value: bool) -> Result<(), MVError> {
         mvs_try!(self.cx => MV_CC_SetBoolValue(self.handle, prop_id_to_c_string(key).as_ptr(), value))
     }
 
-    pub fn get_string_value(&self, key: impl PropId) -> Result<StringValue, MVSError> {
+    pub fn get_string_value(&self, key: impl PropId) -> Result<StringValue, MVError> {
         let mut value = unsafe { std::mem::zeroed() };
         mvs_try!(self.cx => MV_CC_GetStringValue(self.handle, prop_id_to_c_string(key).as_ptr(), &mut value))?;
         Ok(StringValue(value))
     }
 
-    pub fn set_string_value(&self, key: impl PropId, value: &str) -> Result<(), MVSError> {
+    pub fn set_string_value(&self, key: impl PropId, value: &str) -> Result<(), MVError> {
         let c_string = std::ffi::CString::new(value).unwrap();
         mvs_try!(self.cx => MV_CC_SetStringValue(self.handle, prop_id_to_c_string(key).as_ptr(), c_string.as_ptr()))
     }
 
     /// "Sends" a command to the camera.
-    pub fn set_command_value(&self, key: impl PropId) -> Result<(), MVSError> {
+    pub fn set_command_value(&self, key: impl PropId) -> Result<(), MVError> {
         mvs_try!(self.cx => MV_CC_SetCommandValue(self.handle, prop_id_to_c_string(key).as_ptr()))
     }
 
     /// Import camera property files in XML format.
-    pub fn feature_load(&self, path: &Path) -> Result<(), MVSError> {
+    pub fn feature_load(&self, path: &Path) -> Result<(), MVError> {
         let c_string = std::ffi::CString::new(path.to_str().unwrap()).unwrap();
         mvs_try!(self.cx => MV_CC_FeatureLoad(self.handle, c_string.as_ptr()))
     }
 
     /// Save the camera property file in XML format.
-    pub fn feature_save(&self, path: &Path) -> Result<(), MVSError> {
+    pub fn feature_save(&self, path: &Path) -> Result<(), MVError> {
         let c_string = std::ffi::CString::new(path.to_str().unwrap()).unwrap();
         mvs_try!(self.cx => MV_CC_FeatureSave(self.handle, c_string.as_ptr()))
     }
 
-    pub fn open_params_gui(&self) -> Result<(), MVSError> {
+    pub fn open_params_gui(&self) -> Result<(), MVError> {
         mvs_try!(self.cx => MV_CC_OpenParamsGUI(self.handle))
     }
 
@@ -220,7 +227,7 @@ impl MVSDevice {
     /// # Parameters
     /// * `address`: The address of the register. The address can be obtained from Camera.xml, in a form similar to xml node value of xxx_RegAddr (Camera.xml will automatically generate in current program directory after the device is opened).
     /// * `buffer`: The buffer to store the data read from the register (memory value is stored based on **big endian mode**)
-    pub fn read_memory(&self, address: u64, buffer: &mut [u8]) -> Result<(), MVSError> {
+    pub fn read_memory(&self, address: u64, buffer: &mut [u8]) -> Result<(), MVError> {
         mvs_try!(self.cx => MV_CC_ReadMemory(self.handle, buffer.as_mut_ptr() as *mut _, address as i64, buffer.len() as i64))
     }
 
@@ -229,12 +236,12 @@ impl MVSDevice {
     /// # Parameters
     /// * `address`: The address of the register. The address can be obtained from Camera.xml, in a form similar to xml node value of xxx_RegAddr (Camera.xml will automatically generate in current program directory after the device is opened).
     /// * `buffer`: The buffer containing the data to write into the register (the value is to be stored according to **big endian mode**)
-    pub fn write_memory(&self, address: u64, buffer: &[u8]) -> Result<(), MVSError> {
+    pub fn write_memory(&self, address: u64, buffer: &[u8]) -> Result<(), MVError> {
         mvs_try!(self.cx => MV_CC_WriteMemory(self.handle, buffer.as_ptr() as *const _, address as i64, buffer.len() as i64))
     }
 
     #[allow(non_snake_case)]
-    pub fn get_GenICam_xml(&self) -> Result<String, MVSError> {
+    pub fn get_GenICam_xml(&self) -> Result<String, MVError> {
         let mut size = 0;
         mvs_try!(self.cx => MV_XML_GetGenICamXML(self.handle, std::ptr::null_mut(), 0, &mut size))?;
         let mut buffer = vec![0u8; size as usize];
@@ -242,13 +249,13 @@ impl MVSDevice {
         Ok(String::from_utf8(buffer).expect("Failed to convert GenICam XML to UTF-8"))
     }
 
-    pub fn get_node_access_mode(&self, key: impl PropId) -> Result<XmlAccessMode, MVSError> {
+    pub fn get_node_access_mode(&self, key: impl PropId) -> Result<XmlAccessMode, MVError> {
         let mut mode = 0;
         mvs_try!(self.cx => MV_XML_GetNodeAccessMode(self.handle, prop_id_to_c_string(key).as_ptr(), &mut mode))?;
         Ok(XmlAccessMode::from_i32(mode))
     }
 
-    pub fn get_node_interface_type(&self, key: impl PropId) -> Result<XmlInterfaceType, MVSError> {
+    pub fn get_node_interface_type(&self, key: impl PropId) -> Result<XmlInterfaceType, MVError> {
         let mut interface_type = 0;
         mvs_try!(self.cx => MV_XML_GetNodeInterfaceType(self.handle, prop_id_to_c_string(key).as_ptr(), &mut interface_type))?;
         Ok(XmlInterfaceType::from_i32(interface_type))
@@ -256,15 +263,15 @@ impl MVSDevice {
 
     // TOOD from here on it is a mess, to tidy up
 
-    pub fn start_grabbing(&self) -> Result<(), MVSError> {
+    pub fn start_grabbing(&self) -> Result<(), MVError> {
         mvs_try!(self.cx => MV_CC_StartGrabbing(self.handle))
     }
 
-    pub fn stop_grabbing(&self) -> Result<(), MVSError> {
+    pub fn stop_grabbing(&self) -> Result<(), MVError> {
         mvs_try!(self.cx => MV_CC_StopGrabbing(self.handle))
     }
 
-    pub fn get_one_frame_timeout(&self, data: &mut [u8], timeout: Duration) -> Result<(), MVSError> {
+    pub fn get_one_frame_timeout(&self, data: &mut [u8], timeout: Duration) -> Result<(), MVError> {
         let mut info = unsafe { std::mem::zeroed() };
         mvs_try!(self.cx => MV_CC_GetOneFrameTimeout(
             self.handle,
@@ -274,9 +281,66 @@ impl MVSDevice {
             timeout.as_millis() as u32,
         ))
     }
+
+    //pub fn get_image_buffer(&self, timeout: Option<Duration>) -> Result<(), MVError> {
+//
+    //}
+
+    // TODO move?
+    pub fn register_image_callback(&self, f: impl Fn(DynamicImage) + Send + Sync + 'static) {
+        type F = dyn Fn(DynamicImage);
+
+        mvs_try!(self.cx => MV_CC_SetEnumValueByString(self.handle, c"ExposureAuto".as_ptr(), c"Continuous".as_ptr())).unwrap();
+
+        #[allow(non_snake_case)]
+        extern "C" fn evt(pEventInfo: *mut mvs_sys::MV_EVENT_OUT_INFO, pUser: *mut c_void) {
+            assert_ne!(pEventInfo, std::ptr::null_mut());
+            let info = unsafe { &*pEventInfo };
+            let name: &[u8; 128] = unsafe { std::mem::transmute(&info.EventName) };
+            let name = CStr::from_bytes_until_nul(name).unwrap();
+            println!("EVENT: {:?}", name);
+        }
+
+        mvs_try!(self.cx => MV_CC_RegisterAllEventCallBack(
+            self.handle,
+            Some(evt),
+            std::ptr::null_mut(),
+        )).unwrap();
+
+        let callback: Pin<Box<Box<F>>> = Box::pin(Box::new(f));
+
+        #[allow(non_snake_case)]
+        extern "C" fn frame(pData: *mut c_uchar, pFrameInfo: *mut MV_FRAME_OUT_INFO_EX, pUser: *mut c_void) {
+            assert!(!pFrameInfo.is_null());
+            let info = unsafe { &*pFrameInfo };
+            let w = info.nWidth;
+            let h = info.nHeight;
+            //println!("Frame: {}x{}", w, h);
+
+            assert!(!pUser.is_null());
+            let f = pUser as *const Box<F>;
+            let callback = unsafe { &*f };
+
+            assert!(!pData.is_null());
+            let data = unsafe { std::slice::from_raw_parts(pData as *const u8, info.nFrameLen as _) };
+            let image = decode_mv_image(w as _, h as _, data, info.enPixelType);
+            callback(image);
+        }
+
+        let f: *const Box<F> = &*callback;
+
+        mvs_try!(self.cx => MV_CC_RegisterImageCallBackEx(
+            self.handle,
+            Some(frame),
+            f as *mut _,
+        )).unwrap();
+
+        // Note: we store the callback only if the registration was successful
+        self._image_callback.replace(Box::new(callback));
+    }
 }
 
-impl Drop for MVSDevice {
+impl Drop for MVDevice {
     fn drop(&mut self) {
         // try close the camera
         // we don't know if the camera is open or closed at this point, so we ignore the result
