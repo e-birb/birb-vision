@@ -29,8 +29,24 @@ impl DeviceInfo {
         DeviceTypeInfo(self.info.nDevTypeInfo)
     }
 
-    pub fn special_info(&self) -> SpecialDeviceInfo {
-        todo!()
+    pub fn special_info(&self) -> Option<SpecialDeviceInfo> {
+        use TransportLayerType::*;
+
+        // TODO maybe transport_layer_type is the wrong way to go here, but I don't know what else to use
+        match self.transport_layer_type() {
+            Unknown => None,
+            Gige => Some(SpecialDeviceInfo::GigE(GigEDeviceInfo(unsafe { self.info.SpecialInfo.stGigEInfo }))),
+            _1394 => None, // TODO ???
+            Usb => Some(SpecialDeviceInfo::Usb(UsbDeviceInfo(unsafe { self.info.SpecialInfo.stUsb3VInfo }))),
+            Cameralink => Some(SpecialDeviceInfo::Cameralink(CameralinkDeviceInfo(unsafe { self.info.SpecialInfo.stCamLInfo }))),
+            VirGige => None, // TODO ???
+            VirUsb => None, // TODO ???
+            GentlGige => None, // TODO ???
+            GentlCameralink => None, // TODO ???
+            GentlCxp => Some(SpecialDeviceInfo::CoaXPress(CoaXPressDeviceInfo(unsafe { self.info.SpecialInfo.stCXPInfo }))),
+            GentlXof => Some(SpecialDeviceInfo::Xof(XofDeviceInfo(unsafe { self.info.SpecialInfo.stXoFInfo }))),
+            Error(_) => None,
+        }
     }
 
     pub fn into_device(self, log: bool) -> Result<MVDevice, MVError> {
@@ -46,7 +62,7 @@ impl Debug for DeviceInfo {
             .field("mac_address", &format_args!("{:#018x}", self.mac_address()))
             .field("transport_layer_type", &self.transport_layer_type())
             .field("device_type_info", &self.device_type_info())
-            //.field("special_info", &self.special_info())
+            .field("special_info", &self.special_info())
             .finish()
     }
 }
@@ -175,6 +191,7 @@ impl TransportLayerType {
     }
 }
 
+#[derive(Debug, Clone)]
 pub enum SpecialDeviceInfo {
     GigE(GigEDeviceInfo),
     Usb(UsbDeviceInfo),
@@ -184,27 +201,221 @@ pub enum SpecialDeviceInfo {
     Xof(XofDeviceInfo),
 }
 
+#[derive(Clone)]
 #[allow(dead_code)] // TODO
 pub struct GigEDeviceInfo(mvs_sys::MV_GIGE_DEVICE_INFO);
 
-impl GigEDeviceInfo {
-    // TODO
+impl Debug for GigEDeviceInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GigEDeviceInfo")
+            .field("ip_configuration_options", &format_args!("{:#010x}", self.ip_configuration_options()))
+            .field("ip_configuration_current", &format_args!("{:#010x}", self.ip_configuration_current()))
+            .field("current_ip_address", &format_args!("{:#010x}", self.current_ip_address()))
+            .field("current_subnet_mask", &format_args!("{:#010x}", self.current_subnet_mask()))
+            .field("default_gateway", &format_args!("{:#010x}", self.default_gateway()))
+            .field("manufacturer_name", &self.manufacturer_name())
+            .field("model_name", &self.model_name())
+            .field("device_version", &self.device_version())
+            .field("manufacturer_specific_info", &self.manufacturer_specific_info())
+            .field("serial_number", &self.serial_number())
+            .field("user_defined_name", &self.user_defined_name())
+            .field("network_ip_address", &format_args!("{:#010x}", self.network_ip_address()))
+            .finish()
+    }
 }
 
+impl GigEDeviceInfo {
+    pub fn ip_configuration_options(&self) -> u32 {
+        self.0.nIpCfgOption
+    }
+
+    pub fn ip_configuration_current(&self) -> u32 {
+        self.0.nIpCfgCurrent
+    }
+
+    pub fn current_ip_address(&self) -> u32 {
+        self.0.nCurrentIp
+    }
+
+    pub fn current_subnet_mask(&self) -> u32 {
+        self.0.nCurrentSubNetMask
+    }
+
+    pub fn default_gateway(&self) -> u32 {
+        self.0.nDefultGateWay
+    }
+
+    pub fn manufacturer_name(&self) -> &CStr {
+        CStr::from_bytes_until_nul(&self.0.chManufacturerName).unwrap()
+    }
+
+    pub fn model_name(&self) -> &CStr {
+        CStr::from_bytes_until_nul(&self.0.chModelName).unwrap()
+    }
+
+    pub fn device_version(&self) -> &CStr {
+        CStr::from_bytes_until_nul(&self.0.chDeviceVersion).unwrap()
+    }
+
+    pub fn manufacturer_specific_info(&self) -> &CStr {
+        CStr::from_bytes_until_nul(&self.0.chManufacturerSpecificInfo).unwrap()
+    }
+
+    pub fn serial_number(&self) -> &CStr {
+        CStr::from_bytes_until_nul(&self.0.chSerialNumber).unwrap()
+    }
+
+    pub fn user_defined_name(&self) -> &CStr {
+        CStr::from_bytes_until_nul(&self.0.chUserDefinedName).unwrap()
+    }
+
+    pub fn network_ip_address(&self) -> u32 {
+        self.0.nNetExport
+    }
+}
+
+#[derive(Clone)]
 #[allow(dead_code)] // TODO
 pub struct UsbDeviceInfo(mvs_sys::MV_USB3_DEVICE_INFO);
 
-impl UsbDeviceInfo {
-    // TODO
+impl Debug for UsbDeviceInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("UsbDeviceInfo")
+            .field("control_input_endpoint", &self.control_input_endpoint())
+            .field("control_output_endpoint", &self.control_output_endpoint())
+            .field("stream_endpoint", &self.stream_endpoint())
+            .field("event_endpoint", &self.event_endpoint())
+            .field("vendor_id", &self.vendor_id())
+            .field("product_id", &self.product_id())
+            .field("device_number", &self.device_number())
+            .field("device_guid", &self.device_guid())
+            .field("vendor_name", &self.vendor_name())
+            .field("model_name", &self.model_name())
+            .field("family_name", &self.family_name())
+            .field("device_version", &self.device_version())
+            .field("manufacturer_name", &self.manufacturer_name())
+            .field("serial_number", &self.serial_number())
+            .field("user_defined_name", &self.user_defined_name())
+            .field("support_usb_protocol", &self.support_usb_protocol())
+            .field("device_address", &format_args!("{:#010x}", self.device_address()))
+            .finish()
+    }
 }
 
+impl UsbDeviceInfo {
+    pub fn control_input_endpoint(&self) -> u8 {
+        self.0.CrtlInEndPoint
+    }
+
+    pub fn control_output_endpoint(&self) -> u8 {
+        self.0.CrtlOutEndPoint
+    }
+
+    pub fn stream_endpoint(&self) -> u8 {
+        self.0.StreamEndPoint
+    }
+
+    pub fn event_endpoint(&self) -> u8 {
+        self.0.EventEndPoint
+    }
+
+    pub fn vendor_id(&self) -> u16 {
+        self.0.idVendor
+    }
+
+    pub fn product_id(&self) -> u16 {
+        self.0.idProduct
+    }
+
+    pub fn device_number(&self) -> u32 {
+        self.0.nDeviceNumber
+    }
+
+    pub fn device_guid(&self) -> &CStr {
+        CStr::from_bytes_until_nul(&self.0.chDeviceGUID).unwrap()
+    }
+
+    pub fn vendor_name(&self) -> &CStr {
+        CStr::from_bytes_until_nul(&self.0.chVendorName).unwrap()
+    }
+
+    pub fn model_name(&self) -> &CStr {
+        CStr::from_bytes_until_nul(&self.0.chModelName).unwrap()
+    }
+
+    pub fn family_name(&self) -> &CStr {
+        CStr::from_bytes_until_nul(&self.0.chFamilyName).unwrap()
+    }
+
+    pub fn device_version(&self) -> &CStr {
+        CStr::from_bytes_until_nul(&self.0.chDeviceVersion).unwrap()
+    }
+
+    pub fn manufacturer_name(&self) -> &CStr {
+        CStr::from_bytes_until_nul(&self.0.chManufacturerName).unwrap()
+    }
+
+    pub fn serial_number(&self) -> &CStr {
+        CStr::from_bytes_until_nul(&self.0.chSerialNumber).unwrap()
+    }
+
+    pub fn user_defined_name(&self) -> &CStr {
+        CStr::from_bytes_until_nul(&self.0.chUserDefinedName).unwrap()
+    }
+
+    pub fn support_usb_protocol(&self) -> u32 {
+        self.0.nbcdUSB
+    }
+
+    pub fn device_address(&self) -> u32 {
+        self.0.nDeviceAddress
+    }
+}
+
+#[derive(Clone)]
 #[allow(dead_code)] // TODO
 pub struct CameralinkDeviceInfo(mvs_sys::MV_CamL_DEV_INFO);
 
-impl CameralinkDeviceInfo {
-    // TODO
+impl Debug for CameralinkDeviceInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CameralinkDeviceInfo")
+            .field("port_id", &self.port_id())
+            .field("model_name", &self.model_name())
+            .field("family_name", &self.family_name())
+            .field("device_version", &self.device_version())
+            .field("manufacturer_name", &self.manufacturer_name())
+            .field("serial_number", &self.serial_number())
+            .finish()
+    }
 }
 
+impl CameralinkDeviceInfo {
+    pub fn port_id(&self) -> &CStr {
+        CStr::from_bytes_until_nul(&self.0.chPortID).unwrap()
+    }
+
+    pub fn model_name(&self) -> &CStr {
+        CStr::from_bytes_until_nul(&self.0.chModelName).unwrap()
+    }
+
+    pub fn family_name(&self) -> &CStr {
+        CStr::from_bytes_until_nul(&self.0.chFamilyName).unwrap()
+    }
+
+    pub fn device_version(&self) -> &CStr {
+        CStr::from_bytes_until_nul(&self.0.chDeviceVersion).unwrap()
+    }
+
+    pub fn manufacturer_name(&self) -> &CStr {
+        CStr::from_bytes_until_nul(&self.0.chManufacturerName).unwrap()
+    }
+
+    pub fn serial_number(&self) -> &CStr {
+        CStr::from_bytes_until_nul(&self.0.chSerialNumber).unwrap()
+    }
+}
+
+#[derive(Debug, Clone)]
 #[allow(dead_code)] // TODO
 pub struct CameralinkFramegrabberDeviceInfo(mvs_sys::MV_CML_DEVICE_INFO);
 
@@ -212,18 +423,110 @@ impl CameralinkFramegrabberDeviceInfo {
     // TODO
 }
 
+#[derive(Clone)]
 #[allow(dead_code)] // TODO
 pub struct CoaXPressDeviceInfo(mvs_sys::MV_CXP_DEVICE_INFO);
 
-impl CoaXPressDeviceInfo {
-    // TODO
+impl Debug for CoaXPressDeviceInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CoaXPressDeviceInfo")
+            .field("interface_id", &self.interface_id())
+            .field("vendor_name", &self.vendor_name())
+            .field("model_name", &self.model_name())
+            .field("manufacturer_info", &self.manufacturer_info())
+            .field("device_version", &self.device_version())
+            .field("serial_number", &self.serial_number())
+            .field("user_defined_name", &self.user_defined_name())
+            .field("device_id", &self.device_id())
+            .finish()
+    }
 }
 
+impl CoaXPressDeviceInfo {
+    pub fn interface_id(&self) -> &CStr {
+        CStr::from_bytes_until_nul(&self.0.chInterfaceID).unwrap()
+    }
+
+    pub fn vendor_name(&self) -> &CStr {
+        CStr::from_bytes_until_nul(&self.0.chVendorName).unwrap()
+    }
+
+    pub fn model_name(&self) -> &CStr {
+        CStr::from_bytes_until_nul(&self.0.chModelName).unwrap()
+    }
+
+    pub fn manufacturer_info(&self) -> &CStr {
+        CStr::from_bytes_until_nul(&self.0.chManufacturerInfo).unwrap()
+    }
+
+    pub fn device_version(&self) -> &CStr {
+        CStr::from_bytes_until_nul(&self.0.chDeviceVersion).unwrap()
+    }
+
+    pub fn serial_number(&self) -> &CStr {
+        CStr::from_bytes_until_nul(&self.0.chSerialNumber).unwrap()
+    }
+
+    pub fn user_defined_name(&self) -> &CStr {
+        CStr::from_bytes_until_nul(&self.0.chUserDefinedName).unwrap()
+    }
+
+    pub fn device_id(&self) -> &CStr {
+        CStr::from_bytes_until_nul(&self.0.chDeviceID).unwrap()
+    }
+}
+
+#[derive(Clone)]
 #[allow(dead_code)] // TODO
 pub struct XofDeviceInfo(mvs_sys::MV_XOF_DEVICE_INFO);
 
+impl Debug for XofDeviceInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("XofDeviceInfo")
+            .field("interface_id", &self.interface_id())
+            .field("vendor_name", &self.vendor_name())
+            .field("model_name", &self.model_name())
+            .field("manufacturer_info", &self.manufacturer_info())
+            .field("device_version", &self.device_version())
+            .field("serial_number", &self.serial_number())
+            .field("user_defined_name", &self.user_defined_name())
+            .field("device_id", &self.device_id())
+            .finish()
+    }
+}
+
 impl XofDeviceInfo {
-    // TODO
+    pub fn interface_id(&self) -> &CStr {
+        CStr::from_bytes_until_nul(&self.0.chInterfaceID).unwrap()
+    }
+
+    pub fn vendor_name(&self) -> &CStr {
+        CStr::from_bytes_until_nul(&self.0.chVendorName).unwrap()
+    }
+
+    pub fn model_name(&self) -> &CStr {
+        CStr::from_bytes_until_nul(&self.0.chModelName).unwrap()
+    }
+
+    pub fn manufacturer_info(&self) -> &CStr {
+        CStr::from_bytes_until_nul(&self.0.chManufacturerInfo).unwrap()
+    }
+
+    pub fn device_version(&self) -> &CStr {
+        CStr::from_bytes_until_nul(&self.0.chDeviceVersion).unwrap()
+    }
+
+    pub fn serial_number(&self) -> &CStr {
+        CStr::from_bytes_until_nul(&self.0.chSerialNumber).unwrap()
+    }
+
+    pub fn user_defined_name(&self) -> &CStr {
+        CStr::from_bytes_until_nul(&self.0.chUserDefinedName).unwrap()
+    }
+
+    pub fn device_id(&self) -> &CStr {
+        CStr::from_bytes_until_nul(&self.0.chDeviceID).unwrap()
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

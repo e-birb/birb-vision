@@ -22,7 +22,7 @@ fn main() {
     println!("Found {} MVS devices", devices.len());
 
     for device_info in devices {
-        println!("{:?}", device_info);
+        println!("{:#?}", device_info);
 
         let device = device_info
             .into_device(true)

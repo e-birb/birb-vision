@@ -227,6 +227,10 @@ impl MVContext {
         Ok(())
     }
 
+    pub fn set_log_level(&self) {
+        todo!()
+    }
+
     pub fn ffi(&self) -> &mvs_sys::MVS {
         &self.inner.lib
     }
