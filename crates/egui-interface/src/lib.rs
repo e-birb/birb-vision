@@ -1,12 +1,13 @@
 use std::{collections::{HashMap, HashSet}, ops::{Deref, DerefMut}, sync::{mpsc::Sender, Arc, Weak}, time::Instant};
 
 use birb_vision::{CameraDevice, Child, EnumEntry, Event, Frame, Node, NodeId, NodeVariant, PropertyVariant, Representation};
-use egui::{load::SizedTexture, mutex::Mutex, Color32, ColorImage, ComboBox, DragValue, Image, ImageData, Rect, RichText, Sense, TextBuffer, TextureHandle, Ui};
+use egui::{load::SizedTexture, mutex::Mutex, Color32, ColorImage, ComboBox, DragValue, Image, ImageData, Rect, RichText, Sense, TextBuffer, TextureFilter, TextureHandle, TextureOptions, Ui, Window};
 use regex::Regex;
 
 
 pub struct Preview {
     state: Option<Arc<Mutex<PreviewState>>>,
+    controls_window: bool,
     zoom: Rect,
 }
 
@@ -89,6 +90,7 @@ impl Preview {
     pub fn new() -> Self {
         Preview {
             state: None,
+            controls_window: false,
             zoom: Rect { min: (0.0, 0.0).into(), max: (1.0, 1.0).into() },
         }
     }
@@ -120,17 +122,19 @@ impl Preview {
                                 let Frame::Image(img) = frame;
                                 let start = Instant::now();
                                 let img = img.to_rgb8();
-                                println!("Converted in {:?}", start.elapsed());
+                                //println!("Converted in {:?}", start.elapsed());
                                 let start = Instant::now();
                                 let img = ColorImage::from_rgb([img.width() as usize, img.height() as usize], &img.into_raw());
-                                println!("Converted to egui in {:?}", start.elapsed());
+                                //println!("Converted to egui in {:?}", start.elapsed());
                                 let start = Instant::now();
                                 state.on_state_mut(move |s| {
                                     s.image = Some(img.into());
                                 });
-                                println!("Sent in {:?}", start.elapsed());
+                                //println!("Sent in {:?}", start.elapsed());
                             },
-                            _ => {},
+                            _ => {
+
+                            },
                         }
                     })
                 }).unwrap();
@@ -158,21 +162,21 @@ impl Preview {
                     let Ok(command) = rx.recv() else {
                         break;
                     };
-                    if state.on_state_mut(|state| {
-                        match command {
-                            Command::Write => {
+                    match command {
+                        Command::Write => {
+                            if state.on_state_mut(|state| {
                                 let props = state.props.as_mut().unwrap();
                                 props.write_all_nodes(&*camera);
-                            },
-                            Command::StartGrabbing => {
-                                camera.start_grabbing().unwrap();
-                            },
-                            Command::StopGrabbing => {
-                                camera.stop_grabbing().unwrap();
+                            }).is_none() {
+                                break;
                             }
+                        },
+                        Command::StartGrabbing => {
+                            camera.start_grabbing().unwrap();
+                        },
+                        Command::StopGrabbing => {
+                            camera.stop_grabbing().unwrap();
                         }
-                    }).is_none() {
-                        break;
                     }
                 }
             }
@@ -183,90 +187,118 @@ impl Preview {
         self.state = Some(state.clone());
     }
 
-    pub fn show(&self, ui: &mut egui::Ui) {
-        if let Some(state) = self.state.as_ref() {
-            let mut state = state.lock();
-            let tx = state.tx.clone();
-            state.update = Box::new({
-                let cx = ui.ctx().clone();
-                move || cx.request_repaint()
+    fn show_view(&mut self, ui: &mut egui::Ui) {
+        let Some(state) = self.state.as_ref() else { return; };
+        let mut state = state.lock();
+        let tx = state.tx.clone();
+        state.update = Box::new({
+            let cx = ui.ctx().clone();
+            move || cx.request_repaint()
+        });
+
+        if let Some(img) = state.image.take() {
+            let mut options = TextureOptions::default();
+            options.magnification = TextureFilter::Nearest;
+            state.texture_handle = ui.ctx().load_texture("frame", img, options).into();
+        }
+
+        ui.vertical(|ui| {
+            ui.horizontal(|ui| {
+                if ui.button("\u{e037}")
+                    .on_hover_text("Start Grabbing")
+                    .clicked() {
+                    tx.send(Command::StartGrabbing).unwrap();
+                }
+                if ui.button("\u{e047}")
+                    .on_hover_text("Stop Grabbing")
+                    .clicked() {
+                    tx.send(Command::StopGrabbing).unwrap();
+                }
+                if ui.button("\u{e429}")
+                    .on_hover_text("Controls")
+                    .clicked() {
+                    self.controls_window = true;
+                }
             });
+            ui.separator();
+            if let Some(texture_handle) = state.texture_handle.as_ref() {
+                let texture = SizedTexture::from_handle(texture_handle);
+                let available = ui.available_size();
+                //let (rect, response) = ui.allocate_exact_size(available, Sense::drag());
+                //let p = ui.painter();
+                //p.image(texture.id, rect, self.zoom, Color32::WHITE);
+                let image = Image::new(texture)
+                    .max_width(available.x)
+                    .max_height(available.y)
+                    .shrink_to_fit()
+                    .maintain_aspect_ratio(true)
+                    .fit_to_original_size(2.0);
+                ui.add(image);
+            }
+        });
+    }
 
-            if state.props.is_some() {
+    fn controls_window(&mut self, ctx: &egui::Context) {
+        if !self.controls_window {
+            return;
+        }
 
-                // Self::show_node(ui, state.props.as_ref().unwrap());
-                ui.centered_and_justified(|ui| {
-                    ui.horizontal(|ui| {
-                        ui.vertical(|ui| {
-                            ui.set_max_width(300.0);
-                            ui.horizontal(|ui| {
-                                ui.label("filter");
-                                if ui.text_edit_singleline(&mut state.filter).changed() {
-                                    let re = state.filter_re();
-                                    if let Some(props) = &state.props {
-                                        let mut selected = HashSet::new();
-                                        let root_id = props.root.as_ref().unwrap();
-                                        let root = props.leafs.get(root_id).unwrap();
-                                        root.filter(&props, &mut selected, &re);
-                                        state.selected = selected;
-                                    }
+        if self.controls_window {
+            Window::new("Controls") // TODO camera name for ID
+                .open(&mut self.controls_window)
+                .min_width(300.0)
+                .min_height(300.0)
+                .show(ctx, |ui| {
+                    let Some(state) = self.state.as_ref() else { return; };
+                    let mut state = state.lock();
+                    let tx = state.tx.clone();
+                    state.update = Box::new({
+                        let cx = ui.ctx().clone();
+                        move || cx.request_repaint()
+                    });
+
+                    ui.vertical(|ui| {
+                        ui.set_max_width(300.0);
+                        ui.horizontal(|ui| {
+                            ui.label("filter \u{e1ba}");
+                            if ui.text_edit_singleline(&mut state.filter).changed() {
+                                let re = state.filter_re();
+                                if let Some(props) = &state.props {
+                                    let mut selected = HashSet::new();
+                                    let root_id = props.root.as_ref().unwrap();
+                                    let root = props.leafs.get(root_id).unwrap();
+                                    root.filter(&props, &mut selected, &re);
+                                    state.selected = selected;
                                 }
-                                if !state.filter_error.is_empty() {
-                                    ui
-                                        .label(RichText::new("Invalid regex").color(Color32::RED))
-                                        .on_hover_ui(|ui| {
-                                            ui.code(&state.filter_error);
-                                        });
-                                }
-                            });
-                            ui.separator();
-                            egui::ScrollArea::vertical().show(ui, |ui| {
-                                let selected = state.selected.clone();
-                                if let Some(props) = state.props.as_mut() {
-                                    //println!("OK 1");
-                                    if let Some(root) = props.root.clone() {
-                                        //println!("OK 2");
-                                        props.show_property(ui, &selected, &root, &tx);
-                                    }
-                                }
-                            });
+                            }
+                            if !state.filter_error.is_empty() {
+                                ui
+                                    .label(RichText::new("Invalid regex").color(Color32::RED))
+                                    .on_hover_ui(|ui| {
+                                        ui.code(&state.filter_error);
+                                    });
+                            }
                         });
                         ui.separator();
-                        if let Some(img) = state.image.take() {
-                            let start = Instant::now();
-                            state.texture_handle = ui.ctx().load_texture("frame", img, Default::default()).into();
-                            println!("created handle in {:?}", start.elapsed());
-                        }
 
-                        ui.vertical(|ui| {
-                            ui.horizontal(|ui| {
-                                if ui.button("Start").clicked() {
-                                    tx.send(Command::StartGrabbing).unwrap();
+                        egui::ScrollArea::vertical().show(ui, |ui| {
+                            let selected = state.selected.clone();
+                            if let Some(props) = state.props.as_mut() {
+                                //println!("OK 1");
+                                if let Some(root) = props.root.clone() {
+                                    //println!("OK 2");
+                                    props.show_property(ui, &selected, &root, &tx);
                                 }
-                                if ui.button("stop").clicked() {
-                                    tx.send(Command::StopGrabbing).unwrap();
-                                }
-                            });
-                            ui.separator();
-                            if let Some(texture_handle) = state.texture_handle.as_ref() {
-                                let texture = SizedTexture::from_handle(texture_handle);
-                                let available = ui.available_size();
-                                //let (rect, response) = ui.allocate_exact_size(available, Sense::drag());
-                                //let p = ui.painter();
-                                //p.image(texture.id, rect, self.zoom, Color32::WHITE);
-                                let image = Image::new(texture)
-                                    .max_width(available.x)
-                                    .max_height(available.y)
-                                    .shrink_to_fit()
-                                    .maintain_aspect_ratio(true)
-                                    .fit_to_original_size(2.0);
-                                ui.add(image);
                             }
                         });
                     });
                 });
-            }
         }
+    }
+
+    pub fn show(&mut self, ui: &mut egui::Ui) {
+        self.show_view(ui);
+        self.controls_window(ui.ctx())
     }
 }
 
@@ -771,7 +803,7 @@ impl Property {
 
         let mut any_child_selected = false;
         for child_id in self.children() {
-            println!("child id: {:?}", child_id);
+            //println!("child id: {:?}", child_id);
             let Some(child) = props.leafs.get(child_id) else {
                 continue;
             };

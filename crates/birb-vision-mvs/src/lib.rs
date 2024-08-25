@@ -353,8 +353,6 @@ impl MVDevice {
 
     // TODO move?
     pub fn set_image_callback(&self, f: Box<dyn Fn(DynamicImage) + Send + Sync + 'static>) {
-        type F = dyn Fn(DynamicImage) + Send + Sync;
-
         self.callbacks.lock().unwrap().image_callback = f;
     }
 

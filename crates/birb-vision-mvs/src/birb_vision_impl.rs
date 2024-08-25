@@ -150,9 +150,10 @@ impl CameraDevice for MVDevice {
         }));
 
         // TODO
-        //self.set_event_callback(Box::new(move |img| {
-        //    f(Event::Frame(Ok(Frame::Image(img))))
-        //}));
+        self.set_all_event_callback(Box::new(move || {
+            println!("EVENT!-------------------------------------------------")
+            //f(Event::Flushed)
+        }));
 
         Ok(())
     }
