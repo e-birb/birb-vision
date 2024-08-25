@@ -1,12 +1,13 @@
-use std::{collections::{HashMap, HashSet}, ops::{Deref, DerefMut}, sync::{Arc, Weak}};
+use std::{collections::{HashMap, HashSet}, ops::{Deref, DerefMut}, sync::{mpsc::Sender, Arc, Weak}, time::Instant};
 
-use birb_vision::{CameraDevice, Child, EnumEntry, Node, NodeId, NodeVariant, PropertyVariant, Representation};
-use egui::{mutex::Mutex, Color32, ComboBox, DragValue, RichText, TextBuffer, Ui};
+use birb_vision::{CameraDevice, Child, EnumEntry, Event, Frame, Node, NodeId, NodeVariant, PropertyVariant, Representation};
+use egui::{load::SizedTexture, mutex::Mutex, Color32, ColorImage, ComboBox, DragValue, Image, ImageData, Rect, RichText, Sense, TextBuffer, TextureHandle, Ui};
 use regex::Regex;
 
 
 pub struct Preview {
     state: Option<Arc<Mutex<PreviewState>>>,
+    zoom: Rect,
 }
 
 pub struct PreviewState {
@@ -15,8 +16,17 @@ pub struct PreviewState {
     filter_error: String,
     selected: HashSet<NodeId>,
     updated: HashSet<NodeId>,
+    image: Option<ImageData>,
+    texture_handle: Option<TextureHandle>,
     thread: Option<std::thread::JoinHandle<()>>,
     update: Box<dyn Fn() + Send + Sync>,
+    tx: Sender<Command>,
+}
+
+enum Command {
+    Write,
+    StartGrabbing,
+    StopGrabbing,
 }
 
 impl PreviewState {
@@ -44,12 +54,16 @@ impl PreviewState {
             filter_error: String::new(),
             selected: Default::default(),
             updated: HashSet::new(),
+            image: None,
+            texture_handle: None,
             thread: None,
             update: Box::new(|| {}),
+            tx: std::sync::mpsc::channel().0, // TODO shit
         }
     }
 }
 
+#[derive(Clone)]
 struct StateRef(Weak<Mutex<PreviewState>>);
 
 impl StateRef {
@@ -75,6 +89,7 @@ impl Preview {
     pub fn new() -> Self {
         Preview {
             state: None,
+            zoom: Rect { min: (0.0, 0.0).into(), max: (1.0, 1.0).into() },
         }
     }
 
@@ -83,6 +98,8 @@ impl Preview {
         init: impl FnOnce() -> Box<dyn CameraDevice> + Send + 'static,
     ) {
         let mut state = PreviewState::new();
+        let (tx, mut rx) = std::sync::mpsc::channel();
+        state.tx = tx;
         let state = Arc::new(Mutex::new(state));
 
         let thread = std::thread::spawn({
@@ -91,6 +108,32 @@ impl Preview {
             move || {
                 let mut camera = init();
                 camera.open(Default::default()).unwrap();
+                //camera.start_grabbing().unwrap();
+                camera.set_stream_callback({
+                    let state = state.clone();
+                    Box::new(move |e| {
+                        match e {
+                            Event::Frame(frame) => {
+                                let Ok(frame) = frame else {
+                                    return;
+                                };
+                                let Frame::Image(img) = frame;
+                                let start = Instant::now();
+                                let img = img.to_rgb8();
+                                println!("Converted in {:?}", start.elapsed());
+                                let start = Instant::now();
+                                let img = ColorImage::from_rgb([img.width() as usize, img.height() as usize], &img.into_raw());
+                                println!("Converted to egui in {:?}", start.elapsed());
+                                let start = Instant::now();
+                                state.on_state_mut(move |s| {
+                                    s.image = Some(img.into());
+                                });
+                                println!("Sent in {:?}", start.elapsed());
+                            },
+                            _ => {},
+                        }
+                    })
+                }).unwrap();
 
                 let properties = camera.control_description().unwrap();
                 let ui_properties = camera.properties().unwrap();
@@ -112,10 +155,22 @@ impl Preview {
 
                 loop {
                     std::thread::yield_now();
-
+                    let Ok(command) = rx.recv() else {
+                        break;
+                    };
                     if state.on_state_mut(|state| {
-                        let props = state.props.as_mut().unwrap();
-                        props.write_all_nodes(&*camera);
+                        match command {
+                            Command::Write => {
+                                let props = state.props.as_mut().unwrap();
+                                props.write_all_nodes(&*camera);
+                            },
+                            Command::StartGrabbing => {
+                                camera.start_grabbing().unwrap();
+                            },
+                            Command::StopGrabbing => {
+                                camera.stop_grabbing().unwrap();
+                            }
+                        }
                     }).is_none() {
                         break;
                     }
@@ -131,45 +186,84 @@ impl Preview {
     pub fn show(&self, ui: &mut egui::Ui) {
         if let Some(state) = self.state.as_ref() {
             let mut state = state.lock();
+            let tx = state.tx.clone();
             state.update = Box::new({
                 let cx = ui.ctx().clone();
                 move || cx.request_repaint()
             });
 
             if state.props.is_some() {
-                ui.label("Hello World!");
 
-                ui.horizontal(|ui| {
-                    ui.label("filter");
-                    if ui.text_edit_singleline(&mut state.filter).changed() {
-                        let re = state.filter_re();
-                        if let Some(props) = &state.props {
-                            let mut selected = HashSet::new();
-                            let root_id = props.root.as_ref().unwrap();
-                            let root = props.leafs.get(root_id).unwrap();
-                            root.filter(&props, &mut selected, &re);
-                            state.selected = selected;
-                        }
-                    }
-                    if !state.filter_error.is_empty() {
-                        ui
-                            .label(RichText::new("Invalid regex").color(Color32::RED))
-                            .on_hover_ui(|ui| {
-                                ui.code(&state.filter_error);
-                            });
-                    }
-                });
-                
                 // Self::show_node(ui, state.props.as_ref().unwrap());
-                egui::ScrollArea::vertical().show(ui, |ui| {
-                    let selected = state.selected.clone();
-                    if let Some(props) = state.props.as_mut() {
-                        //println!("OK 1");
-                        if let Some(root) = props.root.clone() {
-                            //println!("OK 2");
-                            props.show_property(ui, &selected, &root);
+                ui.centered_and_justified(|ui| {
+                    ui.horizontal(|ui| {
+                        ui.vertical(|ui| {
+                            ui.set_max_width(300.0);
+                            ui.horizontal(|ui| {
+                                ui.label("filter");
+                                if ui.text_edit_singleline(&mut state.filter).changed() {
+                                    let re = state.filter_re();
+                                    if let Some(props) = &state.props {
+                                        let mut selected = HashSet::new();
+                                        let root_id = props.root.as_ref().unwrap();
+                                        let root = props.leafs.get(root_id).unwrap();
+                                        root.filter(&props, &mut selected, &re);
+                                        state.selected = selected;
+                                    }
+                                }
+                                if !state.filter_error.is_empty() {
+                                    ui
+                                        .label(RichText::new("Invalid regex").color(Color32::RED))
+                                        .on_hover_ui(|ui| {
+                                            ui.code(&state.filter_error);
+                                        });
+                                }
+                            });
+                            ui.separator();
+                            egui::ScrollArea::vertical().show(ui, |ui| {
+                                let selected = state.selected.clone();
+                                if let Some(props) = state.props.as_mut() {
+                                    //println!("OK 1");
+                                    if let Some(root) = props.root.clone() {
+                                        //println!("OK 2");
+                                        props.show_property(ui, &selected, &root, &tx);
+                                    }
+                                }
+                            });
+                        });
+                        ui.separator();
+                        if let Some(img) = state.image.take() {
+                            let start = Instant::now();
+                            state.texture_handle = ui.ctx().load_texture("frame", img, Default::default()).into();
+                            println!("created handle in {:?}", start.elapsed());
                         }
-                    }
+
+                        ui.vertical(|ui| {
+                            ui.horizontal(|ui| {
+                                if ui.button("Start").clicked() {
+                                    tx.send(Command::StartGrabbing).unwrap();
+                                }
+                                if ui.button("stop").clicked() {
+                                    tx.send(Command::StopGrabbing).unwrap();
+                                }
+                            });
+                            ui.separator();
+                            if let Some(texture_handle) = state.texture_handle.as_ref() {
+                                let texture = SizedTexture::from_handle(texture_handle);
+                                let available = ui.available_size();
+                                //let (rect, response) = ui.allocate_exact_size(available, Sense::drag());
+                                //let p = ui.painter();
+                                //p.image(texture.id, rect, self.zoom, Color32::WHITE);
+                                let image = Image::new(texture)
+                                    .max_width(available.x)
+                                    .max_height(available.y)
+                                    .shrink_to_fit()
+                                    .maintain_aspect_ratio(true)
+                                    .fit_to_original_size(2.0);
+                                ui.add(image);
+                            }
+                        });
+                    });
                 });
             }
         }
@@ -320,6 +414,7 @@ impl Properties {
                             basic: BasicProperty {
                                 display_name: node.display_name.as_str().to_string(),
                             },
+                            requested: false,
                         };
                         if let Some(id) = &id {
                             leafs.insert(id.clone(), Property::Command(prop));
@@ -472,10 +567,11 @@ impl Properties {
                     log::error!("Error writing STRING property: {id:?}: {e}");
                 }
             },
-            Property::Command(_) => {
-                if !force {
+            Property::Command(c) => {
+                if !force && !c.requested {
                     return false;
                 }
+                c.requested = false;
                 if let Err(e) = camera.send_command(id) {
                     log::error!("Error sending COMMAND property: {id:?}: {e}");
                 }
@@ -493,7 +589,7 @@ impl Properties {
         }
     }
 
-    pub fn show_property(&mut self, ui: &mut Ui, selected: &HashSet<NodeId>, id: &NodeId) {
+    pub fn show_property(&mut self, ui: &mut Ui, selected: &HashSet<NodeId>, id: &NodeId, send: &Sender<Command>) {
         let Some(property) = self.leafs.get_mut(id) else {
             ui.label(RichText::new("&".to_string() + id.0.as_str()).color(Color32::RED));
             return;
@@ -503,53 +599,63 @@ impl Properties {
             Property::Group(ref g) => {
                 let display_name = g.display_name.clone();
                 let children = g.children.clone();
-                Self::show_group(self, ui, selected, &display_name, children);
+                Self::show_group(self, ui, selected, &display_name, children, send);
             },
-            Property::Bool(b) => Self::show_bool(ui, b),
-            Property::Int(i) => Self::show_int(ui, i),
-            Property::Float(f) => Self::show_float(ui, f),
-            Property::Enum(e) => Self::show_enum(ui, e),
-            Property::String(s) => Self::show_string(ui, s),
-            Property::Command(c) => Self::show_command(ui, c),
+            Property::Bool(b) => Self::show_bool(ui, b, send),
+            Property::Int(i) => Self::show_int(ui, i, send),
+            Property::Float(f) => Self::show_float(ui, f, send),
+            Property::Enum(e) => Self::show_enum(ui, e, send),
+            Property::String(s) => Self::show_string(ui, s, send),
+            Property::Command(c) => Self::show_command(ui, c, send),
         }
     }
 
-    pub fn show_group(&mut self, ui: &mut Ui, selected: &HashSet<NodeId>, display_name: &str, children: impl IntoIterator<Item = NodeId>) {
+    pub fn show_group(&mut self, ui: &mut Ui, selected: &HashSet<NodeId>, display_name: &str, children: impl IntoIterator<Item = NodeId>, send: &Sender<Command>) {
         ui.collapsing(display_name, |ui| {
             for id in children {
                 if !selected.contains(&id) {
                     continue;
                 }
-                self.show_property(ui, selected, &id)
+                self.show_property(ui, selected, &id, send)
             }
         });
     }
 
-    pub fn show_bool(ui: &mut Ui, b: &mut BoolProp) {
-        ui.checkbox(&mut b.requested, b.basic.display_name.as_str());
+    pub fn show_bool(ui: &mut Ui, b: &mut BoolProp, send: &Sender<Command>) {
+        if ui.checkbox(&mut b.requested, b.basic.display_name.as_str()).changed() {
+            send.send(Command::Write);
+        };
     }
 
-    pub fn show_int(ui: &mut Ui, i: &mut IntProp) {
+    pub fn show_int(ui: &mut Ui, i: &mut IntProp, send: &Sender<Command>) {
         // TODO unit
         match i.representation {
             Representation::Hex => {
                 ui.horizontal(|ui| {
                     ui.label("0x");
-                    ui.add(DragValue::new(&mut i.requested).hexadecimal(4, true, false));
+                    if ui.add(DragValue::new(&mut i.requested).hexadecimal(4, true, false)).changed() {
+                        send.send(Command::Write);
+                    };
                     ui.label(i.basic.display_name.as_str())
                 });
             },
             Representation::PureNumber => {
                 ui.horizontal(|ui| {
-                    ui.add(DragValue::new(&mut i.requested));
+                    if ui.add(DragValue::new(&mut i.requested)).changed() {
+                        send.send(Command::Write);
+                    };
                     ui.label(i.basic.display_name.as_str())
                 });
             },
             Representation::Linear => {
-                ui.add(egui::Slider::new(&mut i.requested, i.min..=i.max).text(i.basic.display_name.as_str()));
+                if ui.add(egui::Slider::new(&mut i.requested, i.min..=i.max).text(i.basic.display_name.as_str())).changed() {
+                    send.send(Command::Write);
+                };
             },
             Representation::Logarithmic => {
-                ui.add(egui::Slider::new(&mut i.requested, i.min..=i.max).text(i.basic.display_name.as_str()).logarithmic(true));
+                if ui.add(egui::Slider::new(&mut i.requested, i.min..=i.max).text(i.basic.display_name.as_str()).logarithmic(true)).changed() {
+                    send.send(Command::Write);
+                };
             },
             Representation::Boolean => {
                 ui.label(RichText::new(format!("invalid representation: {:?}", i.representation)));
@@ -557,31 +663,39 @@ impl Properties {
         }
     }
 
-    pub fn show_float(ui: &mut Ui, f: &mut FloatProp) {
+    pub fn show_float(ui: &mut Ui, f: &mut FloatProp, send: &Sender<Command>) {
         // TODO unit
         match f.representation {
             Representation::PureNumber => {
                 ui.horizontal(|ui| {
-                    ui.add(DragValue::new(&mut f.requested));
+                    if ui.add(DragValue::new(&mut f.requested)).changed() {
+                        send.send(Command::Write);
+                    };
                     ui.label(f.basic.display_name.as_str())
                 });
             },
             Representation::Linear if f.min.is_finite() && f.max.is_finite() => {
                 ui.horizontal(|ui| {
-                    ui.add(egui::Slider::new(&mut f.requested, f.min..=f.max).text(f.basic.display_name.as_str()));
+                    if ui.add(egui::Slider::new(&mut f.requested, f.min..=f.max).text(f.basic.display_name.as_str())).changed() {
+                        send.send(Command::Write);
+                    };
                     ui.label(f.basic.display_name.as_str())
                 });
             },
             Representation::Logarithmic => {
-                ui.add(egui::Slider::new(&mut f.requested, f.min..=f.max).text(f.basic.display_name.as_str()).logarithmic(true));
+                if ui.add(egui::Slider::new(&mut f.requested, f.min..=f.max).text(f.basic.display_name.as_str()).logarithmic(true)).changed() {
+                    send.send(Command::Write);
+                };
             },
             Representation::Hex | Representation::Boolean | Representation::Linear => {
-                ui.label(RichText::new(format!("invalid representation: {:?}", f.representation)));
+                if ui.label(RichText::new(format!("invalid representation: {:?}", f.representation))).changed() {
+                    send.send(Command::Write);
+                };
             },
         }
     }
 
-    pub fn show_enum(ui: &mut Ui, e: &mut EnumProp) {
+    pub fn show_enum(ui: &mut Ui, e: &mut EnumProp, send: &Sender<Command>) {
         let selected_text = if let Some(entry) = e.entries.iter().find(|entry| entry.discriminant == e.requested) {
             entry.name.to_string()
         } else {
@@ -594,20 +708,26 @@ impl Properties {
                 for entry in e.entries.iter() {
                     ui.selectable_value(&mut e.requested, entry.discriminant, entry.name.as_str());
                 }
-            }
-        );
+            });
+
+        if e.value != e.requested {
+            send.send(Command::Write);
+        }
     }
 
-    pub fn show_string(ui: &mut Ui, s: &mut StringProp) {
+    pub fn show_string(ui: &mut Ui, s: &mut StringProp, send: &Sender<Command>) {
         ui.horizontal(|ui| {
-            ui.text_edit_singleline(&mut s.requested);
+            if ui.text_edit_singleline(&mut s.requested).changed() {
+                send.send(Command::Write);
+            };
             ui.label(&s.display_name);
         });
     }
 
-    pub fn show_command(ui: &mut Ui, c: &CommandProp) {
+    pub fn show_command(ui: &mut Ui, c: &mut CommandProp, send: &Sender<Command>) {
         if ui.button(c.display_name.as_str()).clicked() {
-            // TODO
+            c.requested = true;
+            send.send(Command::Write);
         }
     }
 }
@@ -781,5 +901,6 @@ impl_basic!(StringProp, String);
 
 pub struct CommandProp {
     basic: BasicProperty,
+    requested: bool,
 }
 impl_basic!(CommandProp);

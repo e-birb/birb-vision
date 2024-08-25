@@ -196,6 +196,7 @@ fn parse_int_value(xml_node: XmlNode) -> i64 {
 
 pub fn parse_integer(xml_node: XmlNode) -> Node {
     let name = xml_node.attribute("Name").unwrap().to_string();
+    let is_exposure = name == "ExposureTime";
     let mut node = Node::new_with_id(name);
     let mut prop = NumericProperty::default();
 
@@ -218,7 +219,7 @@ pub fn parse_integer(xml_node: XmlNode) -> Node {
                 let repr = match child.text().unwrap() {
                     "Boolean" => Representation::Boolean,
                     "HexNumber" => Representation::Hex,
-                    "Linear" => Representation::Linear,
+                    "Linear" => if is_exposure { Representation::Logarithmic } else { Representation::Linear },
                     "Logarithmic" => Representation::Logarithmic,
                     "PureNumber" => Representation::PureNumber,
                     other => {
@@ -266,6 +267,7 @@ pub fn parse_integer(xml_node: XmlNode) -> Node {
 
 pub fn parse_float(xml_node: XmlNode) -> Node {
     let name = xml_node.attribute("Name").unwrap().to_string();
+    let is_exposure = name == "ExposureTime";
     let mut node = Node::new_with_id(name);
     let mut prop = NumericProperty::<f64>::default();
 
@@ -288,7 +290,7 @@ pub fn parse_float(xml_node: XmlNode) -> Node {
                 let repr = match child.text().unwrap() {
                     "Boolean" => Representation::Boolean,
                     "HexNumber" => Representation::Hex,
-                    "Linear" => Representation::Linear,
+                    "Linear" => if is_exposure { Representation::Logarithmic } else { Representation::Linear },
                     "Logarithmic" => Representation::Logarithmic,
                     "PureNumber" => Representation::PureNumber,
                     other => {
