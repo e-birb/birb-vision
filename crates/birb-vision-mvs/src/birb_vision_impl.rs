@@ -1,9 +1,9 @@
 
 
-use std::{borrow::Cow, time::Duration};
+use std::borrow::Cow;
 
-use birb_vision::{image::{DynamicImage, ImageBuffer, Luma}, CameraDevice, DeviceAccessMode, DeviceError, DeviceResult, Event, Frame};
-use crate::{mvs_try, prelude::*};
+use birb_vision::{CameraDevice, DeviceAccessMode, DeviceError, DeviceResult, EnumValue, Event, Frame, GroupNode, Node, NodeVariant, NumericProperty, NumericValue, Representation, Slope, Visibility};
+use crate::{genicam::{parse_root}, mvs_try, prelude::*};
 
 impl CameraDevice for MVDevice {
     fn is_device_accessible(&self, mode: DeviceAccessMode) -> bool {
@@ -24,6 +24,89 @@ impl CameraDevice for MVDevice {
 
     fn close(&self) -> DeviceResult<()> {
         MVDevice::close(self).map_err(|e| DeviceError::other(e))
+    }
+
+    fn control_description(&self) -> DeviceResult<Node> {
+        let xml = self.get_GenICam_xml().map_err(|e| DeviceError::other(e))?;
+        std::fs::write("mvs.xml", &xml).unwrap();
+        let doc = roxmltree::Document::parse(&xml).unwrap();
+        let r = doc.root_element();
+        let node = parse_root(r);
+
+        Ok(node)
+    }
+
+    fn properties(&self) -> DeviceResult<Node> {
+        self
+            .control_description()?
+            .variant.into_group().unwrap()
+            .children.into_iter()
+            .cloned()
+            .filter_map(|n| n.into_node().ok())
+            .filter(|n| n.variant.is_group())
+            .filter(|g| g.display_name == "Root")
+            .next().ok_or(DeviceError::OtherString("Root node not found".into()))
+    }
+
+    fn get_bool_property(&self, id: &str) -> DeviceResult<bool> {
+        self.get_bool_value(id).map_err(|e| DeviceError::other(e))
+    }
+
+    fn get_int_property(&self, id: &str) -> DeviceResult<NumericValue<i64>> {
+        self
+            .get_int_value(id)
+            .map_err(|e| DeviceError::other(e))
+            .map(|v| NumericValue::<i64> {
+                current: v.current() as _,
+                range: v.min() as _ ..= v.max() as _,
+                default: None,
+            })
+    }
+
+    fn get_float_property(&self, id: &str) -> DeviceResult<NumericValue<f64>> {
+        self
+            .get_float_value(id)
+            .map_err(|e| DeviceError::other(e))
+            .map(|v| NumericValue::<f64> {
+                current: v.current() as _,
+                range: v.min() as _ ..= v.max() as _,
+                default: None,
+            })
+    }
+    fn get_enum_property(&self, id: &str) -> DeviceResult<EnumValue> {
+        self
+            .get_enum_value(id)
+            .map_err(|e| DeviceError::other(e))
+            .map(|v| EnumValue {
+                current: v.current_value() as _,
+                support: Cow::Owned(v.support().iter().map(|v| *v as i64).collect::<Vec<_>>()),
+            })
+    }
+
+    fn get_string_property(&self, id: &str) -> DeviceResult<String> {
+        self
+            .get_string_value(id)
+            .map_err(|e| DeviceError::other(e))
+            .map(|s| s.current_value().to_string())
+    }
+
+    fn set_bool_property(&self, id: &str, value: bool) -> DeviceResult {
+        self.set_bool_value(id, value).map_err(|e| DeviceError::other(e))
+    }
+    fn set_int_property(&self, id: &str, value: i64) -> DeviceResult {
+        self.set_int_value(id, value as _).map_err(|e| DeviceError::other(e))
+    }
+    fn set_float_property(&self, id: &str, value: f64) -> DeviceResult {
+        self.set_float_value(id, value as _).map_err(|e| DeviceError::other(e))
+    }
+    fn set_enum_property(&self, id: &str, value: i64) -> DeviceResult {
+        self.set_enum_value(id, value as _).map_err(|e| DeviceError::other(e))
+    }
+    fn set_string_property(&self, id: &str, value: &str) -> DeviceResult {
+        self.set_string_value(id, value).map_err(|e| DeviceError::other(e))
+    }
+    fn send_command(&self, id: &str) -> DeviceResult {
+        self.set_command_value(id).map_err(|e| DeviceError::other(e))
     }
 
     fn start_grabbing(&self) -> DeviceResult<()> {

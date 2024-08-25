@@ -11,7 +11,6 @@ fn main() {
         .init();
 
     let cx = MVContext::new(None).expect("Failed to initialize a MVS context");
-    cx.set_sdk_log_path("/home/luca/develop/e-birb/repos/birb-vision/z").unwrap();
 
     let devices = cx
         .enumerate_devices([TransportLayerType::Usb])
@@ -20,6 +19,11 @@ fn main() {
     let mut device = devices.into_iter().next().unwrap().into_device(true).unwrap();
 
     CameraDevice::open(&mut device, Default::default()).unwrap();
+
+    let props = device.control_description().unwrap();
+    panic!("{:#?}", props);
+    let e = CameraDevice::get_float_property(&device, "ExposureTime").unwrap();
+    println!("ExposureTime: {:?}", e);
 
     device.set_stream_callback(Box::new(|ev| {
         println!("Event: {ev:?}");

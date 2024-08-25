@@ -1,6 +1,6 @@
 
 
-use std::{borrow::Cow, future::Future, sync::{Arc, Mutex}, task::Poll};
+use std::{borrow::Cow, sync::{Arc, Mutex}};
 use clap::ValueEnum;
 
 use enum_as_inner::EnumAsInner;
@@ -10,11 +10,11 @@ pub mod decoders;
 pub mod channels;
 
 mod frame;
-//mod device_properties;
+mod device_properties;
 //mod pixel_format;
 
 pub use frame::*;
-//pub use device_properties::*;
+pub use device_properties::*;
 //pub use pixel_format::*;
 
 pub use futures;
@@ -92,6 +92,21 @@ pub trait CameraDevice {
     fn is_open(&self) -> Option<DeviceAccessMode>;
     fn open(&self, mode: DeviceAccessMode) -> DeviceResult;
     fn close(&self) -> DeviceResult;
+
+    fn control_description(&self) -> DeviceResult<Node>;
+    fn properties(&self) -> DeviceResult<Node>;
+    fn get_bool_property(&self, id: &str) -> DeviceResult<bool>;
+    fn get_int_property(&self, id: &str) -> DeviceResult<NumericValue<i64>>;
+    fn get_float_property(&self, id: &str) -> DeviceResult<NumericValue<f64>>;
+    fn get_enum_property(&self, id: &str) -> DeviceResult<EnumValue>;
+    fn get_string_property(&self, id: &str) -> DeviceResult<String>; // TODO Cow
+
+    fn set_bool_property(&self, id: &str, value: bool) -> DeviceResult;
+    fn set_int_property(&self, id: &str, value: i64) -> DeviceResult;
+    fn set_float_property(&self, id: &str, value: f64) -> DeviceResult;
+    fn set_enum_property(&self, id: &str, value: i64) -> DeviceResult;
+    fn set_string_property(&self, id: &str, value: &str) -> DeviceResult;
+    fn send_command(&self, id: &str) -> DeviceResult;
 
     fn start_grabbing(&self) -> DeviceResult;
     fn stop_grabbing(&self) -> DeviceResult;

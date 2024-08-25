@@ -10,7 +10,7 @@ members = [
     "crates/birb-vision-media-foundation",
     #"crates/birb-vision-media-uvc",
     "crates/birb-vision-mvs",
-    "crates/birb-vision-v4l",
+    "crates/birb-vision-v4l", "crates/egui-interface",
     #"crates/birb-vision-nokhwa",
 ]
 default-members = [

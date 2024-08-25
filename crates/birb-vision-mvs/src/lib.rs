@@ -18,6 +18,7 @@ pub use version::MVSVersion;
 mod ctx;
 pub use ctx::{MVContext, MVSContextCreationError};
 pub use mvs_sys;
+mod genicam;
 
 pub mod pixel;
 
@@ -289,10 +290,27 @@ impl MVDevice {
 
     #[allow(non_snake_case)]
     pub fn get_GenICam_xml(&self) -> Result<String, MVError> {
-        let mut size = 0;
-        mvs_try!(self.cx => MV_XML_GetGenICamXML(self.handle, std::ptr::null_mut(), 0, &mut size))?;
+        // TODO remove println!("a");
+        let mut size = {
+            let mut size = 0;
+            if let Err(MVError::PARAMETER) = mvs_try!(self.cx => MV_XML_GetGenICamXML(self.handle, std::ptr::null_mut(), 0, &mut size)) {
+                // HACK: on Linux it appears that this methods fails, so we just assume the size is less then 10 MB
+                // TODO remove println!("b");
+                10000000 // 10 MB
+            } else {
+                // TODO remove println!("b2");
+                size
+            }
+        };
+        // TODO remove println!("c");
         let mut buffer = vec![0u8; size as usize];
         mvs_try!(self.cx => MV_XML_GetGenICamXML(self.handle, buffer.as_mut_ptr() as *mut _, size, &mut size))?;
+        // TODO remove println!("d");
+        //if size == buffer.len() as _ {
+        //    // HACK: same as above, we try to find the first null byte
+        //    size = buffer.iter().position(|&b| b == 0).unwrap_or(buffer.len()) as _;
+        //}
+        buffer.resize(size as _, 0);
         Ok(String::from_utf8(buffer).expect("Failed to convert GenICam XML to UTF-8"))
     }
 
