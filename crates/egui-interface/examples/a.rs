@@ -12,9 +12,8 @@ impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
             let mut fonts = FontDefinitions::default();
-            fonts.font_data.insert("Material".into(), FontData::from_static(include_bytes!("../../../MaterialIcons-Regular (1).ttf")));
+            fonts.font_data.insert("Material".into(), FontData::from_static(include_bytes!("../../../MaterialIcons-Regular.ttf")));
             fonts.families.get_mut(&FontFamily::Proportional).unwrap().insert(2, "Material".into());
-            let fs = fonts.families.get_mut(&FontFamily::Proportional).unwrap();
             ctx.set_fonts(fonts);
 
             ui.heading("Hello World! \u{e1c4}");
@@ -38,7 +37,9 @@ fn main() {
             .unwrap();
 
         CameraDevice::open(&camera, Default::default()).unwrap();
-        camera.open_params_gui().unwrap();
+        if let Err(e) = camera.open_params_gui() {
+            log::error!("Could not open the params gui: {e}");
+        }
         CameraDevice::close(&camera).unwrap();
 
         Box::new(camera)

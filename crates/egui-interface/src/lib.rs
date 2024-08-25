@@ -204,17 +204,17 @@ impl Preview {
 
         ui.vertical(|ui| {
             ui.horizontal(|ui| {
-                if ui.button("\u{e037}")
+                if ui.button(RichText::new("\u{e037}").size(20.0))
                     .on_hover_text("Start Grabbing")
                     .clicked() {
                     tx.send(Command::StartGrabbing).unwrap();
                 }
-                if ui.button("\u{e047}")
+                if ui.button(RichText::new("\u{e047}").size(20.0))
                     .on_hover_text("Stop Grabbing")
                     .clicked() {
                     tx.send(Command::StopGrabbing).unwrap();
                 }
-                if ui.button("\u{e429}")
+                if ui.button(RichText::new("\u{e429}").size(20.0))
                     .on_hover_text("Controls")
                     .clicked() {
                     self.controls_window = true;
@@ -260,8 +260,14 @@ impl Preview {
                     ui.vertical(|ui| {
                         ui.set_max_width(300.0);
                         ui.horizontal(|ui| {
-                            ui.label("filter \u{e1ba}");
-                            if ui.text_edit_singleline(&mut state.filter).changed() {
+                            ui.label("filter");
+                            if ui
+                                .text_edit_singleline(&mut state.filter)
+                                .on_hover_ui(|ui| {
+                                    ui.label("Filter nodes by name using a regex. Examples:");
+                                    ui.code("^Exposure");
+                                })
+                                .changed() {
                                 let re = state.filter_re();
                                 if let Some(props) = &state.props {
                                     let mut selected = HashSet::new();
