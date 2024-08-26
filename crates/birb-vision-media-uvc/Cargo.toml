@@ -4,4 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-uvc = { version = "0.2.0", features = ["vendor"] }
+#uvc = { version = "0.2.0", features = ["vendor"] }
+#uvc = { git = "https://github.com/l1npengtul/libuvc-rs/", features = ["vendor"] }
+uvc = { git = "https://github.com/e-birb/libuvc-rs/", features = ["vendor"] }

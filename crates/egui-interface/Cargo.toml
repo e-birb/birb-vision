@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 birb-vision = { version = "0.1.0", path = "../birb-vision" }
 birb-vision-mvs = { version = "0.1.0", path = "../birb-vision-mvs" }
+birb-vision-v4l = { version = "0.1.0", path = "../birb-vision-v4l" }
 egui = "0.28.1"
 log = "0.4.22"
 regex = "1.10.6"

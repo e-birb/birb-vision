@@ -1,67 +1,34 @@
-use std::io;
-use std::sync::Mutex;
-use std::time::Instant;
+use std::{io, time::Duration};
 
-use async_std::task::yield_now;
-use async_trait::async_trait;
-use v4l::buffer::Type;
-use v4l::io::traits::CaptureStream;
-use v4l::prelude::*;
-use v4l::video::Capture;
+use v4l::{buffer::Type, control::Description, io::traits::CaptureStream, prelude::*, Control};
 
 fn main() -> io::Result<()> {
     let path = "/dev/video0";
     println!("Using device: {}\n", path);
 
-    // Capture 4 frames by default
-    let count = 4;
+    let mut dev = Device::with_path(path)?;
+    let controls: Vec<Description> = dev.query_controls()?;
+    println!("{} controls:", controls.len());
 
-    // Allocate 4 buffers by default
-    let buffer_count = 4;
-
-    let dev = Device::with_path(path)?;
-    let format = dev.format()?;
-    let params = dev.params()?;
-    println!("Active format:\n{}", format);
-    println!("Active parameters:\n{}", params);
-
-    // Setup a buffer stream and grab a frame, then print its data
-    let mut stream = MmapStream::with_buffers(&dev, Type::VideoCapture, buffer_count)?;
-
-    // warmup
-    stream.next()?;
-
-    let start = Instant::now();
-    let mut megabytes_ps: f64 = 0.0;
-    for i in 0..count {
-        let t0 = Instant::now();
-        let (buf, meta) = stream.next()?;
-        let duration_us = t0.elapsed().as_micros();
-
-        let cur = buf.len() as f64 / 1_048_576.0 * 1_000_000.0 / duration_us as f64;
-        if i == 0 {
-            megabytes_ps = cur;
-        } else {
-            // ignore the first measurement
-            let prev = megabytes_ps * (i as f64 / (i + 1) as f64);
-            let now = cur * (1.0 / (i + 1) as f64);
-            megabytes_ps = prev + now;
-        }
-
-        println!("Buffer");
-        println!("  sequence  : {}", meta.sequence);
-        println!("  timestamp : {}", meta.timestamp);
-        println!("  flags     : {}", meta.flags);
-        println!("  length    : {}", buf.len());
+    for control in controls {
+        let value = dev.control(control.id);
+        println!("{}: {:?}\n", control, value);
     }
 
-    println!();
-    println!("FPS: {}", count as f64 / start.elapsed().as_secs_f64());
-    println!("MB/s: {}", megabytes_ps);
+    let mut s = MmapStream::with_buffers(&mut dev, Type::VideoCapture, 4)?;
+    let j = std::thread::spawn(move || {
+        while let Ok(frame) = s.next() {
+            println!("frame: {:?}", frame.0.len());
+            s.set_timeout(Duration::from_millis(1));
+            std::thread::sleep(Duration::from_millis(10));
+            println!("ERR: {}", s.next().err().unwrap());
+        }
+        println!("stream ended");
+    });
+    std::thread::sleep(std::time::Duration::from_secs(2));
+    let s = MmapStream::with_buffers(&mut dev, Type::VideoCapture, 4)?;
+    drop(s);
+    j.join().unwrap();
 
     Ok(())
-}
-
-fn aa(a: &dyn AA) {
-    //let b = a.foo();
 }

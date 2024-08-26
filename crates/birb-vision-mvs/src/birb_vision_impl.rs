@@ -59,7 +59,6 @@ impl CameraDevice for MVDevice {
             .map(|v| NumericValue::<i64> {
                 current: v.current() as _,
                 range: v.min() as _ ..= v.max() as _,
-                default: None,
             })
     }
 
@@ -70,7 +69,6 @@ impl CameraDevice for MVDevice {
             .map(|v| NumericValue::<f64> {
                 current: v.current() as _,
                 range: v.min() as _ ..= v.max() as _,
-                default: None,
             })
     }
     fn get_enum_property(&self, id: &str) -> DeviceResult<EnumValue> {

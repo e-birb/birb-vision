@@ -9,6 +9,7 @@ pub struct Preview {
     state: Option<Arc<Mutex<PreviewState>>>,
     controls_window: bool,
     zoom: Rect,
+    fps: f32,
 }
 
 pub struct PreviewState {
@@ -22,6 +23,7 @@ pub struct PreviewState {
     thread: Option<std::thread::JoinHandle<()>>,
     update: Box<dyn Fn() + Send + Sync>,
     tx: Sender<Command>,
+    last_frame: Instant,
 }
 
 enum Command {
@@ -60,6 +62,7 @@ impl PreviewState {
             thread: None,
             update: Box::new(|| {}),
             tx: std::sync::mpsc::channel().0, // TODO shit
+            last_frame: Instant::now(),
         }
     }
 }
@@ -92,6 +95,7 @@ impl Preview {
             state: None,
             controls_window: false,
             zoom: Rect { min: (0.0, 0.0).into(), max: (1.0, 1.0).into() },
+            fps: 0.0,
         }
     }
 
@@ -197,6 +201,8 @@ impl Preview {
         });
 
         if let Some(img) = state.image.take() {
+            self.fps = 1.0 / state.last_frame.elapsed().as_secs_f32();
+            state.last_frame = Instant::now();
             let mut options = TextureOptions::default();
             options.magnification = TextureFilter::Nearest;
             state.texture_handle = ui.ctx().load_texture("frame", img, options).into();
@@ -219,6 +225,7 @@ impl Preview {
                     .clicked() {
                     self.controls_window = true;
                 }
+                ui.label(format!("fps: {:.2}", self.fps));
             });
             ui.separator();
             if let Some(texture_handle) = state.texture_handle.as_ref() {

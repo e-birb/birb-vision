@@ -137,17 +137,6 @@ pub enum NodeVariant {
     Port, // TODO ID
 }
 
-#[derive(Debug, Clone)]
-#[derive(EnumAsInner)]
-pub enum PropertyVariant {
-    Boolean(BoolProperty),
-    Integer(NumericProperty<i64>),
-    Float(NumericProperty<f64>),
-    Enum(EnumProperty),
-    String(StringProperty),
-    Command, // TODO command might have data!
-}
-
 impl From<GroupNode> for NodeVariant {
     fn from(group: GroupNode) -> Self {
         NodeVariant::Group(group)
@@ -158,6 +147,23 @@ impl From<BoolProperty> for NodeVariant {
     fn from(prop: BoolProperty) -> Self {
         NodeVariant::Property(PropertyVariant::Boolean(prop))
     }
+}
+
+impl From<PropertyVariant> for NodeVariant {
+    fn from(prop: PropertyVariant) -> Self {
+        NodeVariant::Property(prop)
+    }
+}
+
+#[derive(Debug, Clone)]
+#[derive(EnumAsInner)]
+pub enum PropertyVariant {
+    Boolean(BoolProperty),
+    Integer(NumericProperty<i64>),
+    Float(NumericProperty<f64>),
+    Enum(EnumProperty),
+    String(StringProperty),
+    Command, // TODO command might have data!
 }
 
 impl From<EnumProperty> for NodeVariant {
@@ -210,6 +216,7 @@ impl Debug for Child {
 pub struct BoolProperty {
     pub value: Option<bool>,
     pub value_ref: Option<NodeId>, // TODO unify with a variant, maybe ValueOrRef or something similar to also replace Child
+    pub default: Option<bool>,
 }
 
 impl Default for BoolProperty {
@@ -217,6 +224,7 @@ impl Default for BoolProperty {
         BoolProperty {
             value: None,
             value_ref: None,
+            default: None,
         }
     }
 }
@@ -230,6 +238,7 @@ pub struct NumericProperty<T> {
     pub max_ref: Option<NodeId>,
     pub increment: Option<T>,
     pub increment_ref: Option<NodeId>,
+    pub default: Option<T>,
     pub unit: Option<Cow<'static, str>>,
     pub slope: Slope,
     pub representation: Option<Representation>,
@@ -245,6 +254,7 @@ impl<T> Default for NumericProperty<T> {
             max_ref: None,
             increment: None,
             increment_ref: None,
+            default: None,
             unit: None,
             slope: Slope::Increasing,
             representation: None,
@@ -259,11 +269,20 @@ pub struct EnumProperty {
     pub entries: Cow<'static, [EnumEntry]>,
 }
 
+impl Default for EnumProperty {
+    fn default() -> Self {
+        EnumProperty {
+            value: None,
+            value_ref: None,
+            entries: Cow::Borrowed(&[]),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct NumericValue<T> {
     pub current: T,
     pub range: RangeInclusive<T>, // TODO support not range
-    pub default: Option<T>,
 }
 
 pub struct EnumValue<'a> {
@@ -304,12 +323,14 @@ pub struct EnumEntry {
 #[derive(Debug, Clone)]
 pub struct StringProperty {
     pub max_length: u32,
+    pub default: Option<String>,
 }
 
 impl Default for StringProperty {
     fn default() -> Self {
         StringProperty {
             max_length: u32::MAX,
+            default: None,
         }
     }
 }

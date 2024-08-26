@@ -1,5 +1,6 @@
 use birb_vision::CameraDevice;
 use birb_vision_mvs::{device::TransportLayerType, MVContext};
+use birb_vision_v4l::V4lDevice;
 use egui::{FontData, FontDefinitions, FontFamily, Window};
 use egui_interface::Preview;
 
@@ -44,6 +45,10 @@ fn main() {
 
         Box::new(camera)
     });
+    //preview.init(|| {
+    //    let camera = V4lDevice::from_path("/dev/video0").unwrap();
+    //    Box::new(camera)
+    //});
 
     let app = MyApp {
         preview,

@@ -1,3 +1,8 @@
+use uvc::Context;
+
+
 fn main() {
-    println!("Hello, world!");
+    let ctx = Context::new().expect("Could not create context");
+
+    let devices = ctx.devices();
 }

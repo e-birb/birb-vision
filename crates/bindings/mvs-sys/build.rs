@@ -33,7 +33,7 @@ impl SdkTarget {
         use SdkTarget::*;
         match self {
             Win32 | Win64 => "MvCameraControl",
-            Linux => "libMvCameraControl.so",
+            Linux => "/opt/MVS/lib/64/libMvCameraControl.so",
         }
     }
 }
