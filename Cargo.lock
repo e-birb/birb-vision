@@ -591,6 +591,11 @@ dependencies = [
 [[package]]
 name = "birb-vision"
 version = "0.1.0"
+dependencies = [
+ "birb-vision-core",
+ "birb-vision-mvs",
+ "birb-vision-v4l",
+]
 
 [[package]]
 name = "birb-vision-core"

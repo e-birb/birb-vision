@@ -9,3 +9,5 @@ target/
 # TODO remove
 /*.xml
 *.ttf
+/tmp/
+/tmp*

@@ -14,7 +14,7 @@ members = [
     #"crates/birb-vision-nokhwa",
 ]
 default-members = [
-    "crates/birb-vision-core",
+    "crates/birb-vision",
 ]
 
 [workspace.dependencies]

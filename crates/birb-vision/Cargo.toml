@@ -4,3 +4,14 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+birb-vision-core = { version = "0.1.0", path = "../birb-vision-core" }
+birb-vision-mvs = { version = "0.1.0", path = "../birb-vision-mvs", optional = true }
+birb-vision-v4l = { version = "0.1.0", path = "../birb-vision-v4l", optional = true }
+
+[features]
+default = [
+    "mvs",
+    "v4l",
+]
+mvs = ["dep:birb-vision-mvs"]
+v4l = ["dep:birb-vision-v4l"]

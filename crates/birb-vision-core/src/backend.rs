@@ -9,15 +9,85 @@
  * Usually if your app you would define a [`VisionBackendSet`]
  */
 
-use std::{borrow::Cow, collections::HashMap, error::Error, rc::Rc, sync::{Arc, Mutex}};
+use std::{collections::HashMap, error::Error, fmt::Debug, rc::Rc, sync::{Arc, Mutex}};
 
 use serde::{Deserialize, Serialize};
 
 use crate::CameraDevice;
 
-pub type BackendProvider = dyn Fn() -> BackendProviderResult + Send + Sync + 'static;
+pub enum LogoImageFile {
+    Path(String),
+    StaticBytes(&'static [u8]),
+    Bytes(Arc<Vec<u8>>),
+}
 
-pub type BackendProviderResult = Result<Box<dyn Backend>, Box<dyn Error>>;
+impl Debug for LogoImageFile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LogoImageFile::Path(path) => path.fmt(f),
+            LogoImageFile::StaticBytes(_) => f.debug_tuple("LogoImageFile::StaticBytes").finish(),
+            LogoImageFile::Bytes(_) => f.debug_tuple("LogoImageFile::Bytes").finish(),
+        }
+    }
+}
+
+pub struct BackendPackage {
+    identifier: String,
+    display_name: String,
+    logo: Option<LogoImageFile>,
+    description: Option<String>,
+    builder: Box<dyn Fn() -> BackendProviderResult + Send + Sync + 'static>,
+}
+
+impl Debug for BackendPackage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BackendPackage")
+            .field("identifier", &self.identifier)
+            .field("display_name", &self.display_name)
+            .field("logo", &self.logo)
+            .field("description", &self.description)
+            .finish()
+    }
+}
+
+impl BackendPackage {
+    pub fn from_builder_fn<T: Backend>(builder: impl Fn() -> Result<T, Box<dyn Error>> + Send + Sync + 'static) -> Self {
+        let identifier = std::any::type_name::<T>().to_string();
+
+        let builder = Box::new(move || -> BackendProviderResult {
+            builder().map(|backend| Box::new(backend) as Box<dyn Backend>)
+        });
+
+        Self {
+            identifier: identifier.clone(),
+            display_name: identifier,
+            logo: None,
+            description: None,
+            builder: Box::new(builder),
+        }
+    }
+
+    pub fn with_display_name(mut self, display_name: impl Into<String>) -> Self {
+        self.display_name = display_name.into();
+        self
+    }
+
+    pub fn with_logo(mut self, logo: LogoImageFile) -> Self {
+        self.logo = Some(logo);
+        self
+    }
+
+    pub fn with_description(mut self, description: impl Into<String>) -> Self {
+        self.description = Some(description.into());
+        self
+    }
+
+    pub fn build_backend(&self) -> BackendProviderResult {
+        (self.builder)()
+    }
+}
+
+type BackendProviderResult = Result<Box<dyn Backend>, Box<dyn Error>>;
 
 /// A set of [`Backend`] providers.
 ///
@@ -26,23 +96,23 @@ pub type BackendProviderResult = Result<Box<dyn Backend>, Box<dyn Error>>;
 /// If you want to share the backend set between threads you should use [`BackendProviderSet`]
 /// which only defines "how" to create a backend.
 pub struct BackendSet {
-    providers: BackendProviderSet,
+    providers: BackendRegistry,
     backends: Mutex<HashMap<String, Rc<dyn Backend>>>,
 }
 
 impl BackendSet {
     pub fn new() -> Self {
-        Self::new_with_providers(BackendProviderSet::new())
+        Self::new_with_providers(BackendRegistry::new())
     }
 
-    pub fn new_with_providers(providers: BackendProviderSet) -> Self {
+    pub fn new_with_providers(providers: BackendRegistry) -> Self {
         Self {
             providers,
             backends: Mutex::new(HashMap::new()),
         }
     }
 
-    pub fn providers(&self) -> &BackendProviderSet {
+    pub fn providers(&self) -> &BackendRegistry {
         &self.providers
     }
 
@@ -55,7 +125,7 @@ impl BackendSet {
         if let Some(backend) = backends.get(type_name.as_ref()) {
             return Some(Ok(backend.clone()));
         } else {
-            let backend: Rc<dyn Backend> = match self.providers.get(type_name.as_ref())? {
+            let backend: Rc<dyn Backend> = match self.providers.get_backend(type_name.as_ref())? {
                 Ok(backend) => backend.into(),
                 Err(e) => return Some(Err(e)),
             };
@@ -69,38 +139,43 @@ impl BackendSet {
 }
 
 #[derive(Clone)]
-pub struct BackendProviderSet {
-    frameworks: Arc<Mutex<HashMap<String, Arc<BackendProvider>>>>,
+pub struct BackendRegistry {
+    packages: Arc<Mutex<HashMap<String, Arc<BackendPackage>>>>,
 }
 
-impl BackendProviderSet {
+impl BackendRegistry {
     pub fn new() -> Self {
         Self {
-            frameworks: Arc::new(Mutex::new(HashMap::new())),
+            packages: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
     /// Register a new backend provider.
     ///
     /// If the provider already exists, this function will return an error.
-    pub fn add(
+    pub fn register(
         &self,
-        type_name: impl AsRef<str>,
-        provider: impl Fn() -> BackendProviderResult + Send + Sync + 'static,
+        package: BackendPackage,
     ) -> Result<(), Box<dyn Error>> {
-        self.frameworks.lock().unwrap()
+        let identifier = package.identifier.clone();
+        self.packages.lock().unwrap()
             .insert(
-                type_name.as_ref().to_string(),
-                Arc::new(provider),
+                identifier.clone(),
+                Arc::new(package),
             ).is_none().then(|| ())
-            .ok_or(format!("Backend provider for type {:?} already exists", type_name.as_ref()).into())
+            .ok_or(format!("Backend provider for type {:?} already exists", identifier).into())
     }
 
     /// Build a new backend for the given type name.
-    pub fn get(&self, type_name: impl AsRef<str>) -> Option<BackendProviderResult> {
-        self.frameworks.lock().unwrap()
+    pub fn get_backend(&self, type_name: impl AsRef<str>) -> Option<BackendProviderResult> {
+        self.packages.lock().unwrap()
             .get(type_name.as_ref())
-            .map(|p| p())
+            .map(|p| p.build_backend())
+    }
+
+    pub fn all_packages(&self) -> HashMap<String, Arc<BackendPackage>> {
+        self.packages.lock().unwrap()
+            .clone()
     }
 }
 
@@ -116,18 +191,7 @@ impl BackendProviderSet {
 ///
 /// Contexts may not be [`Send`] or [`Sync`], for this reason a convenient
 /// 
-pub trait Backend {
-    ///// Unique string identifying this context
-    /////
-    ///// This is primarily used during serialization.
-    //fn type_name(&self) -> Cow<'static, str> {
-    //    std::any::type_name::<Self>().into()
-    //}
-
-    fn display_name(&self) -> Cow<'static, str>;
-
-    // TODO documentation
-
+pub trait Backend: 'static {
     /// Enumerate all devices.
     fn enumerate(&self) -> Result<Vec<DeviceInfo>, Box<dyn Error>>;
 
@@ -157,14 +221,36 @@ pub trait GenericDeviceInfo {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[derive(Serialize, Deserialize)]
 pub struct DeviceInfo {
-    /// The backend that this device belongs to.
-    pub backend: String,
-
     /// Display name of the device.
     pub display_name: String,
 
     /// Other device information.
     pub other: HashMap<String, DeviceInfoEntry>,
+}
+
+impl std::fmt::Display for DeviceInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut s = f.debug_struct(&self.display_name);
+
+        //s.field("display_name", &self.display_name);
+
+        for (_, value) in &self.other {
+            if value.visible {
+                s.field(&value.display_name, &format_args!("{}", value.value));
+            }
+        }
+
+        s.finish()
+    }
+}
+
+impl DeviceInfo {
+    pub fn new() -> Self {
+        Self {
+            display_name: String::new(),
+            other: HashMap::new(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -175,4 +261,20 @@ pub struct DeviceInfoEntry {
 
     /// Whether this entry should be visible to the user.
     pub visible: bool,
+}
+
+impl DeviceInfoEntry {
+    pub fn new(display_name: impl Into<String>, value: impl Into<String>) -> Self {
+        Self {
+            display_name: display_name.into(),
+            value: value.into(),
+            visible: true,
+        }
+    }
+
+
+    pub fn with_visible(mut self, visible: bool) -> Self {
+        self.visible = visible;
+        self
+    }
 }

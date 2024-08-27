@@ -1,10 +1,11 @@
+use birb_vision_core::backend::{Backend, DeviceInfoEntry};
 use mvs_sys::ext::libloading;
 
 use std::{
-    cell::RefCell, error::Error, fmt::{Debug, Display}, path::Path, sync::{Arc, Mutex}
+    cell::RefCell, error::Error, fmt::{format, Debug, Display}, path::Path, sync::{Arc, Mutex}
 };
 
-use crate::{device::{AccessMode, DeviceInfo, TransportLayerType}, MVError, MVSVersion};
+use crate::{device::{AccessMode, DeviceInfo, SpecialDeviceInfo, TransportLayerType}, MVError, MVSVersion};
 
 /// A macro to simplify calling FFI functions and checking the result.
 ///
@@ -437,3 +438,118 @@ impl Display for MVSContextCreationError {
 }
 
 impl Error for MVSContextCreationError {}
+
+
+impl Backend for MVContext {
+    fn enumerate(&self) -> Result<Vec<birb_vision_core::backend::DeviceInfo>, Box<dyn Error>> {
+        let devices = self
+            .enumerate_all_devices()?
+            .into_iter()
+            .filter_map(|mv_info| {
+                //let dev = info.into_device(false).ok()?;
+                let mut info = BirbInfo::new();
+                info.display_name = "???".into();
+                info.other.insert(
+                    "version".into(),
+                    DeviceInfoEntry::new(
+                        "version",
+                        format!("{}.{}", mv_info.major_version(), mv_info.minor_version()),
+                    ),
+                );
+                info.other.insert(
+                    "mac_address".into(),
+                    DeviceInfoEntry::new(
+                        "MAC address",
+                        format!("{:#010X}", mv_info.mac_address()),
+                    ),
+                );
+                info.other.insert(
+                    "transport_layer_type".into(),
+                    DeviceInfoEntry::new(
+                        "Transport Layer",
+                        format!("{:?}", mv_info.transport_layer_type()),
+                    ),
+                );
+                info.other.insert(
+                    "device_type_info".into(),
+                    DeviceInfoEntry::new(
+                        "Device Type Info",
+                        format!("{:?}", mv_info.device_type_info()),
+                    ),
+                );
+                if let Some(special_info) = mv_info.special_info() {
+                    convert_special_info(&mut info, &special_info);
+                }
+                Some(info)
+            })
+            .collect::<Vec<_>>();
+
+        Ok(devices)
+    }
+    fn find(&self, info: &birb_vision_core::backend::DeviceInfo) -> Result<Vec<birb_vision_core::backend::DeviceInfo>, Box<dyn Error>> {
+        todo!()
+    }
+    fn create(&self, info: &birb_vision_core::backend::DeviceInfo) -> Result<Option<Box<dyn birb_vision_core::CameraDevice>>, Box<dyn Error>> {
+        todo!()
+    }
+}
+
+use birb_vision_core::backend::DeviceInfo as BirbInfo;
+
+fn convert_special_info(dev_info: &mut BirbInfo, special_info: &SpecialDeviceInfo) {
+    let mut push = |key: &str, display_name: &str, value: String| {
+        dev_info.other.insert(
+            key.into(),
+            DeviceInfoEntry::new(display_name, value)
+        );
+    };
+
+    match special_info {
+        SpecialDeviceInfo::GigE(special_info) => {
+            push("ip_configuration_options", "IP Configuration Options", format!("{:#010X}", special_info.ip_configuration_options()));
+            push("ip_configuration_current", "IP Configuration Current", format!("{:#010X}", special_info.ip_configuration_current()));
+            push("current_ip_address", "Current IP Address", format!("{:#010X}", special_info.current_ip_address()));
+            push("current_subnet_mask", "Current Subnet Mask", format!("{:#010X}", special_info.current_subnet_mask()));
+            push("default_gateway", "Default Gateway", format!("{:#010X}", special_info.default_gateway()));
+            push("manufacturer_name", "Manufacturer", special_info.manufacturer_name().to_string_lossy().to_string());
+            push("model_name", "Model", special_info.model_name().to_string_lossy().to_string());
+            push("device_version", "Device Version", special_info.device_version().to_string_lossy().to_string());
+            push("manufacturer_specific_info", "Manufacturer Specific Info", special_info.manufacturer_specific_info().to_string_lossy().to_string());
+            push("serial_number", "Serial Number", special_info.serial_number().to_string_lossy().to_string());
+            push("user_defined_name", "User Defined Name", special_info.user_defined_name().to_string_lossy().to_string());
+            push("network_ip_address", "Network IP Address", format!("{:#010X}", special_info.network_ip_address()));
+
+            if !special_info.user_defined_name().is_empty() {
+                dev_info.display_name = format!("{} ({})", special_info.user_defined_name().to_string_lossy().to_string(), special_info.model_name().to_string_lossy().to_string());
+            } else {
+                dev_info.display_name = special_info.model_name().to_string_lossy().to_string();
+            }
+        },
+        SpecialDeviceInfo::Usb(special_info) => {
+            push("control_input_endpoint", "Control Input Endpoint", format!("{:#04X}", special_info.control_input_endpoint()));
+            push("control_output_endpoint", "Control Output Endpoint", format!("{:#04X}", special_info.control_output_endpoint()));
+            push("stream_endpoint", "Stream Endpoint", format!("{:#04X}", special_info.stream_endpoint()));
+            push("event_endpoint", "Event Endpoint", format!("{:#04X}", special_info.event_endpoint()));
+            push("vendor_id", "Vendor ID", format!("{:#06X}", special_info.vendor_id()));
+            push("product_id", "Product ID", format!("{:#06X}", special_info.product_id()));
+            push("device_number", "Device Number", format!("{}", special_info.device_number()));
+            push("device_guid", "Device GUID", special_info.device_guid().to_string_lossy().to_string());
+            push("vendor_name", "Vendor Name", special_info.vendor_name().to_string_lossy().to_string());
+            push("model_name", "Model Name", special_info.model_name().to_string_lossy().to_string());
+            push("family_name", "Family Name", special_info.family_name().to_string_lossy().to_string());
+            push("device_version", "Device Version", special_info.device_version().to_string_lossy().to_string());
+            push("manufacturer_name", "Manufacturer Name", special_info.manufacturer_name().to_string_lossy().to_string());
+            push("serial_number", "Serial Number", special_info.serial_number().to_string_lossy().to_string());
+            push("user_defined_name", "User Defined Name", special_info.user_defined_name().to_string_lossy().to_string());
+            push("support_usb_protocol", "Support USB Protocol", format!("{:010X}", special_info.support_usb_protocol()));
+            push("device_address", "Device Address", format!("{:010X}", special_info.device_address()));
+
+            if !special_info.user_defined_name().is_empty() {
+                dev_info.display_name = format!("{} ({})", special_info.user_defined_name().to_string_lossy().to_string(), special_info.model_name().to_string_lossy().to_string());
+            } else {
+                dev_info.display_name = special_info.model_name().to_string_lossy().to_string();
+            }
+        }
+        _ => {}
+    }
+}

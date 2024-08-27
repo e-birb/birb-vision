@@ -1,14 +1,19 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+use std::any::Any;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+use birb_vision_core::backend::{BackendPackage, BackendRegistry};
+use birb_vision_mvs::MVContext;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
+pub fn all_backends() -> BackendRegistry {
+    let set = BackendRegistry::new();
+
+    #[cfg(feature = "mvs")]
+    set.register(
+        BackendPackage::from_builder_fn(|| {
+            let ctx = MVContext::new(None)?;
+            Ok(ctx)
+        })
+        .with_display_name("Hikrobot (MVS SDK)")
+    ).unwrap();
+
+    set
 }
