@@ -636,7 +636,7 @@ impl Properties {
 
     pub fn show_property(&mut self, ui: &mut Ui, selected: &HashSet<NodeId>, id: &NodeId, send: &Sender<Command>) {
         let Some(property) = self.leafs.get_mut(id) else {
-            ui.label(RichText::new("&".to_string() + id.0.as_str()).color(Color32::RED));
+            ui.label(RichText::new(format!("&{:?}", id)).color(Color32::RED));
             return;
         };
 

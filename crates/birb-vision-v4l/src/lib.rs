@@ -1,13 +1,13 @@
 use std::{cell::RefCell, collections::HashMap, path::Path, sync::{Arc, Mutex}, time::{Duration, Instant}};
 
-use birb_vision::{decoders::yuyv422_to_rgb, image::{DynamicImage, RgbImage}, BoolProperty, CameraDevice, Child, DeviceAccessMode, DeviceResult, EnumEntry, EnumProperty, EnumValue, Event, Frame, GroupNode, Node, NodeVariant, NumericProperty, NumericValue, PropertyVariant, Representation, StringProperty};
+use birb_vision::{decoders::yuyv422_to_rgb, image::{DynamicImage, RgbImage}, BoolProperty, CameraDevice, Child, DeviceAccessMode, DeviceResult, EnumEntry, EnumProperty, EnumValue, Event, Frame, GroupNode, Node, NodeId, NodeVariant, NumericProperty, NumericValue, PropertyVariant, Representation, StringProperty};
 use v4l::{control::{MenuItem, Value}, io::traits::CaptureStream, video::Capture, Control, Device, Format, FourCC};
 
 
 
 pub struct V4lDevice {
     dev: Mutex<Device>,
-    controls: RefCell<HashMap<String, v4l::control::Description>>,
+    controls: RefCell<HashMap<NodeId, v4l::control::Description>>,
     current_format: Arc<Mutex<v4l::Format>>,
 
     callback: Arc<Mutex<Box<dyn Fn(Event) + Send + Sync>>>,
@@ -141,7 +141,7 @@ impl CameraDevice for V4lDevice {
             };
             if let Some(variant) = variant {
                 node.variant = variant;
-                self.controls.borrow_mut().insert(control.id.to_string(), control);
+                self.controls.borrow_mut().insert((control.id as i32).into(), control);
                 nodes.push(node);
             }
         }
@@ -164,17 +164,17 @@ impl CameraDevice for V4lDevice {
         self.control_description()
     }
 
-    fn get_bool_property(&self, id: &str) -> DeviceResult<bool> {
-        let control = self.dev.lock().unwrap().control(id.parse().unwrap()).unwrap();
+    fn get_bool_property(&self, id: &NodeId) -> DeviceResult<bool> {
+        let control = self.dev.lock().unwrap().control(*id.as_i32().unwrap() as _).unwrap();
         let Value::Boolean(value) = control.value else {
             panic!("Expected boolean value");
         };
         Ok(value)
     }
-    fn get_int_property(&self, id: &str) -> DeviceResult<NumericValue<i64>> {
+    fn get_int_property(&self, id: &NodeId) -> DeviceResult<NumericValue<i64>> {
         let controls = self.controls.borrow();
         let desc = controls.get(id).unwrap();
-        let control = self.dev.lock().unwrap().control(id.parse().unwrap()).unwrap();
+        let control = self.dev.lock().unwrap().control(*id.as_i32().unwrap() as _).unwrap();
         let Value::Integer(value) = control.value else {
             panic!("Expected integer value");
         };
@@ -183,10 +183,10 @@ impl CameraDevice for V4lDevice {
             range: (desc.minimum as i64)..=(desc.maximum as i64),
         })
     }
-    fn get_float_property(&self, id: &str) -> DeviceResult<NumericValue<f64>> {
+    fn get_float_property(&self, id: &NodeId) -> DeviceResult<NumericValue<f64>> {
         let controls = self.controls.borrow();
         let desc = controls.get(id).unwrap();
-        let control = self.dev.lock().unwrap().control(id.parse().unwrap()).unwrap();
+        let control = self.dev.lock().unwrap().control(*id.as_i32().unwrap() as _).unwrap();
         let Value::Integer(value) = control.value else {
             panic!("Expected integer value");
         };
@@ -195,8 +195,8 @@ impl CameraDevice for V4lDevice {
             range: (desc.minimum as f64)..=(desc.maximum as f64),
         })
     }
-    fn get_enum_property(&self, id: &str) -> DeviceResult<EnumValue> {
-        let control = self.dev.lock().unwrap().control(id.parse().unwrap()).unwrap();
+    fn get_enum_property(&self, id: &NodeId) -> DeviceResult<EnumValue> {
+        let control = self.dev.lock().unwrap().control(*id.as_i32().unwrap() as _).unwrap();
         let Value::Integer(value) = control.value else {
             panic!("Expected integer value");
         };
@@ -217,35 +217,35 @@ impl CameraDevice for V4lDevice {
             support: entries.iter().map(|e| e.discriminant).collect::<Vec<_>>().into(),
         })
     }
-    fn get_string_property(&self, id: &str) -> DeviceResult<String> {
-        let control = self.dev.lock().unwrap().control(id.parse().unwrap()).unwrap();
+    fn get_string_property(&self, id: &NodeId) -> DeviceResult<String> {
+        let control = self.dev.lock().unwrap().control(*id.as_i32().unwrap() as _).unwrap();
         let Value::String(value) = control.value else {
             panic!("Expected string value");
         };
         Ok(value)
     }
 
-    fn set_bool_property(&self, id: &str, value: bool) -> DeviceResult {
-        self.dev.lock().unwrap().set_control(Control { id: id.parse().unwrap(), value: Value::Boolean(value) }).unwrap();
+    fn set_bool_property(&self, id: &NodeId, value: bool) -> DeviceResult {
+        self.dev.lock().unwrap().set_control(Control { id: *id.as_i32().unwrap() as _, value: Value::Boolean(value) }).unwrap();
         Ok(())
     }
-    fn set_int_property(&self, id: &str, value: i64) -> DeviceResult {
-        self.dev.lock().unwrap().set_control(Control { id: id.parse().unwrap(), value: Value::Integer(value) }).unwrap();
+    fn set_int_property(&self, id: &NodeId, value: i64) -> DeviceResult {
+        self.dev.lock().unwrap().set_control(Control { id: *id.as_i32().unwrap() as _, value: Value::Integer(value) }).unwrap();
         Ok(())
     }
-    fn set_float_property(&self, id: &str, value: f64) -> DeviceResult {
+    fn set_float_property(&self, id: &NodeId, value: f64) -> DeviceResult {
         // TODO error
         unimplemented!()
     }
-    fn set_enum_property(&self, id: &str, value: i64) -> DeviceResult {
+    fn set_enum_property(&self, id: &NodeId, value: i64) -> DeviceResult {
         self.set_int_property(id, value)
     }
-    fn set_string_property(&self, id: &str, value: &str) -> DeviceResult {
-        self.dev.lock().unwrap().set_control(Control { id: id.parse().unwrap(), value: Value::String(value.to_string()) }).unwrap();
+    fn set_string_property(&self, id: &NodeId, value: &str) -> DeviceResult {
+        self.dev.lock().unwrap().set_control(Control { id: *id.as_i32().unwrap() as _, value: Value::String(value.to_string()) }).unwrap();
         Ok(())
     }
-    fn send_command(&self, id: &str) -> DeviceResult {
-        self.dev.lock().unwrap().set_control(Control { id: id.parse().unwrap(), value: Value::None }).unwrap();
+    fn send_command(&self, id: &NodeId) -> DeviceResult {
+        self.dev.lock().unwrap().set_control(Control { id: *id.as_i32().unwrap() as _, value: Value::None }).unwrap();
         Ok(())
     }
 

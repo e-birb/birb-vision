@@ -3,40 +3,9 @@ use std::{borrow::Cow, fmt::{Debug, Formatter}, ops::{Deref, RangeInclusive}};
 use enum_as_inner::EnumAsInner;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[derive(Serialize, Deserialize)]
-pub struct NodeId(pub Cow<'static, str>);
-impl Deref for NodeId {
-    type Target = str;
+mod id;
 
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl From<&'static str> for NodeId {
-    fn from(s: &'static str) -> Self {
-        NodeId(Cow::Borrowed(s))
-    }
-}
-
-impl From<String> for NodeId {
-    fn from(s: String) -> Self {
-        NodeId(Cow::Owned(s))
-    }
-}
-
-impl From<Cow<'static, str>> for NodeId {
-    fn from(s: Cow<'static, str>) -> Self {
-        NodeId(s)
-    }
-}
-
-impl Debug for NodeId {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self.0)
-    }
-}
+pub use id::*;
 
 #[derive(Debug, Clone)]
 pub struct Node {
@@ -96,7 +65,7 @@ impl Node {
         let name = name.into();
         Node {
             display_name: name.clone(),
-            id: Some(NodeId(name)),
+            id: Some(name.into()),
             tooltip: None,
             description: None,
             visibility: None,

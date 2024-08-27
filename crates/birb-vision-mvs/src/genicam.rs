@@ -1,4 +1,4 @@
-use birb_vision::{AccessMode, BoolProperty, Child, EnumEntry, EnumProperty, GroupNode, Node, NodeId, NodeVariant, NumericProperty, PropertyVariant, Representation, StringProperty, Visibility};
+use birb_vision::{AccessMode, BoolProperty, Child, EnumEntry, EnumProperty, GroupNode, Node, NodeVariant, NumericProperty, PropertyVariant, Representation, StringProperty, Visibility};
 use roxmltree::Node as XmlNode;
 
 fn parse_child_or_property(xml_node: XmlNode, current: &mut Node) -> Option<Child> {
@@ -82,7 +82,7 @@ fn parse_child_or_property(xml_node: XmlNode, current: &mut Node) -> Option<Chil
             None
         },
         "pIsLocked" => {
-            current.is_locked_ref = Some(NodeId(xml_node.text().unwrap().to_string().into()));
+            current.is_locked_ref = Some(xml_node.text().unwrap().to_string().into());
             None
         },
         "Address" => {
@@ -90,11 +90,11 @@ fn parse_child_or_property(xml_node: XmlNode, current: &mut Node) -> Option<Chil
             None
         },
         "pAddress" => {
-            current.address_ref = Some(NodeId(xml_node.text().unwrap().to_string().into()));
+            current.address_ref = Some(xml_node.text().unwrap().to_string().into());
             None
         },
         "pPort" => {
-            current.port_ref = Some(NodeId(xml_node.text().unwrap().to_string().into()));
+            current.port_ref = Some(xml_node.text().unwrap().to_string().into());
             None
         },
         "Streamable" => {
@@ -234,7 +234,7 @@ pub fn parse_integer(xml_node: XmlNode) -> Node {
                 continue;
             },
             "pMin" => {
-                prop.min_ref = Some(NodeId(child.text().unwrap().to_string().into()));
+                prop.min_ref = Some(child.text().unwrap().to_string().into());
                 continue;
             },
             "Max" => {
@@ -242,7 +242,7 @@ pub fn parse_integer(xml_node: XmlNode) -> Node {
                 continue;
             },
             "pMax" => {
-                prop.max_ref = Some(NodeId(child.text().unwrap().to_string().into()));
+                prop.max_ref = Some(child.text().unwrap().to_string().into());
                 continue;
             },
             "Inc" => {
@@ -250,7 +250,7 @@ pub fn parse_integer(xml_node: XmlNode) -> Node {
                 continue;
             },
             "pInc" => {
-                prop.increment_ref = Some(NodeId(child.text().unwrap().to_string().into()));
+                prop.increment_ref = Some(child.text().unwrap().to_string().into());
                 continue;
             },
             _ => {},
@@ -305,7 +305,7 @@ pub fn parse_float(xml_node: XmlNode) -> Node {
                 continue;
             },
             "pMin" => {
-                prop.min_ref = Some(NodeId(child.text().unwrap().to_string().into()));
+                prop.min_ref = Some(child.text().unwrap().to_string().into());
                 continue;
             },
             "Max" => {
@@ -313,7 +313,7 @@ pub fn parse_float(xml_node: XmlNode) -> Node {
                 continue;
             },
             "pMax" => {
-                prop.max_ref = Some(NodeId(child.text().unwrap().to_string().into()));
+                prop.max_ref = Some(child.text().unwrap().to_string().into());
                 continue;
             },
             "Inc" => {
@@ -321,7 +321,7 @@ pub fn parse_float(xml_node: XmlNode) -> Node {
                 continue;
             },
             "pInc" => {
-                prop.increment_ref = Some(NodeId(child.text().unwrap().to_string().into()));
+                prop.increment_ref = Some(child.text().unwrap().to_string().into());
                 continue;
             },
             _ => {},
@@ -354,7 +354,7 @@ pub fn parse_enum(xml_node: XmlNode) -> Node {
                 continue;
             },
             "pValue" => {
-                variant.value_ref = Some(NodeId(child.text().unwrap().to_string().into()));
+                variant.value_ref = Some(child.text().unwrap().to_string().into());
                 continue;
             },
             "EnumEntry" => {
@@ -419,7 +419,7 @@ fn parse_bool(xml_node: XmlNode) -> Node {
                 continue;
             }
             "pValue" => {
-                prop.value_ref = Some(NodeId(child.text().unwrap().to_string().into()));
+                prop.value_ref = Some(child.text().unwrap().to_string().into());
                 continue;
             },
             "OnValue" => {

@@ -2,7 +2,7 @@
 
 use std::borrow::Cow;
 
-use birb_vision::{CameraDevice, DeviceAccessMode, DeviceError, DeviceResult, EnumValue, Event, Frame, GroupNode, Node, NodeVariant, NumericProperty, NumericValue, Representation, Slope, Visibility};
+use birb_vision::{CameraDevice, DeviceAccessMode, DeviceError, DeviceResult, EnumValue, Event, Frame, GroupNode, Node, NodeId, NodeVariant, NumericProperty, NumericValue, Representation, Slope, Visibility};
 use crate::{genicam::{parse_root}, mvs_try, prelude::*};
 
 impl CameraDevice for MVDevice {
@@ -48,13 +48,13 @@ impl CameraDevice for MVDevice {
             .next().ok_or(DeviceError::OtherString("Root node not found".into()))
     }
 
-    fn get_bool_property(&self, id: &str) -> DeviceResult<bool> {
-        self.get_bool_value(id).map_err(|e| DeviceError::other(e))
+    fn get_bool_property(&self, id: &NodeId) -> DeviceResult<bool> {
+        self.get_bool_value(id.as_str().unwrap()).map_err(|e| DeviceError::other(e))
     }
 
-    fn get_int_property(&self, id: &str) -> DeviceResult<NumericValue<i64>> {
+    fn get_int_property(&self, id: &NodeId) -> DeviceResult<NumericValue<i64>> {
         self
-            .get_int_value(id)
+            .get_int_value(id.as_str().unwrap())
             .map_err(|e| DeviceError::other(e))
             .map(|v| NumericValue::<i64> {
                 current: v.current() as _,
@@ -62,18 +62,18 @@ impl CameraDevice for MVDevice {
             })
     }
 
-    fn get_float_property(&self, id: &str) -> DeviceResult<NumericValue<f64>> {
+    fn get_float_property(&self, id: &NodeId) -> DeviceResult<NumericValue<f64>> {
         self
-            .get_float_value(id)
+            .get_float_value(id.as_str().unwrap())
             .map_err(|e| DeviceError::other(e))
             .map(|v| NumericValue::<f64> {
                 current: v.current() as _,
                 range: v.min() as _ ..= v.max() as _,
             })
     }
-    fn get_enum_property(&self, id: &str) -> DeviceResult<EnumValue> {
+    fn get_enum_property(&self, id: &NodeId) -> DeviceResult<EnumValue> {
         self
-            .get_enum_value(id)
+            .get_enum_value(id.as_str().unwrap())
             .map_err(|e| DeviceError::other(e))
             .map(|v| EnumValue {
                 current: v.current_value() as _,
@@ -81,30 +81,30 @@ impl CameraDevice for MVDevice {
             })
     }
 
-    fn get_string_property(&self, id: &str) -> DeviceResult<String> {
+    fn get_string_property(&self, id: &NodeId) -> DeviceResult<String> {
         self
-            .get_string_value(id)
+            .get_string_value(id.as_str().unwrap())
             .map_err(|e| DeviceError::other(e))
             .map(|s| s.current_value().to_string())
     }
 
-    fn set_bool_property(&self, id: &str, value: bool) -> DeviceResult {
-        self.set_bool_value(id, value).map_err(|e| DeviceError::other(e))
+    fn set_bool_property(&self, id: &NodeId, value: bool) -> DeviceResult {
+        self.set_bool_value(id.as_str().unwrap(), value).map_err(|e| DeviceError::other(e))
     }
-    fn set_int_property(&self, id: &str, value: i64) -> DeviceResult {
-        self.set_int_value(id, value as _).map_err(|e| DeviceError::other(e))
+    fn set_int_property(&self, id: &NodeId, value: i64) -> DeviceResult {
+        self.set_int_value(id.as_str().unwrap(), value as _).map_err(|e| DeviceError::other(e))
     }
-    fn set_float_property(&self, id: &str, value: f64) -> DeviceResult {
-        self.set_float_value(id, value as _).map_err(|e| DeviceError::other(e))
+    fn set_float_property(&self, id: &NodeId, value: f64) -> DeviceResult {
+        self.set_float_value(id.as_str().unwrap(), value as _).map_err(|e| DeviceError::other(e))
     }
-    fn set_enum_property(&self, id: &str, value: i64) -> DeviceResult {
-        self.set_enum_value(id, value as _).map_err(|e| DeviceError::other(e))
+    fn set_enum_property(&self, id: &NodeId, value: i64) -> DeviceResult {
+        self.set_enum_value(id.as_str().unwrap(), value as _).map_err(|e| DeviceError::other(e))
     }
-    fn set_string_property(&self, id: &str, value: &str) -> DeviceResult {
-        self.set_string_value(id, value).map_err(|e| DeviceError::other(e))
+    fn set_string_property(&self, id: &NodeId, value: &str) -> DeviceResult {
+        self.set_string_value(id.as_str().unwrap(), value).map_err(|e| DeviceError::other(e))
     }
-    fn send_command(&self, id: &str) -> DeviceResult {
-        self.set_command_value(id).map_err(|e| DeviceError::other(e))
+    fn send_command(&self, id: &NodeId) -> DeviceResult {
+        self.set_command_value(id.as_str().unwrap()).map_err(|e| DeviceError::other(e))
     }
 
     fn start_grabbing(&self) -> DeviceResult<()> {

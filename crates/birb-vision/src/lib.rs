@@ -95,18 +95,18 @@ pub trait CameraDevice {
 
     fn control_description(&self) -> DeviceResult<Node>;
     fn properties(&self) -> DeviceResult<Node>;
-    fn get_bool_property(&self, id: &str) -> DeviceResult<bool>;
-    fn get_int_property(&self, id: &str) -> DeviceResult<NumericValue<i64>>;
-    fn get_float_property(&self, id: &str) -> DeviceResult<NumericValue<f64>>;
-    fn get_enum_property(&self, id: &str) -> DeviceResult<EnumValue>;
-    fn get_string_property(&self, id: &str) -> DeviceResult<String>; // TODO Cow
+    fn get_bool_property(&self, id: &NodeId) -> DeviceResult<bool>;
+    fn get_int_property(&self, id: &NodeId) -> DeviceResult<NumericValue<i64>>;
+    fn get_float_property(&self, id: &NodeId) -> DeviceResult<NumericValue<f64>>;
+    fn get_enum_property(&self, id: &NodeId) -> DeviceResult<EnumValue>;
+    fn get_string_property(&self, id: &NodeId) -> DeviceResult<String>; // TODO Cow
 
-    fn set_bool_property(&self, id: &str, value: bool) -> DeviceResult;
-    fn set_int_property(&self, id: &str, value: i64) -> DeviceResult;
-    fn set_float_property(&self, id: &str, value: f64) -> DeviceResult;
-    fn set_enum_property(&self, id: &str, value: i64) -> DeviceResult;
-    fn set_string_property(&self, id: &str, value: &str) -> DeviceResult;
-    fn send_command(&self, id: &str) -> DeviceResult;
+    fn set_bool_property(&self, id: &NodeId, value: bool) -> DeviceResult;
+    fn set_int_property(&self, id: &NodeId, value: i64) -> DeviceResult;
+    fn set_float_property(&self, id: &NodeId, value: f64) -> DeviceResult;
+    fn set_enum_property(&self, id: &NodeId, value: i64) -> DeviceResult;
+    fn set_string_property(&self, id: &NodeId, value: &str) -> DeviceResult;
+    fn send_command(&self, id: &NodeId) -> DeviceResult;
 
     fn start_grabbing(&self) -> DeviceResult;
     fn stop_grabbing(&self) -> DeviceResult;
