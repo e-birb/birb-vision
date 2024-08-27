@@ -2,7 +2,7 @@ use birb_vision_core::backend::{Backend, DeviceInfoEntry};
 use mvs_sys::ext::libloading;
 
 use std::{
-    cell::RefCell, error::Error, fmt::{format, Debug, Display}, path::Path, sync::{Arc, Mutex}
+    cell::RefCell, error::Error, fmt::{Debug, Display}, path::Path, sync::{Arc, Mutex}
 };
 
 use crate::{device::{AccessMode, DeviceInfo, SpecialDeviceInfo, TransportLayerType}, MVError, MVSVersion};

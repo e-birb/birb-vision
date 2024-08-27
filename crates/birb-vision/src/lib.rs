@@ -1,4 +1,3 @@
-use std::any::Any;
 
 use birb_vision_core::backend::{BackendPackage, BackendRegistry};
 use birb_vision_mvs::MVContext;

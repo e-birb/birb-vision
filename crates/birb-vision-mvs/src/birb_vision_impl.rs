@@ -2,8 +2,8 @@
 
 use std::borrow::Cow;
 
-use birb_vision_core::{CameraDevice, DeviceAccessMode, DeviceError, DeviceResult, EnumValue, Event, Frame, GroupNode, Node, NodeId, NodeVariant, NumericProperty, NumericValue, Representation, Slope, Visibility};
-use crate::{genicam::{parse_root}, mvs_try, prelude::*};
+use birb_vision_core::{CameraDevice, DeviceAccessMode, DeviceError, DeviceResult, EnumValue, Event, Frame, Node, NodeId, NumericValue};
+use crate::{genicam::parse_root, mvs_try, prelude::*};
 
 impl CameraDevice for MVDevice {
     fn is_device_accessible(&self, mode: DeviceAccessMode) -> bool {

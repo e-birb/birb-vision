@@ -1,7 +1,7 @@
 use std::{collections::{HashMap, HashSet}, ops::{Deref, DerefMut}, sync::{mpsc::Sender, Arc, Weak}, time::Instant};
 
 use birb_vision_core::{CameraDevice, Child, EnumEntry, Event, Frame, Node, NodeId, NodeVariant, PropertyVariant, Representation};
-use egui::{load::SizedTexture, mutex::Mutex, Color32, ColorImage, ComboBox, DragValue, Image, ImageData, Rect, RichText, Sense, TextBuffer, TextureFilter, TextureHandle, TextureOptions, Ui, Window};
+use egui::{load::SizedTexture, mutex::Mutex, Color32, ColorImage, DragValue, Image, ImageData, Rect, RichText, TextBuffer, TextureFilter, TextureHandle, TextureOptions, Ui, Window};
 use regex::Regex;
 
 
@@ -104,7 +104,7 @@ impl Preview {
         init: impl FnOnce() -> Box<dyn CameraDevice> + Send + 'static,
     ) {
         let mut state = PreviewState::new();
-        let (tx, mut rx) = std::sync::mpsc::channel();
+        let (tx, rx) = std::sync::mpsc::channel();
         state.tx = tx;
         let state = Arc::new(Mutex::new(state));
 
@@ -112,7 +112,7 @@ impl Preview {
             let state = StateRef(Arc::downgrade(&state));
 
             move || {
-                let mut camera = init();
+                let camera = init();
                 camera.open(Default::default()).unwrap();
                 //camera.start_grabbing().unwrap();
                 camera.set_stream_callback({
