@@ -9,7 +9,7 @@ mvs-sys = { version = "0.1.0", path = "../bindings/mvs-sys" }
 #quick-xml = "0.33.0"
 roxmltree = "=0.20.0"
 semver = "1.0.23"
-birb-vision = { version = "0.1.0", path = "../birb-vision", optional = true }
+birb-vision-core = { version = "0.1.0", path = "../birb-vision-core", optional = true }
 scopeguard = "1.2.0"
 
 [dev-dependencies]
@@ -21,5 +21,5 @@ default = [
     "birb-vision",
 ]
 birb-vision = [
-    "dep:birb-vision",
+    "dep:birb-vision-core",
 ]

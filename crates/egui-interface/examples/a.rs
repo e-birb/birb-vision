@@ -1,8 +1,8 @@
-use birb_vision::CameraDevice;
+use birb_vision_core::CameraDevice;
 use birb_vision_mvs::{device::TransportLayerType, MVContext};
 use birb_vision_v4l::V4lDevice;
 use egui::{FontData, FontDefinitions, FontFamily, Window};
-use egui_interface::Preview;
+use birb_vision_egui_interface::Preview;
 
 
 struct MyApp {

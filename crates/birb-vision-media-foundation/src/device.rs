@@ -1,6 +1,6 @@
 use std::{cell::RefCell, collections::VecDeque, error::Error, sync::{Arc, Mutex}, task::{Context, Poll, Waker}};
 
-use birb_vision::{decoders::{decode_mjpg, nv12_to_rgb_image, yuyv422_to_rgb}, CameraDevice, DeviceAccessMode, DeviceError, DeviceResult, Event, Frame};
+use birb_vision_core::{decoders::{decode_mjpg, nv12_to_rgb_image, yuyv422_to_rgb}, CameraDevice, DeviceAccessMode, DeviceError, DeviceResult, Event, Frame};
 use image::{DynamicImage, RgbImage};
 use serde::{Deserialize, Serialize};
 use windows::{core::PWSTR, Win32::Media::MediaFoundation::{IMFAttributes, IMFMediaSource, IMFSourceReader, IMFSourceReaderCallback, IMFSourceReaderCallback_Impl, MFCreateAttributes, MFCreateSourceReaderFromMediaSource, MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK, MF_E_NOTACCEPTING, MF_READWRITE_DISABLE_CONVERTERS, MF_SOURCE_READERF_ALLEFFECTSREMOVED, MF_SOURCE_READERF_CURRENTMEDIATYPECHANGED, MF_SOURCE_READERF_ENDOFSTREAM, MF_SOURCE_READERF_ERROR, MF_SOURCE_READERF_NATIVEMEDIATYPECHANGED, MF_SOURCE_READERF_NEWSTREAM, MF_SOURCE_READERF_STREAMTICK, MF_SOURCE_READER_ASYNC_CALLBACK, MF_SOURCE_READER_FIRST_VIDEO_STREAM, MF_SOURCE_READER_FLAG}};
@@ -262,7 +262,7 @@ impl CameraDevice for MFDevice {
         Ok(())
     }
 
-    //async fn receive_frame(&self) -> DeviceResult<std::borrow::Cow<'_, birb_vision::Frame>> {
+    //async fn receive_frame(&self) -> DeviceResult<std::borrow::Cow<'_, birb_vision_core::Frame>> {
     //    let img = self.receive_and_decode_frame().unwrap(); // TODO handle error
     //    Ok(Cow::Owned(Frame::Image(img)))
     //}
@@ -535,7 +535,7 @@ impl IMFSourceReaderCallback_Impl for ReaderCallback_Impl {
                         let stride = format.stride().unwrap_or(format.width() as i32 * 3); // TODO check if row major
 
                         // HACK: windows actually uses BGR, so we need to convert it to swap the RED and BLUE channels
-                        let img = birb_vision::decoders::decode_bgr(
+                        let img = birb_vision_core::decoders::decode_bgr(
                             &bytes,
                             format.width(),
                             format.height(),

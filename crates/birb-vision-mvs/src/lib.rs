@@ -2,7 +2,7 @@
 
 use std::{ffi::{c_uchar, c_void, CStr}, path::Path, pin::Pin, sync::Mutex, time::Duration};
 
-use birb_vision::image::DynamicImage;
+use birb_vision_core::image::DynamicImage;
 use device::{AccessMode, DeviceInfo};
 pub use log;
 

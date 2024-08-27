@@ -4,4 +4,4 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-birb-vision = { version = "0.1.0", path = "../birb-vision" }
+birb-vision-core = { version = "0.1.0", path = "../birb-vision-core" }

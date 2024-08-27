@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-birb-vision = { version = "0.1.0", path = "../birb-vision" }
+birb-vision-core = { version = "0.1.0", path = "../birb-vision-core" }
 #icube-sdk-sys = "0.2.1"
 icube-sdk-sys = { path = "../../../../../LucaCiucci/icube-sdk-sys" }
 log = "0.4.21"

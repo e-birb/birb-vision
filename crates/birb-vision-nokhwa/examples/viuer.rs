@@ -1,7 +1,7 @@
 use birb_vision_nokhwa::NokhwaCamera;
 use clap::Parser;
 use nokhwa::{pixel_format::RgbFormat, utils::{CameraIndex, RequestedFormat, RequestedFormatType}, Camera as NCamera};
-use birb_vision::CameraDevice;
+use birb_vision_core::CameraDevice;
 
 #[derive(Parser)]
 struct Args {

@@ -1,6 +1,6 @@
 use std::{collections::{HashMap, HashSet}, ops::{Deref, DerefMut}, sync::{mpsc::Sender, Arc, Weak}, time::Instant};
 
-use birb_vision::{CameraDevice, Child, EnumEntry, Event, Frame, Node, NodeId, NodeVariant, PropertyVariant, Representation};
+use birb_vision_core::{CameraDevice, Child, EnumEntry, Event, Frame, Node, NodeId, NodeVariant, PropertyVariant, Representation};
 use egui::{load::SizedTexture, mutex::Mutex, Color32, ColorImage, ComboBox, DragValue, Image, ImageData, Rect, RichText, Sense, TextBuffer, TextureFilter, TextureHandle, TextureOptions, Ui, Window};
 use regex::Regex;
 

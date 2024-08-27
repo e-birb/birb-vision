@@ -1,6 +1,6 @@
 use std::{cell::RefCell, collections::HashMap, path::Path, sync::{Arc, Mutex}, time::{Duration, Instant}};
 
-use birb_vision::{decoders::yuyv422_to_rgb, image::{DynamicImage, RgbImage}, BoolProperty, CameraDevice, Child, DeviceAccessMode, DeviceResult, EnumEntry, EnumProperty, EnumValue, Event, Frame, GroupNode, Node, NodeId, NodeVariant, NumericProperty, NumericValue, PropertyVariant, Representation, StringProperty};
+use birb_vision_core::{decoders::yuyv422_to_rgb, image::{DynamicImage, RgbImage}, BoolProperty, CameraDevice, Child, DeviceAccessMode, DeviceResult, EnumEntry, EnumProperty, EnumValue, Event, Frame, GroupNode, Node, NodeId, NodeVariant, NumericProperty, NumericValue, PropertyVariant, Representation, StringProperty};
 use v4l::{control::{MenuItem, Value}, io::traits::CaptureStream, video::Capture, Control, Device, Format, FourCC};
 
 
@@ -63,7 +63,7 @@ impl CameraDevice for V4lDevice {
         Ok(())
     }
 
-    fn control_description(&self) -> DeviceResult<birb_vision::Node> {
+    fn control_description(&self) -> DeviceResult<birb_vision_core::Node> {
         use v4l::control::Type;
 
         let controls = self.dev.lock().unwrap().query_controls().unwrap();
@@ -259,7 +259,7 @@ impl CameraDevice for V4lDevice {
         let mut s = v4l::io::mmap::Stream::with_buffers(&mut dev, v4l::buffer::Type::VideoCapture, 4).unwrap();
         s.set_timeout(Duration::from_secs(2));
 
-        use birb_vision::image;
+        use birb_vision_core::image;
 
         let stream = Arc::new(Mutex::new(s));
 
@@ -286,7 +286,7 @@ impl CameraDevice for V4lDevice {
                     Some(img)
                 } else if format.fourcc == FourCC::new(b"MJPG") {
                     let start = Instant::now();
-                    //let img = birb_vision::decoders::decode_mjpg(data).unwrap();
+                    //let img = birb_vision_core::decoders::decode_mjpg(data).unwrap();
                     //let img = DynamicImage::ImageRgb8(img);
                     let img = image::load_from_memory(&data).unwrap();
                     println!("Converted mjpeg in {:?}", start.elapsed());

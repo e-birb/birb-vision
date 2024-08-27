@@ -1,8 +1,8 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/bindings/mvs-sys",
-    "crates/birb-vision",
+    "crates/bindings/mvs-sys", "crates/birb-vision",
+    "crates/birb-vision-core",
     #"crates/birb-vision-bundle",
     "crates/birb-vision-explorer",
     "crates/birb-vision-fake",
@@ -14,7 +14,7 @@ members = [
     #"crates/birb-vision-nokhwa",
 ]
 default-members = [
-    "crates/birb-vision",
+    "crates/birb-vision-core",
 ]
 
 [workspace.dependencies]

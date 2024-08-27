@@ -591,6 +591,10 @@ dependencies = [
 [[package]]
 name = "birb-vision"
 version = "0.1.0"
+
+[[package]]
+name = "birb-vision-core"
+version = "0.1.0"
 dependencies = [
  "clap",
  "enum-as-inner",
@@ -602,6 +606,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "birb-vision-egui-interface"
+version = "0.1.0"
+dependencies = [
+ "birb-vision-core",
+ "birb-vision-mvs",
+ "birb-vision-v4l",
+ "eframe",
+ "egui",
+ "env_logger",
+ "log",
+ "regex",
+]
+
+[[package]]
 name = "birb-vision-explorer"
 version = "0.1.0"
 
@@ -609,14 +627,14 @@ version = "0.1.0"
 name = "birb-vision-fake"
 version = "0.1.0"
 dependencies = [
- "birb-vision",
+ "birb-vision-core",
 ]
 
 [[package]]
 name = "birb-vision-media-foundation"
 version = "0.1.0"
 dependencies = [
- "birb-vision",
+ "birb-vision-core",
  "env_logger",
  "image",
  "log",
@@ -638,7 +656,7 @@ dependencies = [
 name = "birb-vision-mvs"
 version = "0.1.0"
 dependencies = [
- "birb-vision",
+ "birb-vision-core",
  "env_logger",
  "log",
  "mvs-sys",
@@ -652,7 +670,7 @@ dependencies = [
 name = "birb-vision-v4l"
 version = "0.1.0"
 dependencies = [
- "birb-vision",
+ "birb-vision-core",
  "v4l",
 ]
 
@@ -1280,19 +1298,6 @@ dependencies = [
  "epaint",
  "log",
  "nohash-hasher",
-]
-
-[[package]]
-name = "egui-interface"
-version = "0.1.0"
-dependencies = [
- "birb-vision",
- "birb-vision-mvs",
- "eframe",
- "egui",
- "env_logger",
- "log",
- "regex",
 ]
 
 [[package]]

@@ -2,7 +2,7 @@
 
 use std::borrow::Cow;
 
-use birb_vision::{CameraDevice, DeviceAccessMode, DeviceError, DeviceResult, EnumValue, Event, Frame, GroupNode, Node, NodeId, NodeVariant, NumericProperty, NumericValue, Representation, Slope, Visibility};
+use birb_vision_core::{CameraDevice, DeviceAccessMode, DeviceError, DeviceResult, EnumValue, Event, Frame, GroupNode, Node, NodeId, NodeVariant, NumericProperty, NumericValue, Representation, Slope, Visibility};
 use crate::{genicam::{parse_root}, mvs_try, prelude::*};
 
 impl CameraDevice for MVDevice {

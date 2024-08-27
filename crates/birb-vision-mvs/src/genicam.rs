@@ -1,4 +1,4 @@
-use birb_vision::{AccessMode, BoolProperty, Child, EnumEntry, EnumProperty, GroupNode, Node, NodeVariant, NumericProperty, PropertyVariant, Representation, StringProperty, Visibility};
+use birb_vision_core::{AccessMode, BoolProperty, Child, EnumEntry, EnumProperty, GroupNode, Node, NodeVariant, NumericProperty, PropertyVariant, Representation, StringProperty, Visibility};
 use roxmltree::Node as XmlNode;
 
 fn parse_child_or_property(xml_node: XmlNode, current: &mut Node) -> Option<Child> {

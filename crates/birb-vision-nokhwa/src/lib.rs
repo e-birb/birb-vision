@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use birb_vision::{image::DynamicImage, AsyncTask, CameraDevice, DeviceError, Frame};
+use birb_vision_core::{image::DynamicImage, AsyncTask, CameraDevice, DeviceError, Frame};
 use log_once::{error_once, warn_once};
 use nokhwa::{Buffer, FormatDecoder, NokhwaError};
 
@@ -30,33 +30,33 @@ impl NokhwaCamera {
 }
 
 impl CameraDevice for NokhwaCamera {
-    fn open(&mut self) -> AsyncTask<birb_vision::DeviceResult<()>> {
+    fn open(&mut self) -> AsyncTask<birb_vision_core::DeviceResult<()>> {
         AsyncTask::new(async move {
             warn_once!("nokhwa cameras are opened automatically when created, calling open is a no-op.");
             Ok(())
         })
     }
 
-    fn close(&mut self) -> AsyncTask<birb_vision::DeviceResult<()>> {
+    fn close(&mut self) -> AsyncTask<birb_vision_core::DeviceResult<()>> {
         AsyncTask::new(async move {
             error_once!("nokhwa cameras are closed automatically ONLY when dropped, calling close is a no-op.");
             Err(DeviceError::Unsupported)
         })
     }
 
-    fn start_video_stream(&mut self) -> AsyncTask<birb_vision::DeviceResult<()>> {
+    fn start_video_stream(&mut self) -> AsyncTask<birb_vision_core::DeviceResult<()>> {
         AsyncTask::new(async move {
             self.camera.open_stream().map_err(|e| DeviceError::other(e))
         })
     }
 
-    fn stop_video_stream(&mut self) -> AsyncTask<birb_vision::DeviceResult<()>> {
+    fn stop_video_stream(&mut self) -> AsyncTask<birb_vision_core::DeviceResult<()>> {
         AsyncTask::new(async move {
             self.camera.stop_stream().map_err(|e| DeviceError::other(e))
         })
     }
 
-    fn receive_frame(&mut self) -> AsyncTask<birb_vision::DeviceResult<std::borrow::Cow<'_, Frame>>> {
+    fn receive_frame(&mut self) -> AsyncTask<birb_vision_core::DeviceResult<std::borrow::Cow<'_, Frame>>> {
         AsyncTask::new(async move {
             let frame = self.camera.frame().map_err(|e| DeviceError::other(e))?;
             //let decoded = frame.decode_image::<RgbFormat>().map_err(|e| DeviceError::other(e))?;

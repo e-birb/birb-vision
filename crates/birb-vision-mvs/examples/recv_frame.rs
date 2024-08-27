@@ -1,7 +1,7 @@
 use std::time::Instant;
 
 use birb_vision_mvs::prelude::*;
-use birb_vision::{futures::StreamExt, CameraDevice, CameraDeviceEx};
+use birb_vision_core::{futures::StreamExt, CameraDevice, CameraDeviceEx};
 
 fn main() {
     pollster::block_on(async_main());

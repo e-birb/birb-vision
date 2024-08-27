@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use birb_vision::{CameraDevice};
+use birb_vision_core::{CameraDevice};
 use birb_vision_mvs::{device::TransportLayerType, MVContext, MVDevice};
 
 

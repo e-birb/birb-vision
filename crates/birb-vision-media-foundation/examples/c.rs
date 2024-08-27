@@ -1,4 +1,4 @@
-use birb_vision::{futures::StreamExt, CameraDevice, CameraDeviceEx};
+use birb_vision_core::{futures::StreamExt, CameraDevice, CameraDeviceEx};
 use birb_vision_media_foundation::MediaFoundationContext;
 
 

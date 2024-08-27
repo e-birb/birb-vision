@@ -1,5 +1,5 @@
 use std::ffi::c_int;
-use birb_vision::image::{self, DynamicImage, ImageBuffer};
+use birb_vision_core::image::{self, DynamicImage, ImageBuffer};
 
 
 pub fn decode_mv_image(width: u32, height: u32, data: &[u8], pixel_type: c_int) -> image::DynamicImage {
