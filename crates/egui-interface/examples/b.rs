@@ -1,11 +1,11 @@
 use birb_vision::core::CameraDevice;
 use birb_vision_mvs::{device::TransportLayerType, MVContext};
 use egui::{CentralPanel, FontData, FontDefinitions, FontFamily};
-use birb_vision_egui_interface::{add_fonts, Preview, Selector};
+use birb_vision_egui_interface::{add_fonts, CameraControl, CameraManager};
 
 
 struct MyApp {
-    selector: Selector,
+    selector: CameraManager,
 }
 
 impl eframe::App for MyApp {
@@ -19,7 +19,7 @@ impl eframe::App for MyApp {
 fn main() {
     env_logger::init();
 
-    let selector = Selector::new();
+    let selector = CameraManager::new();
 
     let app = MyApp {
         selector,

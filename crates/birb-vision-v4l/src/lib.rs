@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap, error::Error, path::Path, sync::{Arc, Mutex}, time::{Duration, Instant}};
+use std::{cell::RefCell, collections::HashMap, error::Error, ops::Deref, path::Path, sync::{Arc, Mutex}, time::{Duration, Instant}};
 
 use birb_vision_core::{backend::{Backend, DeviceInfo, DeviceInfoEntry}, decoders::yuyv422_to_rgb, image::{DynamicImage, RgbImage}, BoolProperty, CameraDevice, Child, DeviceAccessMode, DeviceResult, EnumEntry, EnumProperty, EnumValue, Event, Frame, GroupNode, Node, NodeId, NodeVariant, NumericProperty, NumericValue, PropertyVariant, Representation, StringProperty};
 use v4l::{control::{MenuItem, Value}, io::traits::CaptureStream, video::Capture, Control, Device, Format, FourCC};
@@ -6,6 +6,7 @@ use v4l::{control::{MenuItem, Value}, io::traits::CaptureStream, video::Capture,
 use birb_vision_core::DeviceError::*;
 
 pub struct V4lDevice {
+    info: Arc<DeviceInfo>,
     dev: Mutex<Device>,
     controls: RefCell<HashMap<NodeId, v4l::control::Description>>,
     current_format: Arc<Mutex<v4l::Format>>,
@@ -21,11 +22,20 @@ pub struct V4lDevice {
 }
 
 impl V4lDevice {
-    pub fn from_v4l_device(dev: Device) -> Self {
+    pub fn from_path(path: impl AsRef<Path>) -> std::io::Result<Self> {
+        let node = v4l::context::enum_devices()
+            .into_iter()
+            .find(|node| node.path() == path.as_ref());
+
+        let info = node_to_info(&node.unwrap());
+
+        let dev = Device::with_path(path)?;
+
         let format = dev.format().unwrap();
         //dev.set_format(&Format::new(format.width, format.height, FourCC::new(b"YUYV"))).unwrap();
 
-        Self {
+        Ok(Self {
+            info: Arc::new(info),
             dev: Mutex::new(dev),
             controls: RefCell::new(HashMap::new()),
             current_format: Arc::new(Mutex::new(format)),
@@ -33,16 +43,15 @@ impl V4lDevice {
             callback: Arc::new(Mutex::new(Box::new(|_| {}))),
             stream: RefCell::new(None),
             _marker: std::ptr::null_mut(),
-        }
-    }
-
-    pub fn from_path(path: impl AsRef<Path>) -> std::io::Result<Self> {
-        let dev = Device::with_path(path)?;
-        Ok(Self::from_v4l_device(dev))
+        })
     }
 }
 
 impl CameraDevice for V4lDevice {
+    fn get_device_info(&self) -> DeviceResult<DeviceInfo> {
+        Ok(self.info.deref().clone())
+    }
+
     fn is_device_accessible(&self, mode: DeviceAccessMode) -> bool {
         // TODO
         true
@@ -347,32 +356,27 @@ impl Backend for V4lContext {
         vec![]
     }
 
-    fn enumerate(&self, transport_layers: &[String]) -> Result<Vec<DeviceInfo>, Box<dyn Error>> {
+    fn enumerate(&self, _transport_layers: &[String]) -> Result<Vec<DeviceInfo>, Box<dyn Error>> {
         Ok(
             v4l::context::enum_devices()
                 .into_iter()
                 .filter(|node| Device::with_path(node.path()).map(|dev| dev.format().is_ok()).unwrap_or(false))
-                .map(node_to_info)
+                .map(|node| node_to_info(&node))
                 .collect()
             )
-    }
-
-    fn find(&self, info: &DeviceInfo) -> Result<Vec<DeviceInfo>, Box<dyn Error>> {
-        todo!()
     }
 
     fn create(&self, info: &DeviceInfo) -> Result<Option<Box<dyn CameraDevice>>, Box<dyn Error>> {
         for node in v4l::context::enum_devices() {
             if node.path().to_string_lossy() == info.other.get("path").unwrap().value.as_str() && node.name() == Some(info.display_name.to_string()) {
-                let dev = Device::with_path(node.path())?;
-                return Ok(Some(Box::new(V4lDevice::from_v4l_device(dev))));
+                return Ok(Some(Box::new(V4lDevice::from_path(node.path())?)));
             }
         }
         Ok(None)
     }
 }
 
-fn node_to_info(node: v4l::context::Node) -> DeviceInfo {
+fn node_to_info(node: &v4l::context::Node) -> DeviceInfo {
     let path = node.path().to_string_lossy().to_string();
     let mut info = DeviceInfo::new();
     info.display_name = path.clone();

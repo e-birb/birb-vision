@@ -1,13 +1,13 @@
-use birb_vision_egui_interface::Selector;
+use birb_vision_egui_interface::CameraManager;
 use egui::CentralPanel;
 
 
 struct MyApp {
-    selector: Selector,
+    selector: CameraManager,
 }
 
 impl eframe::App for MyApp {
-    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         CentralPanel::default().show(ctx, |ui| {
             self.selector.show(ui);
         });
@@ -17,7 +17,7 @@ impl eframe::App for MyApp {
 fn main() {
     env_logger::init();
 
-    let selector = Selector::new();
+    let selector = CameraManager::new();
 
     let app = MyApp {
         selector,

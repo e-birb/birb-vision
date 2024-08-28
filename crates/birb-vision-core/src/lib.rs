@@ -1,6 +1,7 @@
 
 
 use std::{borrow::Cow, future::Future, sync::{Arc, Mutex}};
+use backend::DeviceInfo;
 use clap::ValueEnum;
 
 use enum_as_inner::EnumAsInner;
@@ -89,6 +90,8 @@ pub enum DeviceAccessMode {
 /// [`flush`]: CameraDevice::flush
 /// [`stream`]: CameraDevice::stream
 pub trait CameraDevice {
+    fn get_device_info(&self) -> DeviceResult<DeviceInfo>;
+
     fn is_device_accessible(&self, mode: DeviceAccessMode) -> bool;
     fn is_open(&self) -> Option<DeviceAccessMode>;
     fn open(&self, mode: DeviceAccessMode) -> DeviceResult;

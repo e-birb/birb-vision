@@ -460,9 +460,7 @@ impl Backend for MVContext {
 
         Ok(devices)
     }
-    fn find(&self, info: &birb_vision_core::backend::DeviceInfo) -> Result<Vec<birb_vision_core::backend::DeviceInfo>, Box<dyn Error>> {
-        todo!()
-    }
+
     fn create(&self, info: &birb_vision_core::backend::DeviceInfo) -> Result<Option<Box<dyn birb_vision_core::CameraDevice>>, Box<dyn Error>> {
         let Some(layer) = info.other.get("transport-layer") else {
             return Err(anyhow!("No transport layer specified").into())
@@ -486,7 +484,7 @@ impl Backend for MVContext {
 
 use birb_vision_core::backend::DeviceInfo as BirbInfo;
 
-fn convert_info(mv_info: DeviceInfo) -> BirbInfo {
+pub(crate) fn convert_info(mv_info: DeviceInfo) -> BirbInfo {
     //let dev = info.into_device(false).ok()?;
     let mut info = BirbInfo::new();
     info.display_name = "???".into();

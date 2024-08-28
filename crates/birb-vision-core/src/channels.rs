@@ -1,4 +1,4 @@
-use std::{any::Any, pin::Pin, sync::{Arc, Weak}};
+use std::{any::Any, pin::Pin};
 
 use futures::{stream::BoxStream, Stream, StreamExt};
 

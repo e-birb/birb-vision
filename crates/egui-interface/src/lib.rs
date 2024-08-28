@@ -6,185 +6,21 @@ use material_icons::Icon;
 use regex::Regex;
 use scope_guard::scope_guard;
 
+mod selector;
 
-pub struct Selector {
-    preview: Preview,
+pub use selector::CameraManager;
 
-    enum_task: Option<JoinHandle<Vec<(String, DeviceInfo)>>>,
-    cameras: Vec<(String, DeviceInfo)>,
-
-    backend_registry: BackendRegistry,
-}
-
-impl Selector {
-    pub fn new() -> Self {
-        let backend_registry = birb_vision::all_backends();
-        Selector {
-            preview: Preview::new(),
-            enum_task: None,
-            cameras: Vec::new(),
-            backend_registry,
-        }
-    }
-
-    pub fn show(&mut self, ui: &mut egui::Ui) {
-        add_fonts(ui.ctx());
-
-        if let Some(task) = self.enum_task.as_ref() {
-            if task.is_finished() {
-                let cameras = match self.enum_task.take().unwrap().join() {
-                    Ok(cameras) => cameras,
-                    Err(e) => {
-                        log::error!("Error enumerating cameras: {e:?}"); // TODO try downcast to String and &str
-                        Vec::new()
-                    }
-                };
-                self.cameras = cameras;
-            }
-        }
-
-        ui.add_enabled_ui(!self.is_any_task_running(), |ui| {
-            ui.centered_and_justified(|ui| {
-                ui.horizontal(|ui| {
-                    self.show_selection(ui);
-                    self.preview.show(ui);
-                });
-            });
-        });
-    }
-
-    pub fn show_selection(&mut self, ui: &mut egui::Ui) {
-        ui.vertical(|ui| {
-            ui.set_width(200.0);
-            ui.horizontal(|ui| {
-                if ui.button("Enumerate").clicked() {
-                    self.start_enumerate(ui.ctx());
-                }
-                if self.enum_task.is_some() {
-                    ui.spinner();
-                }
-                if ui.button(Icon::Close.to_string())
-                    .on_hover_text("Close current device")
-                    .clicked() {
-                    self.preview = Preview::new();
-                }
-            });
-
-            ui.separator();
-            ui.centered_and_justified(|ui| { // TODO does not work
-                ScrollArea::vertical().show(ui, |ui| {
-                    let mut to_open = None;
-                    for (backend_id, info) in &self.cameras {
-                        CollapsingHeader::new(&info.display_name).id_source(&info).show(ui, |ui| {
-                            if ui
-                                .button("Connect \u{e63c}") // plug
-                                .on_hover_text("Connect")
-                                .clicked() {
-                                to_open = Some((backend_id.clone(), info.clone()));
-                            }
-                            ui.label(backend_id);
-                            Grid::new(&info).striped(true).show(ui, |ui| {
-                                let keys = info.other.keys().collect::<Vec<_>>();
-                                //keys.sort();
-                                for k in keys {
-                                    let v = &info.other[k];
-                                    if !v.visible {
-                                        continue;
-                                    }
-                                    ui.label(&v.display_name);
-                                    ui.label(&v.value).on_hover_ui(|ui| {
-                                        ui.label(k);
-                                    });
-                                    ui.end_row();
-                                }
-                            });
-                        });
-                    }
-                    if let Some((backend_id, info)) = to_open {
-                        self.open_camera(&backend_id, info);
-                    }
-                });
-            });
-        });
-    }
-
-    fn is_any_task_running(&self) -> bool {
-        self.enum_task.is_some()
-    }
-
-    fn start_enumerate(&mut self, cx: &egui::Context) {
-        let cx = cx.clone();
-        let registry = self.backend_registry.clone();
-        let task = std::thread::spawn(move || {
-            scope_guard!(|| {
-                cx.request_repaint();
-            });
-
-            let keys = registry.all_packages().into_iter().map(|(id, _)| id).collect::<Vec<_>>();
-            let backends = BackendSet::new_with_registry(registry);
-            let mut all_devices = Vec::new();
-            for key in keys {
-                let backend = match backends.get_backend(&key).unwrap() {
-                    Ok(backend) => backend,
-                    Err(e) => {
-                        log::error!("Error getting backend: {e}");
-                        continue;
-                    }
-                };
-                let devices = match backend.enumerate(&backend.default_transport_layers()) {
-                    Ok(devices) => devices,
-                    Err(e) => {
-                        log::error!("Error enumerating devices: {e}");
-                        continue;
-                    }
-                };
-                all_devices.extend(devices.into_iter().map(|d| (key.clone(), d)));
-            }
-            all_devices
-        });
-        self.enum_task = Some(task);
-    }
-
-    fn open_camera(&mut self, backend_id: &str, device_info: DeviceInfo) {
-        let backend_id = backend_id.to_string();
-        self.preview = Preview::new(); // Close current camera
-        let mut preview = Preview::new();
-        let registry = self.backend_registry.clone();
-        preview.init(device_info.display_name.clone(), move || {
-            let backend = match registry.get_backend(backend_id).unwrap() {
-                Ok(backend) => backend,
-                Err(e) => {
-                    log::error!("Error getting backend: {e}");
-                    panic!("Error getting backend: {e}");
-                }
-            };
-            let camera = match backend.create(&device_info) {
-                Ok(camera) => camera,
-                Err(e) => {
-                    log::error!("Error opening camera: {e}");
-                    panic!("Error opening camera: {e}");
-                }
-            };
-            let Some(camera) = camera else {
-                log::error!("Camera not found");
-                panic!("Camera not found");
-            };
-            camera
-        });
-        // TODO use self.preview.init(...);
-        self.preview = preview;
-    }
-}
-
-pub struct Preview {
-    state: Option<Arc<Mutex<PreviewState>>>,
+/// UI providing control over a camera.
+pub struct CameraControl {
+    state: Option<Arc<Mutex<State>>>,
     controls_window: bool,
     zoom: f32,
     fps: f32,
 }
 
-pub struct PreviewState {
-    display_name: String,
+/// The state that is shared with the camera control thread.
+pub struct State {
+    device_info: Option<Arc<DeviceInfo>>,
     props: Option<Properties>,
     filter: String,
     filter_error: String,
@@ -204,7 +40,7 @@ enum Command {
     StopGrabbing,
 }
 
-impl PreviewState {
+impl State {
     fn filter_re(&mut self) -> Option<Regex> {
         if self.filter.is_empty() {
             return None;
@@ -221,10 +57,10 @@ impl PreviewState {
     }
 }
 
-impl PreviewState {
+impl State {
     fn new() -> Self {
-        PreviewState {
-            display_name: "???".into(),
+        State {
+            device_info: None,
             props: None,
             filter: String::new(),
             filter_error: String::new(),
@@ -241,10 +77,10 @@ impl PreviewState {
 }
 
 #[derive(Clone)]
-struct StateRef(Weak<Mutex<PreviewState>>);
+struct StateRef(Weak<Mutex<State>>);
 
 impl StateRef {
-    fn on_state<R>(&self, f: impl FnOnce(&PreviewState) -> R) -> Option<R> {
+    fn on_state<R>(&self, f: impl FnOnce(&State) -> R) -> Option<R> {
         self.0.upgrade().map(|state| {
             let state = state.lock();
             let r = f(&state);
@@ -252,7 +88,7 @@ impl StateRef {
         })
     }
 
-    fn on_state_mut<R>(&self, f: impl FnOnce(&mut PreviewState) -> R) -> Option<R> {
+    fn on_state_mut<R>(&self, f: impl FnOnce(&mut State) -> R) -> Option<R> {
         self.0.upgrade().map(|state| {
             let mut state = state.lock();
             let r = f(&mut state);
@@ -262,9 +98,9 @@ impl StateRef {
     }
 }
 
-impl Preview {
+impl CameraControl {
     pub fn new() -> Self {
-        Preview {
+        CameraControl {
             state: None,
             controls_window: false,
             zoom: 1.0,
@@ -272,15 +108,18 @@ impl Preview {
         }
     }
 
+    pub fn current_camera_info(&self) -> Option<Arc<DeviceInfo>> {
+        self.state.as_ref()?.lock().device_info.clone()
+    }
+
     pub fn init(
         &mut self,
         display_name: impl Into<String>,
         init: impl FnOnce() -> Box<dyn CameraDevice> + Send + 'static,
     ) {
-        let mut state = PreviewState::new();
+        let mut state = State::new();
         let (tx, rx) = std::sync::mpsc::channel();
         state.tx = tx;
-        state.display_name = display_name.into();
         let state = Arc::new(Mutex::new(state));
 
         let thread = std::thread::spawn({
@@ -288,7 +127,11 @@ impl Preview {
 
             move || {
                 let camera = init();
+                let info = camera.get_device_info().unwrap();
                 camera.open(Default::default()).unwrap();
+                state.on_state_mut(|state| {
+                    state.device_info = Some(Arc::new(info));
+                });
                 //camera.start_grabbing().unwrap();
                 camera.set_stream_callback({
                     let state = state.clone();
@@ -392,7 +235,9 @@ impl Preview {
 
         ui.vertical(|ui| {
             ui.horizontal(|ui| {
-                ui.label(&state.display_name);
+                if let Some(info) = &state.device_info {
+                    ui.label(&info.display_name);
+                }
             });
             ui.horizontal(|ui| {
                 if ui.button(icon(Icon::PlayArrow))
@@ -522,7 +367,7 @@ impl Preview {
     }
 }
 
-impl Drop for Preview {
+impl Drop for CameraControl {
     fn drop(&mut self) {
         let Some(state) = self.state.as_ref() else {
             return;

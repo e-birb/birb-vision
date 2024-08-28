@@ -1,11 +1,11 @@
 use birb_vision_core::CameraDevice;
 use birb_vision_mvs::{device::TransportLayerType, MVContext};
 use egui::{FontData, FontDefinitions, FontFamily};
-use birb_vision_egui_interface::Preview;
+use birb_vision_egui_interface::CameraControl;
 
 
 struct MyApp {
-    preview: Preview,
+    preview: CameraControl,
 }
 
 impl eframe::App for MyApp {
@@ -26,7 +26,7 @@ impl eframe::App for MyApp {
 fn main() {
     env_logger::init();
 
-    let mut preview = Preview::new();
+    let mut preview = CameraControl::new();
 
     preview.init(|| {
         let camera = MVContext::new(None)
