@@ -477,14 +477,11 @@ impl Preview {
                     ui.vertical(|ui| {
                         ui.set_max_width(300.0);
                         ui.horizontal(|ui| {
-                            ui.label("filter");
-                            if ui
-                                .text_edit_singleline(&mut state.filter)
-                                .on_hover_ui(|ui| {
-                                    ui.label("Filter nodes by name using a regex. Examples:");
-                                    ui.code("^Exposure");
-                                })
-                                .changed() {
+                            ui.label(icon(Icon::FilterList)).on_hover_ui(|ui| {
+                                ui.label("Filter nodes by name using a regex. Examples:");
+                                ui.code("^Exposure");
+                            });
+                            if ui.text_edit_singleline(&mut state.filter).changed() {
                                 let re = state.filter_re();
                                 if let Some(props) = &state.props {
                                     let mut selected = HashSet::new();
