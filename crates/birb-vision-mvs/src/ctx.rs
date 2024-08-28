@@ -1,4 +1,4 @@
-use birb_vision_core::backend::{Backend, DeviceInfoEntry};
+use birb_vision_core::{anyhow::anyhow, backend::{Backend, DeviceInfoEntry}};
 use mvs_sys::ext::libloading;
 
 use std::{
@@ -441,9 +441,19 @@ impl Error for MVSContextCreationError {}
 
 
 impl Backend for MVContext {
-    fn enumerate(&self) -> Result<Vec<birb_vision_core::backend::DeviceInfo>, Box<dyn Error>> {
+    fn available_transport_layers(&self) -> Vec<String> {
+        TransportLayerType::ALL.iter().filter_map(|ty| ty.name()).collect()
+    }
+
+    fn default_transport_layers(&self) -> Vec<String> {
+        TransportLayerType::DEFAULT_TRANSPORT_LAYERS.iter().filter_map(|ty| ty.name()).collect()
+    }
+
+    fn enumerate(&self, transport_layers: &[String]) -> Result<Vec<birb_vision_core::backend::DeviceInfo>, Box<dyn Error>> {
+        let transport_layers = transport_layers.iter().filter_map(|name| TransportLayerType::from_name(name));
+
         let devices = self
-            .enumerate_all_devices()?
+            .enumerate_devices(transport_layers)?
             .into_iter()
             .map(convert_info)
             .collect::<Vec<_>>();
@@ -454,8 +464,16 @@ impl Backend for MVContext {
         todo!()
     }
     fn create(&self, info: &birb_vision_core::backend::DeviceInfo) -> Result<Option<Box<dyn birb_vision_core::CameraDevice>>, Box<dyn Error>> {
+        let Some(layer) = info.other.get("transport-layer") else {
+            return Err(anyhow!("No transport layer specified").into())
+        };
+        let layer = &layer.value;
+        let layer = match TransportLayerType::from_name(layer.as_str()) {
+            Some(layer) => layer,
+            None => return Err(anyhow!("Invalid transport layer name: {layer}").into())
+        };
         let serial = info.other.get("serial_number").map(|x| x.value.clone()).unwrap_or_default();
-        for dev_info in self.enumerate_all_devices()? {
+        for dev_info in self.enumerate_devices([layer])? {
             let birb_info = convert_info(dev_info.clone());
             if birb_info.other.get("serial_number").map(|x| x.value.clone()).unwrap_or_default() == serial {
                 let dev = dev_info.into_device(false)?;
@@ -492,6 +510,13 @@ fn convert_info(mv_info: DeviceInfo) -> BirbInfo {
             "Transport Layer",
             format!("{:?}", mv_info.transport_layer_type()),
         ),
+    );
+    info.other.insert(
+        "transport-layer".into(),
+        DeviceInfoEntry::new(
+            "Transport Layer",
+            format!("{}", mv_info.transport_layer_type().name().unwrap_or("UNKNOWN".to_string())),
+        ).with_visible(false),
     );
     info.other.insert(
         "device_type_info".into(),

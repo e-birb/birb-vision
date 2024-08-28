@@ -26,5 +26,8 @@ pub fn all_backends() -> BackendRegistry {
     #[cfg(unix)]
     println!("Unix");
 
+    #[cfg(windows)]
+    println!("Windows");
+
     set
 }

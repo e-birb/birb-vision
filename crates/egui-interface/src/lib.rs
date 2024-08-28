@@ -64,6 +64,11 @@ impl Selector {
                 if self.enum_task.is_some() {
                     ui.spinner();
                 }
+                if ui.button(Icon::Close.to_string())
+                    .on_hover_text("Close current device")
+                    .clicked() {
+                    self.preview = Preview::new();
+                }
             });
 
             ui.separator();
@@ -81,7 +86,7 @@ impl Selector {
                             ui.label(backend_id);
                             Grid::new(&info).striped(true).show(ui, |ui| {
                                 let mut keys = info.other.keys().collect::<Vec<_>>();
-                                keys.sort();
+                                //keys.sort();
                                 for k in keys {
                                     let v = &info.other[k];
                                     if !v.visible {
@@ -127,7 +132,7 @@ impl Selector {
                         continue;
                     }
                 };
-                let devices = match backend.enumerate() {
+                let devices = match backend.enumerate(&backend.default_transport_layers()) {
                     Ok(devices) => devices,
                     Err(e) => {
                         log::error!("Error enumerating devices: {e}");
@@ -143,6 +148,7 @@ impl Selector {
 
     fn open_camera(&mut self, backend_id: &str, device_info: DeviceInfo) {
         let backend_id = backend_id.to_string();
+        self.preview = Preview::new(); // Close current camera
         let mut preview = Preview::new();
         let registry = self.backend_registry.clone();
         preview.init(device_info.display_name.clone(), move || {
@@ -362,7 +368,12 @@ impl Preview {
     }
 
     fn show_view(&mut self, ui: &mut egui::Ui) {
-        let Some(state) = self.state.as_ref() else { return; };
+        let Some(state) = self.state.as_ref() else {
+            ui.centered_and_justified(|ui| {
+                ui.label("No camera");
+            });
+            return;
+        };
         let mut state = state.lock();
         let tx = state.tx.clone();
         state.update = Box::new({

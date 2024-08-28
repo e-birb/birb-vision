@@ -12,6 +12,3 @@ birb-vision-v4l = { version = "0.1.0", path = "../birb-vision-v4l", optional = t
 #default = ["mvs", "v4l"]
 mvs = ["dep:birb-vision-mvs"]
 v4l = ["dep:birb-vision-v4l"]
-
-
-[target.'cfg(unix)'.dependencies]

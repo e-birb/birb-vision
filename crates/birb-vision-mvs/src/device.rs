@@ -164,6 +164,37 @@ impl TransportLayerType {
         Self::GentlXof,
     ];
 
+    pub const DEFAULT_TRANSPORT_LAYERS: [Self; 2] = [
+        Self::Gige,
+        Self::Usb,
+    ];
+
+    pub fn name(&self) -> Option<String> {
+        match self {
+            Self::Unknown => None,
+            Self::Gige => Some("Gige".into()),
+            Self::_1394 => Some("_1394".into()),
+            Self::Usb => Some("Usb".into()),
+            Self::Cameralink => Some("Cameralink".into()),
+            Self::VirGige => Some("VirGige".into()),
+            Self::VirUsb => Some("VirUsb".into()),
+            Self::GentlGige => Some("GentlGige".into()),
+            Self::GentlCameralink => Some("GentlCameralink".into()),
+            Self::GentlCxp => Some("GentlCxp".into()),
+            Self::GentlXof => Some("GentlXof".into()),
+            Self::Error(_) => None,
+        }
+    }
+
+    pub fn from_name(name: &str) -> Option<Self> {
+        for ty in &Self::ALL {
+            if ty.name().as_ref().map(|n| n.as_str()) == Some(name) {
+                return Some(ty.clone());
+            }
+        }
+        None
+    }
+
     pub fn from_u32(value: u32) -> Self {
         match value {
             mvs_sys::MV_UNKNOW_DEVICE => Self::Unknown,

@@ -617,8 +617,6 @@ name = "birb-vision-egui-interface"
 version = "0.1.0"
 dependencies = [
  "birb-vision",
- "birb-vision-mvs",
- "birb-vision-v4l",
  "defer",
  "eframe",
  "egui",

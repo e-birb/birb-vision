@@ -9,7 +9,7 @@
  * Usually if your app you would define a [`VisionBackendSet`]
  */
 
-use std::{collections::HashMap, error::Error, fmt::Debug, hash::Hash, rc::Rc, sync::{Arc, Mutex}};
+use std::{collections::{BTreeMap, HashMap}, error::Error, fmt::Debug, hash::Hash, rc::Rc, sync::{Arc, Mutex}};
 
 use serde::{Deserialize, Serialize};
 
@@ -192,8 +192,14 @@ impl BackendRegistry {
 /// Contexts may not be [`Send`] or [`Sync`], for this reason a convenient
 /// 
 pub trait Backend: 'static {
+    fn available_transport_layers(&self) -> Vec<String>;
+
+    fn default_transport_layers(&self) -> Vec<String> {
+        self.available_transport_layers()
+    }
+
     /// Enumerate all devices.
-    fn enumerate(&self) -> Result<Vec<DeviceInfo>, Box<dyn Error>>;
+    fn enumerate(&self, transport_layers: &[String]) -> Result<Vec<DeviceInfo>, Box<dyn Error>>;
 
     /// Find a device by its information.
     ///
@@ -225,7 +231,7 @@ pub struct DeviceInfo {
     pub display_name: String,
 
     /// Other device information.
-    pub other: HashMap<String, DeviceInfoEntry>,
+    pub other: BTreeMap<String, DeviceInfoEntry>,
 }
 
 impl Hash for DeviceInfo {
@@ -257,7 +263,7 @@ impl DeviceInfo {
     pub fn new() -> Self {
         Self {
             display_name: String::new(),
-            other: HashMap::new(),
+            other: BTreeMap::new(),
         }
     }
 }
