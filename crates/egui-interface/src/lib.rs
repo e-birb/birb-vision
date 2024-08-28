@@ -2,7 +2,8 @@ use std::{collections::{HashMap, HashSet}, ops::{Deref, DerefMut}, sync::{mpsc::
 
 use birb_vision_core::{backend::{BackendRegistry, BackendSet, DeviceInfo}, CameraDevice, Child, EnumEntry, Event, Frame, Node, NodeId, NodeVariant, PropertyVariant, Representation};
 use defer::defer;
-use egui::{load::SizedTexture, mutex::Mutex, CollapsingHeader, Color32, ColorImage, DragValue, Grid, Image, ImageData, Rect, RichText, ScrollArea, Sense, Slider, TextBuffer, TextureFilter, TextureHandle, TextureOptions, Ui, Window};
+use egui::{load::SizedTexture, mutex::Mutex, CollapsingHeader, Color32, ColorImage, DragValue, FontData, FontDefinitions, FontFamily, Grid, Image, ImageData, Rect, RichText, ScrollArea, Sense, Slider, TextBuffer, TextureFilter, TextureHandle, TextureOptions, Ui, Window};
+use material_icons::Icon;
 use regex::Regex;
 use scope_guard::scope_guard;
 
@@ -28,6 +29,8 @@ impl Selector {
     }
 
     pub fn show(&mut self, ui: &mut egui::Ui) {
+        add_fonts(ui.ctx());
+
         if let Some(task) = self.enum_task.as_ref() {
             if task.is_finished() {
                 let cameras = match self.enum_task.take().unwrap().join() {
@@ -371,14 +374,21 @@ impl Preview {
             state.texture_handle = ui.ctx().load_texture("frame", img, options).into();
         }
 
+        let mut fit_to_viewport = false;
+
         ui.vertical(|ui| {
             ui.horizontal(|ui| {
-                if ui.button(RichText::new("\u{e037}").size(20.0))
+                if ui.button(icon(Icon::PlayArrow))
                     .on_hover_text("Start Grabbing")
                     .clicked() {
                     tx.send(Command::StartGrabbing).unwrap();
                 }
-                if ui.button(RichText::new("\u{e047}").size(20.0))
+                if ui.button(icon(Icon::Camera))
+                    .on_hover_text("Grab Frame")
+                    .clicked() {
+                    // TODO
+                }
+                if ui.button(icon(Icon::Stop))
                     .on_hover_text("Stop Grabbing")
                     .clicked() {
                     tx.send(Command::StopGrabbing).unwrap();
@@ -389,12 +399,24 @@ impl Preview {
                     self.controls_window = true;
                 }
                 ui.add(Slider::new(&mut self.zoom, 0.1..=5.0).logarithmic(true).text("Zoom"));
+                if ui
+                    .button(RichText::new("\u{ea10}").size(20.0)) // fit_screen
+                    .on_hover_text("Fit to viewport")
+                    .clicked() {
+                    fit_to_viewport = true;
+                }
                 ui.label(format!("fps: {:.2}", self.fps));
             });
             ui.separator();
             if let Some(texture_handle) = state.texture_handle.as_ref() {
                 let texture = SizedTexture::from_handle(texture_handle);
-                let available = ui.available_size();
+                if fit_to_viewport {
+                    let available = ui.available_size();
+                    let zoom_x = available.x / texture.size.x;
+                    let zoom_y = available.y / texture.size.y;
+                    self.zoom = zoom_x.min(zoom_y);
+                }
+                //let available = ui.available_size();
                 // OLD:
                 // let image = Image::new(texture)
                 //     .max_width(available.x)
@@ -480,6 +502,7 @@ impl Preview {
     }
 
     pub fn show(&mut self, ui: &mut egui::Ui) {
+        add_fonts(ui.ctx());
         self.show_view(ui);
         self.controls_window(ui.ctx())
     }
@@ -1119,3 +1142,16 @@ pub struct CommandProp {
     requested: bool,
 }
 impl_basic!(CommandProp);
+
+
+fn icon(icon: impl ToString) -> RichText {
+    RichText::new(icon.to_string()).size(20.0)
+}
+
+pub fn add_fonts(ctx: &egui::Context) {
+    let mut fonts = FontDefinitions::default();
+    // TODO MaterialIcons provided font is outdated
+    fonts.font_data.insert("MaterialIcons".into(), FontData::from_static(material_icons::FONT));
+    fonts.families.get_mut(&FontFamily::Proportional).unwrap().insert(2, "MaterialIcons".into());
+    ctx.set_fonts(fonts);
+}
