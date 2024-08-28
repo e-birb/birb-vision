@@ -7,7 +7,8 @@ fn main() {
 
     for (name, package) in all {
         println!("{}: {:#?}", name, package);
-        let devices = package.build_backend().unwrap().enumerate().unwrap();
+        let backend = package.build_backend().unwrap();
+        let devices = backend.enumerate(&backend.default_transport_layers()).unwrap();
         println!("Found {} devices:", devices.len());
         for device in devices {
             println!("  - {:#}", device);

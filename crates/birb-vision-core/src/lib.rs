@@ -1,10 +1,10 @@
 
 
-use std::{borrow::Cow, sync::{Arc, Mutex}};
+use std::{borrow::Cow, future::Future, sync::{Arc, Mutex}};
 use clap::ValueEnum;
 
 use enum_as_inner::EnumAsInner;
-use futures::stream::BoxStream;
+use futures::{channel::oneshot, stream::BoxStream};
 pub use image;
 pub mod decoders;
 pub mod channels;
@@ -143,6 +143,32 @@ pub trait CameraDevice {
 //}
 
 pub trait CameraDeviceEx: CameraDevice {
+    fn get_one_frame<'a>(&'a self) -> impl Future<Output = DeviceResult<Frame>> + 'a {
+        async move {
+            let (tx, rx) = oneshot::channel();
+            let tx = Mutex::new(Some(tx));
+
+            self.set_stream_callback(Box::new(move |event| {
+                match event {
+                    Event::Frame(frame) => {
+                        if let Some(tx) = tx.lock().unwrap().take() {
+                            if let Err(e) = tx.send(frame) {
+                                log::error!("Error sending frame: {:?}", e);
+                            }
+                        }
+                    },
+                    _ => {},
+                }
+            }))?;
+
+            self.grab()?;
+
+            let frame_result = rx.await.map_err(|e| anyhow::Error::from(e))?;
+
+            Ok(frame_result?)
+        }
+    }
+
     //fn stream(&self, buf: usize) -> DeviceResult<BoxStream<Event>> {
     //    let (tx, rx) = futures::channel::mpsc::channel(buf);
     //    let tx = Mutex::new(tx);

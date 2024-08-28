@@ -23,11 +23,5 @@ pub fn all_backends() -> BackendRegistry {
         .with_display_name("Video4Linux (v4l)")
     ).unwrap();
 
-    #[cfg(unix)]
-    println!("Unix");
-
-    #[cfg(windows)]
-    println!("Windows");
-
     set
 }

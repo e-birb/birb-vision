@@ -343,7 +343,11 @@ impl V4lContext {
 }
 
 impl Backend for V4lContext {
-    fn enumerate(&self) -> Result<Vec<DeviceInfo>, Box<dyn Error>> {
+    fn available_transport_layers(&self) -> Vec<String> {
+        vec![]
+    }
+
+    fn enumerate(&self, transport_layers: &[String]) -> Result<Vec<DeviceInfo>, Box<dyn Error>> {
         Ok(
             v4l::context::enum_devices()
                 .into_iter()
