@@ -3,7 +3,7 @@ use std::{cell::RefCell, collections::HashMap, error::Error, path::Path, sync::{
 use birb_vision_core::{backend::{Backend, DeviceInfo, DeviceInfoEntry}, decoders::yuyv422_to_rgb, image::{DynamicImage, RgbImage}, BoolProperty, CameraDevice, Child, DeviceAccessMode, DeviceResult, EnumEntry, EnumProperty, EnumValue, Event, Frame, GroupNode, Node, NodeId, NodeVariant, NumericProperty, NumericValue, PropertyVariant, Representation, StringProperty};
 use v4l::{control::{MenuItem, Value}, io::traits::CaptureStream, video::Capture, Control, Device, Format, FourCC};
 
-
+use birb_vision_core::DeviceError::*;
 
 pub struct V4lDevice {
     dev: Mutex<Device>,
@@ -165,7 +165,7 @@ impl CameraDevice for V4lDevice {
     }
 
     fn get_bool_property(&self, id: &NodeId) -> DeviceResult<bool> {
-        let control = self.dev.lock().unwrap().control(*id.as_i32().unwrap() as _).unwrap();
+        let control = self.dev.lock().unwrap().control(*id.as_i32().ok_or(InvalidNodeId)? as _).unwrap();
         let Value::Boolean(value) = control.value else {
             panic!("Expected boolean value");
         };
@@ -174,7 +174,7 @@ impl CameraDevice for V4lDevice {
     fn get_int_property(&self, id: &NodeId) -> DeviceResult<NumericValue<i64>> {
         let controls = self.controls.borrow();
         let desc = controls.get(id).expect(&format!("Control {id:?} not found"));
-        let control = self.dev.lock().unwrap().control(*id.as_i32().unwrap() as _).unwrap();
+        let control = self.dev.lock().unwrap().control(*id.as_i32().ok_or(InvalidNodeId)? as _).unwrap();
         let Value::Integer(value) = control.value else {
             panic!("Expected integer value");
         };
@@ -186,7 +186,7 @@ impl CameraDevice for V4lDevice {
     fn get_float_property(&self, id: &NodeId) -> DeviceResult<NumericValue<f64>> {
         let controls = self.controls.borrow();
         let desc = controls.get(id).unwrap();
-        let control = self.dev.lock().unwrap().control(*id.as_i32().unwrap() as _).unwrap();
+        let control = self.dev.lock().unwrap().control(*id.as_i32().ok_or(InvalidNodeId)? as _).unwrap();
         let Value::Integer(value) = control.value else {
             panic!("Expected integer value");
         };
@@ -196,7 +196,7 @@ impl CameraDevice for V4lDevice {
         })
     }
     fn get_enum_property(&self, id: &NodeId) -> DeviceResult<EnumValue> {
-        let control = self.dev.lock().unwrap().control(*id.as_i32().unwrap() as _).unwrap();
+        let control = self.dev.lock().unwrap().control(*id.as_i32().ok_or(InvalidNodeId)? as _).unwrap();
         let Value::Integer(value) = control.value else {
             panic!("Expected integer value");
         };
@@ -218,7 +218,7 @@ impl CameraDevice for V4lDevice {
         })
     }
     fn get_string_property(&self, id: &NodeId) -> DeviceResult<String> {
-        let control = self.dev.lock().unwrap().control(*id.as_i32().unwrap() as _).unwrap();
+        let control = self.dev.lock().unwrap().control(*id.as_i32().ok_or(InvalidNodeId)? as _).unwrap();
         let Value::String(value) = control.value else {
             panic!("Expected string value");
         };
@@ -230,11 +230,11 @@ impl CameraDevice for V4lDevice {
     }
 
     fn set_bool_property(&self, id: &NodeId, value: bool) -> DeviceResult {
-        self.dev.lock().unwrap().set_control(Control { id: *id.as_i32().unwrap() as _, value: Value::Boolean(value) }).unwrap();
+        self.dev.lock().unwrap().set_control(Control { id: *id.as_i32().ok_or(InvalidNodeId)? as _, value: Value::Boolean(value) })?;
         Ok(())
     }
     fn set_int_property(&self, id: &NodeId, value: i64) -> DeviceResult {
-        self.dev.lock().unwrap().set_control(Control { id: *id.as_i32().unwrap() as _, value: Value::Integer(value) }).unwrap();
+        self.dev.lock().unwrap().set_control(Control { id: *id.as_i32().ok_or(InvalidNodeId)? as _, value: Value::Integer(value) })?;
         Ok(())
     }
     fn set_float_property(&self, id: &NodeId, value: f64) -> DeviceResult {
@@ -245,11 +245,11 @@ impl CameraDevice for V4lDevice {
         self.set_int_property(id, value)
     }
     fn set_string_property(&self, id: &NodeId, value: &str) -> DeviceResult {
-        self.dev.lock().unwrap().set_control(Control { id: *id.as_i32().unwrap() as _, value: Value::String(value.to_string()) }).unwrap();
+        self.dev.lock().unwrap().set_control(Control { id: *id.as_i32().ok_or(InvalidNodeId)? as _, value: Value::String(value.to_string()) }).unwrap();
         Ok(())
     }
     fn send_command(&self, id: &NodeId) -> DeviceResult {
-        self.dev.lock().unwrap().set_control(Control { id: *id.as_i32().unwrap() as _, value: Value::None }).unwrap();
+        self.dev.lock().unwrap().set_control(Control { id: *id.as_i32().ok_or(InvalidNodeId)? as _, value: Value::None }).unwrap();
         Ok(())
     }
 

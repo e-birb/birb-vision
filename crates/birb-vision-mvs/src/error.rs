@@ -149,8 +149,9 @@ macro_rules! define_error_enum {
     };
 }
 
-use std::fmt::Debug;
+use std::{fmt::Debug, ops::Deref};
 
+use birb_vision_core::DeviceError;
 use mvs_sys::*;
 
 define_error_enum! {
@@ -319,6 +320,14 @@ impl std::fmt::Display for MVError {
 }
 
 impl std::error::Error for MVError {}
+
+impl Deref for MVError {
+    type Target = dyn std::error::Error;
+
+    fn deref(&self) -> &Self::Target {
+        self
+    }
+}
 
 impl PartialOrd for MVError {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
@@ -640,5 +649,27 @@ define_sub_error! {
 
         "SDK does not match the driver version"
         VERSION_CHECK = MV_EXCEPTION_VERSION_CHECK,
+    }
+}
+
+impl From<MVError> for DeviceError {
+    fn from(value: MVError) -> Self {
+        use MVError::*;
+        match value {
+            SUPPORT => DeviceError::Unsupported,
+            BUFOVER => DeviceError::BufferOverflow,
+            CALLORDER => DeviceError::CallOrderError,
+            PARAMETER => DeviceError::InvalidParameter,
+            // TODO resource
+            NODATA => DeviceError::NoDataAvailable,
+            // TODO precondition
+            VERSION => DeviceError::VersionMismatch,
+            // TODO no enough buffer
+            // TODO abnormal image
+            LOAD_LIBRARY => DeviceError::LibraryLoadError,
+            // TODO ...
+            GigE(GigEError::NOT_IMPLEMENTED) => DeviceError::NotImplemented,
+            _ => DeviceError::Other(value.into()),
+        }
     }
 }

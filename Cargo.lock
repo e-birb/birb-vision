@@ -601,6 +601,7 @@ dependencies = [
 name = "birb-vision-core"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "clap",
  "enum-as-inner",
  "futures",
@@ -608,6 +609,7 @@ dependencies = [
  "log",
  "mozjpeg",
  "serde",
+ "thiserror",
 ]
 
 [[package]]

@@ -9,6 +9,9 @@ pub use image;
 pub mod decoders;
 pub mod channels;
 
+pub use anyhow;
+pub use thiserror;
+
 mod frame;
 mod device_properties;
 //mod pixel_format;
@@ -168,46 +171,71 @@ pub trait CameraDeviceEx: CameraDevice {
 
 impl<T: CameraDevice + ?Sized> CameraDeviceEx for T {}
 
-#[derive(Debug, Clone)]
+//#[derive(Debug)]
+//pub enum DeviceError {
+//    Unsupported,
+//    Other(Box<dyn std::error::Error>),
+//}
+
+//impl<E> From<E> for DeviceError
+//where
+//    E: Into<Box<dyn std::error::Error + 'static>> + 'static,
+//{
+//    fn from(value: E) -> Self {
+//        DeviceError::Other(value.into())
+//    }
+//}
+
+#[derive(thiserror::Error, Debug)]
 pub enum DeviceError {
+    #[error("Device is not accessible in the requested mode")]
+    NotAccessible,
+
+    #[error("Invalid parameter")]
+    InvalidParameter,
+
+    #[error("Operation is not supported")]
     Unsupported,
-    Other(Arc<dyn std::error::Error + Send + Sync>),
-    OtherString(Cow<'static, str>),
+
+    #[error("Functionality not implemented")]
+    NotImplemented,
+
+    #[error("Buffer overflow")]
+    BufferOverflow,
+
+    #[error("Call order error, this function cannot be called at this time")]
+    CallOrderError,
+
+    #[error("No data available")]
+    NoDataAvailable,
+
+    #[error("Timeout")]
+    Timeout,
+
+    #[error("Version mismatch")]
+    VersionMismatch,
+
+    #[error("Library load error")]
+    LibraryLoadError,
+
+    #[error("Input/output error: {0}")]
+    IO(#[from] std::io::Error),
+
+    #[error("Invalid Node ID")]
+    InvalidNodeId,
+
+    //#[error("Error: {0}")]
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
 }
 
 impl DeviceError {
     pub fn other<E>(e: E) -> Self
     where
-        E: std::error::Error + Send + Sync + 'static,
+        E: Into<anyhow::Error>,
     {
-        DeviceError::Other(Arc::new(e))
+        DeviceError::Other(e.into())
     }
 }
-
-impl std::fmt::Display for DeviceError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            DeviceError::Unsupported => write!(f, "Operation is not supported"),
-            DeviceError::Other(e) => write!(f, "Error: {}", e),
-            DeviceError::OtherString(s) => write!(f, "{}", s),
-        }
-    }
-}
-
-impl From<&'static str> for DeviceError {
-    fn from(s: &'static str) -> Self {
-        DeviceError::OtherString(s.into())
-    }
-}
-
-impl From<String> for DeviceError {
-    fn from(s: String) -> Self {
-        DeviceError::OtherString(s.into())
-    }
-}
-
-// TODO conversions!
-
-impl std::error::Error for DeviceError {}
 
 pub type DeviceResult<T = ()> = Result<T, DeviceError>;

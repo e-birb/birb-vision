@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+anyhow = "1.0.86"
 clap = { version = "4.5.16", features = ["derive"] }
 #async-trait = "0.1.81"
 enum-as-inner = "0.6.0"
@@ -12,4 +13,5 @@ image = "0.25"
 log = "0.4.22"
 mozjpeg = "0.10.7"
 serde = { version = "1", features = ["derive"] }
+thiserror = "1.0.63"
 #mozjpeg-sys = "2.2.0"

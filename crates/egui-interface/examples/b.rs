@@ -1,4 +1,4 @@
-use birb_vision_core::CameraDevice;
+use birb_vision::core::CameraDevice;
 use birb_vision_mvs::{device::TransportLayerType, MVContext};
 use egui::{CentralPanel, FontData, FontDefinitions, FontFamily};
 use birb_vision_egui_interface::{add_fonts, Preview, Selector};
