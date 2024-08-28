@@ -1,8 +1,7 @@
-use std::{collections::{HashMap, HashSet}, ops::{Deref, DerefMut}, sync::{mpsc::Sender, Arc, Weak}, thread::JoinHandle, time::{Duration, Instant}};
+use std::{collections::{HashMap, HashSet}, ops::{Deref, DerefMut}, sync::{mpsc::Sender, Arc, Weak}, thread::JoinHandle, time::Instant};
 
 use birb_vision::core::{backend::{BackendRegistry, BackendSet, DeviceInfo}, AccessMode, CameraDevice, Child, EnumEntry, Event, Frame, Node, NodeId, NodeVariant, PropertyVariant, Representation};
-use defer::defer;
-use egui::{load::SizedTexture, mutex::Mutex, CollapsingHeader, Color32, ColorImage, DragValue, FontData, FontDefinitions, FontFamily, Grid, Image, ImageData, Rect, RichText, ScrollArea, Sense, Slider, TextBuffer, TextureFilter, TextureHandle, TextureOptions, Ui, Window};
+use egui::{load::SizedTexture, mutex::Mutex, CollapsingHeader, Color32, ColorImage, DragValue, FontData, FontDefinitions, FontFamily, Grid, Image, ImageData, RichText, ScrollArea, Slider, TextBuffer, TextureFilter, TextureHandle, TextureOptions, Ui, Window};
 use material_icons::Icon;
 use regex::Regex;
 use scope_guard::scope_guard;
@@ -85,7 +84,7 @@ impl Selector {
                             }
                             ui.label(backend_id);
                             Grid::new(&info).striped(true).show(ui, |ui| {
-                                let mut keys = info.other.keys().collect::<Vec<_>>();
+                                let keys = info.other.keys().collect::<Vec<_>>();
                                 //keys.sort();
                                 for k in keys {
                                     let v = &info.other[k];
