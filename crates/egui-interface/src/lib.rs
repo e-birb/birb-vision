@@ -1,6 +1,6 @@
 use std::{collections::{HashMap, HashSet}, ops::{Deref, DerefMut}, sync::{mpsc::Sender, Arc, Weak}, thread::JoinHandle, time::{Duration, Instant}};
 
-use birb_vision_core::{backend::{BackendRegistry, BackendSet, DeviceInfo}, CameraDevice, Child, EnumEntry, Event, Frame, Node, NodeId, NodeVariant, PropertyVariant, Representation};
+use birb_vision_core::{backend::{BackendRegistry, BackendSet, DeviceInfo}, AccessMode, CameraDevice, Child, EnumEntry, Event, Frame, Node, NodeId, NodeVariant, PropertyVariant, Representation};
 use defer::defer;
 use egui::{load::SizedTexture, mutex::Mutex, CollapsingHeader, Color32, ColorImage, DragValue, FontData, FontDefinitions, FontFamily, Grid, Image, ImageData, Rect, RichText, ScrollArea, Sense, Slider, TextBuffer, TextureFilter, TextureHandle, TextureOptions, Ui, Window};
 use material_icons::Icon;
@@ -145,7 +145,7 @@ impl Selector {
         let backend_id = backend_id.to_string();
         let mut preview = Preview::new();
         let registry = self.backend_registry.clone();
-        preview.init(move || {
+        preview.init(device_info.display_name.clone(), move || {
             let backend = match registry.get_backend(backend_id).unwrap() {
                 Ok(backend) => backend,
                 Err(e) => {
@@ -179,6 +179,7 @@ pub struct Preview {
 }
 
 pub struct PreviewState {
+    display_name: String,
     props: Option<Properties>,
     filter: String,
     filter_error: String,
@@ -218,6 +219,7 @@ impl PreviewState {
 impl PreviewState {
     fn new() -> Self {
         PreviewState {
+            display_name: "???".into(),
             props: None,
             filter: String::new(),
             filter_error: String::new(),
@@ -267,11 +269,13 @@ impl Preview {
 
     pub fn init(
         &mut self,
+        display_name: impl Into<String>,
         init: impl FnOnce() -> Box<dyn CameraDevice> + Send + 'static,
     ) {
         let mut state = PreviewState::new();
         let (tx, rx) = std::sync::mpsc::channel();
         state.tx = tx;
+        state.display_name = display_name.into();
         let state = Arc::new(Mutex::new(state));
 
         let thread = std::thread::spawn({
@@ -378,6 +382,9 @@ impl Preview {
 
         ui.vertical(|ui| {
             ui.horizontal(|ui| {
+                ui.label(&state.display_name);
+            });
+            ui.horizontal(|ui| {
                 if ui.button(icon(Icon::PlayArrow))
                     .on_hover_text("Start Grabbing")
                     .clicked() {
@@ -393,14 +400,14 @@ impl Preview {
                     .clicked() {
                     tx.send(Command::StopGrabbing).unwrap();
                 }
-                if ui.button(RichText::new("\u{e429}").size(20.0))
+                if ui.button(icon(Icon::Tune))
                     .on_hover_text("Controls")
                     .clicked() {
                     self.controls_window = true;
                 }
                 ui.add(Slider::new(&mut self.zoom, 0.1..=5.0).logarithmic(true).text("Zoom"));
                 if ui
-                    .button(RichText::new("\u{ea10}").size(20.0)) // fit_screen
+                    .button(icon(Icon::ZoomOutMap))
                     .on_hover_text("Fit to viewport")
                     .clicked() {
                     fit_to_viewport = true;
@@ -556,6 +563,7 @@ impl Properties {
                 let mut group = Group {
                     basic: BasicProperty {
                         display_name: node.display_name.as_str().to_string(),
+                        access_mode: node.access_mode,
                     },
                     children: Vec::new(),
                 };
@@ -581,6 +589,7 @@ impl Properties {
                         let prop = BoolProp {
                             basic: BasicProperty {
                                 display_name: node.display_name.as_str().to_string(),
+                                access_mode: node.access_mode,
                             },
                             value: b.value.unwrap_or(false),
                             requested: b.value.unwrap_or(false),
@@ -593,6 +602,7 @@ impl Properties {
                         let prop = IntProp {
                             basic: BasicProperty {
                                 display_name: node.display_name.as_str().to_string(),
+                                access_mode: node.access_mode,
                             },
                             value: i.value.unwrap_or(0),
                             requested: i.value.unwrap_or(0),
@@ -609,6 +619,7 @@ impl Properties {
                         let prop = FloatProp {
                             basic: BasicProperty {
                                 display_name: node.display_name.as_str().to_string(),
+                                access_mode: node.access_mode,
                             },
                             value: f.value.unwrap_or(0.0),
                             requested: f.value.unwrap_or(0.0),
@@ -625,6 +636,7 @@ impl Properties {
                         let prop = EnumProp {
                             basic: BasicProperty {
                                 display_name: node.display_name.as_str().to_string(),
+                                access_mode: node.access_mode,
                             },
                             value: e.value.unwrap_or(0),
                             requested: e.value.unwrap_or(0),
@@ -638,6 +650,7 @@ impl Properties {
                         let prop = StringProp {
                             basic: BasicProperty {
                                 display_name: node.display_name.as_str().to_string(),
+                                access_mode: node.access_mode,
                             },
                             value: "TODO".to_string(),
                             requested: "TODO".to_string(),
@@ -651,6 +664,7 @@ impl Properties {
                         let prop = CommandProp {
                             basic: BasicProperty {
                                 display_name: node.display_name.as_str().to_string(),
+                                access_mode: node.access_mode,
                             },
                             requested: false,
                         };
@@ -850,50 +864,63 @@ impl Properties {
 
     pub fn show_group(&mut self, ui: &mut Ui, selected: &HashSet<NodeId>, display_name: &str, children: impl IntoIterator<Item = NodeId>, send: &Sender<Command>) {
         ui.collapsing(display_name, |ui| {
-            for id in children {
-                if !selected.contains(&id) {
-                    continue;
+            Grid::new(display_name).striped(true).show(ui, |ui| {
+                for id in children {
+                    if !selected.contains(&id) {
+                        continue;
+                    }
+                    self.show_property(ui, selected, &id, send);
+                    ui.end_row();
                 }
-                self.show_property(ui, selected, &id, send)
-            }
+            });
         });
     }
 
     pub fn show_bool(ui: &mut Ui, b: &mut BoolProp, send: &Sender<Command>) {
-        if ui.checkbox(&mut b.requested, b.basic.display_name.as_str()).changed() {
-            send.send(Command::Write);
-        };
+        ui.add_enabled_ui(b.access_mode.writable(), |ui| {
+            if ui.checkbox(&mut b.requested, b.basic.display_name.as_str()).changed() {
+                send.send(Command::Write);
+            };
+        });
     }
 
     pub fn show_int(ui: &mut Ui, i: &mut IntProp, send: &Sender<Command>) {
         // TODO unit
         match i.representation {
             Representation::Hex => {
-                ui.horizontal(|ui| {
-                    ui.label("0x");
-                    if ui.add(DragValue::new(&mut i.requested).hexadecimal(4, true, false)).changed() {
-                        send.send(Command::Write);
-                    };
-                    ui.label(i.basic.display_name.as_str())
+                ui.add_enabled_ui(i.access_mode.writable(), |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label("0x");
+                        if ui.add(DragValue::new(&mut i.requested).hexadecimal(4, true, false)).changed() {
+                            send.send(Command::Write);
+                        }
+                        ui.label(i.basic.display_name.as_str())
+                    });
                 });
             },
             Representation::PureNumber => {
-                ui.horizontal(|ui| {
-                    if ui.add(DragValue::new(&mut i.requested)).changed() {
-                        send.send(Command::Write);
-                    };
-                    ui.label(i.basic.display_name.as_str())
+                ui.add_enabled_ui(i.access_mode.writable(), |ui| {
+                    ui.horizontal(|ui| {
+                        if ui.add(DragValue::new(&mut i.requested)).changed() {
+                            send.send(Command::Write);
+                        }
+                        ui.label(i.basic.display_name.as_str())
+                    });
                 });
             },
             Representation::Linear => {
-                if ui.add(egui::Slider::new(&mut i.requested, i.min..=i.max).text(i.basic.display_name.as_str())).changed() {
-                    send.send(Command::Write);
-                };
+                ui.add_enabled_ui(i.access_mode.writable(), |ui| {
+                    if ui.add(egui::Slider::new(&mut i.requested, i.min..=i.max).text(i.basic.display_name.as_str())).changed() {
+                        send.send(Command::Write);
+                    }
+                });
             },
             Representation::Logarithmic => {
-                if ui.add(egui::Slider::new(&mut i.requested, i.min..=i.max).text(i.basic.display_name.as_str()).logarithmic(true)).changed() {
-                    send.send(Command::Write);
-                };
+                ui.add_enabled_ui(i.access_mode.writable(), |ui| {
+                    if ui.add(egui::Slider::new(&mut i.requested, i.min..=i.max).text(i.basic.display_name.as_str()).logarithmic(true)).changed() {
+                        send.send(Command::Write);
+                    }
+                });
             },
             Representation::Boolean => {
                 ui.label(RichText::new(format!("invalid representation: {:?}", i.representation)));
@@ -905,30 +932,38 @@ impl Properties {
         // TODO unit
         match f.representation {
             Representation::PureNumber => {
-                ui.horizontal(|ui| {
-                    if ui.add(DragValue::new(&mut f.requested)).changed() {
-                        send.send(Command::Write);
-                    };
-                    ui.label(f.basic.display_name.as_str())
+                ui.add_enabled_ui(f.access_mode.writable(), |ui| {
+                    ui.horizontal(|ui| {
+                        if ui.add(DragValue::new(&mut f.requested)).changed() {
+                            send.send(Command::Write);
+                        }
+                        ui.label(f.basic.display_name.as_str())
+                    });
                 });
             },
             Representation::Linear if f.min.is_finite() && f.max.is_finite() => {
-                ui.horizontal(|ui| {
-                    if ui.add(egui::Slider::new(&mut f.requested, f.min..=f.max).text(f.basic.display_name.as_str())).changed() {
-                        send.send(Command::Write);
-                    };
-                    ui.label(f.basic.display_name.as_str())
+                ui.add_enabled_ui(f.access_mode.writable(), |ui| {
+                    ui.horizontal(|ui| {
+                        if ui.add(egui::Slider::new(&mut f.requested, f.min..=f.max).text(f.basic.display_name.as_str())).changed() {
+                            send.send(Command::Write);
+                        }
+                        ui.label(f.basic.display_name.as_str())
+                    });
                 });
             },
             Representation::Logarithmic => {
-                if ui.add(egui::Slider::new(&mut f.requested, f.min..=f.max).text(f.basic.display_name.as_str()).logarithmic(true)).changed() {
-                    send.send(Command::Write);
-                };
+                ui.add_enabled_ui(f.access_mode.writable(), |ui| {
+                    if ui.add(egui::Slider::new(&mut f.requested, f.min..=f.max).text(f.basic.display_name.as_str()).logarithmic(true)).changed() {
+                        send.send(Command::Write);
+                    }
+                });
             },
             Representation::Hex | Representation::Boolean | Representation::Linear => {
-                if ui.label(RichText::new(format!("invalid representation: {:?}", f.representation))).changed() {
-                    send.send(Command::Write);
-                };
+                ui.add_enabled_ui(f.access_mode.writable(), |ui| {
+                    if ui.label(RichText::new(format!("invalid representation: {:?}", f.representation))).changed() {
+                        send.send(Command::Write);
+                    };
+                });
             },
         }
     }
@@ -940,13 +975,15 @@ impl Properties {
             "???".to_string()
         };
 
-        egui::ComboBox::from_label(&e.display_name)
-            .selected_text(selected_text)
-            .show_ui(ui, |ui| {
-                for entry in e.entries.iter() {
-                    ui.selectable_value(&mut e.requested, entry.discriminant, entry.name.as_str());
-                }
-            });
+        ui.add_enabled_ui(e.access_mode.writable(), |ui| {
+            egui::ComboBox::from_label(&e.display_name)
+                .selected_text(selected_text)
+                .show_ui(ui, |ui| {
+                    for entry in e.entries.iter() {
+                        ui.selectable_value(&mut e.requested, entry.discriminant, entry.name.as_str());
+                    }
+                });
+        });
 
         if e.value != e.requested {
             send.send(Command::Write);
@@ -954,19 +991,23 @@ impl Properties {
     }
 
     pub fn show_string(ui: &mut Ui, s: &mut StringProp, send: &Sender<Command>) {
-        ui.horizontal(|ui| {
-            if ui.text_edit_singleline(&mut s.requested).changed() {
-                send.send(Command::Write);
-            };
-            ui.label(&s.display_name);
+        ui.add_enabled_ui(s.access_mode.writable(), |ui| {
+            ui.horizontal(|ui| {
+                if ui.text_edit_singleline(&mut s.requested).changed() {
+                    send.send(Command::Write);
+                }
+                ui.label(&s.display_name);
+            });
         });
     }
 
     pub fn show_command(ui: &mut Ui, c: &mut CommandProp, send: &Sender<Command>) {
-        if ui.button(c.display_name.as_str()).clicked() {
-            c.requested = true;
-            send.send(Command::Write);
-        }
+        ui.add_enabled_ui(c.access_mode.writable(), |ui| {
+            if ui.button(c.display_name.as_str()).clicked() {
+                c.requested = true;
+                send.send(Command::Write);
+            }
+        });
     }
 }
 
@@ -1084,6 +1125,7 @@ macro_rules! impl_basic {
 
 pub struct BasicProperty {
     display_name: String,
+    access_mode: AccessMode,
 }
 
 struct Group {

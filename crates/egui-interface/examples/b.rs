@@ -1,6 +1,6 @@
 use birb_vision_core::CameraDevice;
 use birb_vision_mvs::{device::TransportLayerType, MVContext};
-use egui::{FontData, FontDefinitions, FontFamily};
+use egui::{CentralPanel, FontData, FontDefinitions, FontFamily};
 use birb_vision_egui_interface::{add_fonts, Preview, Selector};
 
 
@@ -10,9 +10,7 @@ struct MyApp {
 
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("Hello World! \u{e037}");
-            ui.label("This is a simple eframe app.");
+        CentralPanel::default().show(ctx, |ui| {
             self.selector.show(ui);
         });
     }

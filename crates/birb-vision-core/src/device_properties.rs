@@ -88,11 +88,26 @@ pub enum Visibility {
     Invisible,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum AccessMode {
     ReadOnly,
     WriteOnly,
     ReadWrite,
+}
+
+impl AccessMode {
+    pub fn readable(&self) -> bool {
+        match self {
+            AccessMode::ReadOnly | AccessMode::ReadWrite => true,
+            AccessMode::WriteOnly => false,
+        }
+    }
+    pub fn writable(&self) -> bool {
+        match self {
+            AccessMode::WriteOnly | AccessMode::ReadWrite => true,
+            AccessMode::ReadOnly => false,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

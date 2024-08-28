@@ -132,6 +132,7 @@ pub fn parse_root(xml_node: XmlNode) -> Node {
 
 fn parse_group(xml_node: XmlNode) -> Node {
     let name = xml_node.attribute("Name").map(|n| n.to_string()).unwrap_or_else(|| "comment=".to_string() + &xml_node.attribute("Comment").unwrap()).to_string();
+    println!("Group NAME: {}", name);
     let mut node = Node::new_with_id(name);
 
     let mut children = Vec::new();

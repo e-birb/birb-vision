@@ -44,7 +44,7 @@ impl CameraDevice for MVDevice {
             .cloned()
             .filter_map(|n| n.into_node().ok())
             .filter(|n| n.variant.is_group())
-            .filter(|g| g.display_name == "Root")
+            .filter(|g| g.id.as_ref().map(|id| id.as_str() == Some("Root")).unwrap_or(false))
             .next().ok_or(DeviceError::OtherString("Root node not found".into()))
     }
 
