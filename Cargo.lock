@@ -1318,6 +1318,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "egui-example"
+version = "0.1.0"
+dependencies = [
+ "birb-vision",
+ "birb-vision-egui-interface",
+ "eframe",
+ "egui",
+ "env_logger",
+]
+
+[[package]]
 name = "egui-wgpu"
 version = "0.28.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -1,0 +1,19 @@
+[package]
+name = "egui-example"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+eframe = "0.28.1"
+egui = "0.28.1"
+birb-vision = { path = "../../crates/birb-vision" }
+birb-vision-egui-interface = { path = "../../crates/egui-interface" }
+env_logger = "0.11.5"
+
+# Optional dependencies
+
+[target.'cfg(unix)'.dependencies]
+birb-vision = { path = "../../crates/birb-vision", features = ["mvs", "v4l"] }
+
+[target.'cfg(windows)'.dependencies]
+birb-vision = { path = "../../crates/birb-vision", features = ["mvs"] }
