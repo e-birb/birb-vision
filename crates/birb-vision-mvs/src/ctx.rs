@@ -445,43 +445,7 @@ impl Backend for MVContext {
         let devices = self
             .enumerate_all_devices()?
             .into_iter()
-            .filter_map(|mv_info| {
-                //let dev = info.into_device(false).ok()?;
-                let mut info = BirbInfo::new();
-                info.display_name = "???".into();
-                info.other.insert(
-                    "version".into(),
-                    DeviceInfoEntry::new(
-                        "version",
-                        format!("{}.{}", mv_info.major_version(), mv_info.minor_version()),
-                    ),
-                );
-                info.other.insert(
-                    "mac_address".into(),
-                    DeviceInfoEntry::new(
-                        "MAC address",
-                        format!("{:#010X}", mv_info.mac_address()),
-                    ),
-                );
-                info.other.insert(
-                    "transport_layer_type".into(),
-                    DeviceInfoEntry::new(
-                        "Transport Layer",
-                        format!("{:?}", mv_info.transport_layer_type()),
-                    ),
-                );
-                info.other.insert(
-                    "device_type_info".into(),
-                    DeviceInfoEntry::new(
-                        "Device Type Info",
-                        format!("{:?}", mv_info.device_type_info()),
-                    ),
-                );
-                if let Some(special_info) = mv_info.special_info() {
-                    convert_special_info(&mut info, &special_info);
-                }
-                Some(info)
-            })
+            .map(convert_info)
             .collect::<Vec<_>>();
 
         Ok(devices)
@@ -490,11 +454,58 @@ impl Backend for MVContext {
         todo!()
     }
     fn create(&self, info: &birb_vision_core::backend::DeviceInfo) -> Result<Option<Box<dyn birb_vision_core::CameraDevice>>, Box<dyn Error>> {
-        todo!()
+        let serial = info.other.get("serial_number").map(|x| x.value.clone()).unwrap_or_default();
+        for dev_info in self.enumerate_all_devices()? {
+            let birb_info = convert_info(dev_info.clone());
+            if birb_info.other.get("serial_number").map(|x| x.value.clone()).unwrap_or_default() == serial {
+                let dev = dev_info.into_device(false)?;
+                return Ok(Some(Box::new(dev)));
+            }
+        }
+        Ok(None)
     }
 }
 
 use birb_vision_core::backend::DeviceInfo as BirbInfo;
+
+fn convert_info(mv_info: DeviceInfo) -> BirbInfo {
+    //let dev = info.into_device(false).ok()?;
+    let mut info = BirbInfo::new();
+    info.display_name = "???".into();
+    info.other.insert(
+        "version".into(),
+        DeviceInfoEntry::new(
+            "version",
+            format!("{}.{}", mv_info.major_version(), mv_info.minor_version()),
+        ),
+    );
+    info.other.insert(
+        "mac_address".into(),
+        DeviceInfoEntry::new(
+            "MAC address",
+            format!("{:#010X}", mv_info.mac_address()),
+        ),
+    );
+    info.other.insert(
+        "transport_layer_type".into(),
+        DeviceInfoEntry::new(
+            "Transport Layer",
+            format!("{:?}", mv_info.transport_layer_type()),
+        ),
+    );
+    info.other.insert(
+        "device_type_info".into(),
+        DeviceInfoEntry::new(
+            "Device Type Info",
+            //format!("{:?}", mv_info.device_type_info()),
+            format!("{:010X}", mv_info.device_type_info().value()),
+        ),
+    );
+    if let Some(special_info) = mv_info.special_info() {
+        convert_special_info(&mut info, &special_info);
+    }
+    info
+}
 
 fn convert_special_info(dev_info: &mut BirbInfo, special_info: &SpecialDeviceInfo) {
     let mut push = |key: &str, display_name: &str, value: String| {

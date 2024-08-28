@@ -1,6 +1,6 @@
-use std::{cell::RefCell, collections::HashMap, path::Path, sync::{Arc, Mutex}, time::{Duration, Instant}};
+use std::{cell::RefCell, collections::HashMap, error::Error, path::Path, sync::{Arc, Mutex}, time::{Duration, Instant}};
 
-use birb_vision_core::{decoders::yuyv422_to_rgb, image::{DynamicImage, RgbImage}, BoolProperty, CameraDevice, Child, DeviceAccessMode, DeviceResult, EnumEntry, EnumProperty, EnumValue, Event, Frame, GroupNode, Node, NodeId, NodeVariant, NumericProperty, NumericValue, PropertyVariant, Representation, StringProperty};
+use birb_vision_core::{backend::{Backend, DeviceInfo, DeviceInfoEntry}, decoders::yuyv422_to_rgb, image::{DynamicImage, RgbImage}, BoolProperty, CameraDevice, Child, DeviceAccessMode, DeviceResult, EnumEntry, EnumProperty, EnumValue, Event, Frame, GroupNode, Node, NodeId, NodeVariant, NumericProperty, NumericValue, PropertyVariant, Representation, StringProperty};
 use v4l::{control::{MenuItem, Value}, io::traits::CaptureStream, video::Capture, Control, Device, Format, FourCC};
 
 
@@ -70,7 +70,7 @@ impl CameraDevice for V4lDevice {
         let mut nodes = Vec::<Node>::new();
         for control in controls {
             let value = self.dev.lock().unwrap().control(control.id);
-            let mut node = Node::new_with_id(control.id.to_string());
+            let mut node: Node = Node::new_with_id(control.id as i32);
             node.display_name = control.name.clone().into();
             let variant: Option<NodeVariant> = match control.typ {
                 Type::Integer | Type::Integer64 => {
@@ -173,7 +173,7 @@ impl CameraDevice for V4lDevice {
     }
     fn get_int_property(&self, id: &NodeId) -> DeviceResult<NumericValue<i64>> {
         let controls = self.controls.borrow();
-        let desc = controls.get(id).unwrap();
+        let desc = controls.get(id).expect(&format!("Control {id:?} not found"));
         let control = self.dev.lock().unwrap().control(*id.as_i32().unwrap() as _).unwrap();
         let Value::Integer(value) = control.value else {
             panic!("Expected integer value");
@@ -223,6 +223,10 @@ impl CameraDevice for V4lDevice {
             panic!("Expected string value");
         };
         Ok(value)
+    }
+
+    fn set_property(&self, id: &NodeId, value: &birb_vision_core::PropertyValue) -> DeviceResult {
+        todo!()
     }
 
     fn set_bool_property(&self, id: &NodeId, value: bool) -> DeviceResult {
@@ -330,4 +334,49 @@ impl CameraDevice for V4lDevice {
         *self.callback.lock().unwrap() = f;
         Ok(())
     }
+}
+
+pub struct V4lContext;
+
+impl V4lContext {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Backend for V4lContext {
+    fn enumerate(&self) -> Result<Vec<DeviceInfo>, Box<dyn Error>> {
+        Ok(
+            v4l::context::enum_devices()
+                .into_iter()
+                .filter(|node| Device::with_path(node.path()).map(|dev| dev.format().is_ok()).unwrap_or(false))
+                .map(node_to_info)
+                .collect()
+            )
+    }
+
+    fn find(&self, info: &DeviceInfo) -> Result<Vec<DeviceInfo>, Box<dyn Error>> {
+        todo!()
+    }
+
+    fn create(&self, info: &DeviceInfo) -> Result<Option<Box<dyn CameraDevice>>, Box<dyn Error>> {
+        for node in v4l::context::enum_devices() {
+            if node.path().to_string_lossy() == info.other.get("path").unwrap().value.as_str() && node.name() == Some(info.display_name.to_string()) {
+                let dev = Device::with_path(node.path())?;
+                return Ok(Some(Box::new(V4lDevice::from_v4l_device(dev))));
+            }
+        }
+        Ok(None)
+    }
+}
+
+fn node_to_info(node: v4l::context::Node) -> DeviceInfo {
+    let path = node.path().to_string_lossy().to_string();
+    let mut info = DeviceInfo::new();
+    info.display_name = path.clone();
+    info.other.insert("path".into(), DeviceInfoEntry::new("Path", path));
+    if let Some(display_name) = node.name() {
+        info.display_name = display_name.to_string();
+    }
+    info
 }

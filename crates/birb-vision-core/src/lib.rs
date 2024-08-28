@@ -99,6 +99,7 @@ pub trait CameraDevice {
     fn get_enum_property(&self, id: &NodeId) -> DeviceResult<EnumValue>;
     fn get_string_property(&self, id: &NodeId) -> DeviceResult<String>; // TODO Cow
 
+    fn set_property(&self, id: &NodeId, value: &PropertyValue) -> DeviceResult;
     fn set_bool_property(&self, id: &NodeId, value: bool) -> DeviceResult;
     fn set_int_property(&self, id: &NodeId, value: i64) -> DeviceResult;
     fn set_float_property(&self, id: &NodeId, value: f64) -> DeviceResult;
@@ -139,15 +140,15 @@ pub trait CameraDevice {
 //}
 
 pub trait CameraDeviceEx: CameraDevice {
-    fn stream(&self, buf: usize) -> DeviceResult<BoxStream<Event>> {
-        let (tx, rx) = futures::channel::mpsc::channel(buf);
-        let tx = Mutex::new(tx);
-        self.set_stream_callback(Box::new(move |e| {
-            // TODO maybe just clone instead of using the mutex?
-            tx.lock().unwrap().try_send(e).unwrap(); // TODO handle error
-        }))?;
-        Ok(Box::pin(rx))
-    }
+    //fn stream(&self, buf: usize) -> DeviceResult<BoxStream<Event>> {
+    //    let (tx, rx) = futures::channel::mpsc::channel(buf);
+    //    let tx = Mutex::new(tx);
+    //    self.set_stream_callback(Box::new(move |e| {
+    //        // TODO maybe just clone instead of using the mutex?
+    //        tx.lock().unwrap().try_send(e).unwrap(); // TODO handle error
+    //    }))?;
+    //    Ok(Box::pin(rx))
+    //}
 
     /*fn next_event(&self) -> impl Future<Output = DeviceResult<Event>> {
         NextFrame { device: self }

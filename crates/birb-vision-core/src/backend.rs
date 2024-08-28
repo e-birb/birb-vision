@@ -9,7 +9,7 @@
  * Usually if your app you would define a [`VisionBackendSet`]
  */
 
-use std::{collections::HashMap, error::Error, fmt::Debug, rc::Rc, sync::{Arc, Mutex}};
+use std::{collections::HashMap, error::Error, fmt::Debug, hash::Hash, rc::Rc, sync::{Arc, Mutex}};
 
 use serde::{Deserialize, Serialize};
 
@@ -96,24 +96,24 @@ type BackendProviderResult = Result<Box<dyn Backend>, Box<dyn Error>>;
 /// If you want to share the backend set between threads you should use [`BackendProviderSet`]
 /// which only defines "how" to create a backend.
 pub struct BackendSet {
-    providers: BackendRegistry,
+    registry: BackendRegistry,
     backends: Mutex<HashMap<String, Rc<dyn Backend>>>,
 }
 
 impl BackendSet {
     pub fn new() -> Self {
-        Self::new_with_providers(BackendRegistry::new())
+        Self::new_with_registry(BackendRegistry::new())
     }
 
-    pub fn new_with_providers(providers: BackendRegistry) -> Self {
+    pub fn new_with_registry(registry: BackendRegistry) -> Self {
         Self {
-            providers,
+            registry,
             backends: Mutex::new(HashMap::new()),
         }
     }
 
     pub fn providers(&self) -> &BackendRegistry {
-        &self.providers
+        &self.registry
     }
 
     /// Get or create a backend for the given type name.
@@ -125,7 +125,7 @@ impl BackendSet {
         if let Some(backend) = backends.get(type_name.as_ref()) {
             return Some(Ok(backend.clone()));
         } else {
-            let backend: Rc<dyn Backend> = match self.providers.get_backend(type_name.as_ref())? {
+            let backend: Rc<dyn Backend> = match self.registry.get_backend(type_name.as_ref())? {
                 Ok(backend) => backend.into(),
                 Err(e) => return Some(Err(e)),
             };
@@ -228,6 +228,15 @@ pub struct DeviceInfo {
     pub other: HashMap<String, DeviceInfoEntry>,
 }
 
+impl Hash for DeviceInfo {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.display_name.hash(state);
+        for (_, v) in &self.other {
+            v.hash(state);
+        }
+    }
+}
+
 impl std::fmt::Display for DeviceInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut s = f.debug_struct(&self.display_name);
@@ -261,6 +270,8 @@ pub struct DeviceInfoEntry {
 
     /// Whether this entry should be visible to the user.
     pub visible: bool,
+
+    // TODO description / tooltip
 }
 
 impl DeviceInfoEntry {

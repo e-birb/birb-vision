@@ -53,7 +53,7 @@ fn parse_child_or_property(xml_node: XmlNode, current: &mut Node) -> Option<Chil
             current.visibility = Some(value);
             None
         },
-        "ImposedAccessMode" => {
+        "ImposedAccessMode" | "AccessMode" => {
             let value = match xml_node.text().unwrap() {
                 "RW" => AccessMode::ReadWrite,
                 "RO" => AccessMode::ReadOnly,
@@ -62,19 +62,8 @@ fn parse_child_or_property(xml_node: XmlNode, current: &mut Node) -> Option<Chil
                     todo!("Unknown access mode: {}", other);
                 },
             };
-            current.imposed_access_mode = Some(value);
-            None
-        },
-        "AccessMode" => {
-            let value = match xml_node.text().unwrap() {
-                "RW" => AccessMode::ReadWrite,
-                "RO" => AccessMode::ReadOnly,
-                "WO" => AccessMode::WriteOnly,
-                other => {
-                    todo!("Unknown access mode: {}", other);
-                },
-            };
-            current.access_mode = Some(value);
+            // TODO maybe imposed access mode should have priority
+            current.access_mode = value;
             None
         },
         "pIsImplemented" => {

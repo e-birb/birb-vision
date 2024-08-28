@@ -88,6 +88,10 @@ impl CameraDevice for MVDevice {
             .map(|s| s.current_value().to_string())
     }
 
+    fn set_property(&self, id: &NodeId, value: &birb_vision_core::PropertyValue) -> DeviceResult {
+        todo!()
+    }
+
     fn set_bool_property(&self, id: &NodeId, value: bool) -> DeviceResult {
         self.set_bool_value(id.as_str().unwrap(), value).map_err(|e| DeviceError::other(e))
     }

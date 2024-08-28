@@ -1,14 +1,177 @@
-use std::{collections::{HashMap, HashSet}, ops::{Deref, DerefMut}, sync::{mpsc::Sender, Arc, Weak}, time::Instant};
+use std::{collections::{HashMap, HashSet}, ops::{Deref, DerefMut}, sync::{mpsc::Sender, Arc, Weak}, thread::JoinHandle, time::{Duration, Instant}};
 
-use birb_vision_core::{CameraDevice, Child, EnumEntry, Event, Frame, Node, NodeId, NodeVariant, PropertyVariant, Representation};
-use egui::{load::SizedTexture, mutex::Mutex, Color32, ColorImage, DragValue, Image, ImageData, Rect, RichText, TextBuffer, TextureFilter, TextureHandle, TextureOptions, Ui, Window};
+use birb_vision_core::{backend::{BackendRegistry, BackendSet, DeviceInfo}, CameraDevice, Child, EnumEntry, Event, Frame, Node, NodeId, NodeVariant, PropertyVariant, Representation};
+use defer::defer;
+use egui::{load::SizedTexture, mutex::Mutex, CollapsingHeader, Color32, ColorImage, DragValue, Grid, Image, ImageData, Rect, RichText, ScrollArea, Sense, Slider, TextBuffer, TextureFilter, TextureHandle, TextureOptions, Ui, Window};
 use regex::Regex;
+use scope_guard::scope_guard;
 
+
+pub struct Selector {
+    preview: Preview,
+
+    enum_task: Option<JoinHandle<Vec<(String, DeviceInfo)>>>,
+    cameras: Vec<(String, DeviceInfo)>,
+
+    backend_registry: BackendRegistry,
+}
+
+impl Selector {
+    pub fn new() -> Self {
+        let backend_registry = birb_vision::all_backends();
+        Selector {
+            preview: Preview::new(),
+            enum_task: None,
+            cameras: Vec::new(),
+            backend_registry,
+        }
+    }
+
+    pub fn show(&mut self, ui: &mut egui::Ui) {
+        if let Some(task) = self.enum_task.as_ref() {
+            if task.is_finished() {
+                let cameras = match self.enum_task.take().unwrap().join() {
+                    Ok(cameras) => cameras,
+                    Err(e) => {
+                        log::error!("Error enumerating cameras: {e:?}"); // TODO try downcast to String and &str
+                        Vec::new()
+                    }
+                };
+                self.cameras = cameras;
+            }
+        }
+
+        ui.add_enabled_ui(!self.is_any_task_running(), |ui| {
+            ui.centered_and_justified(|ui| {
+                ui.horizontal(|ui| {
+                    self.show_selection(ui);
+                    self.preview.show(ui);
+                });
+            });
+        });
+    }
+
+    pub fn show_selection(&mut self, ui: &mut egui::Ui) {
+        ui.vertical(|ui| {
+            ui.set_width(200.0);
+            ui.horizontal(|ui| {
+                if ui.button("Enumerate").clicked() {
+                    self.start_enumerate(ui.ctx());
+                }
+                if self.enum_task.is_some() {
+                    ui.spinner();
+                }
+            });
+
+            ui.separator();
+            ui.centered_and_justified(|ui| { // TODO does not work
+                ScrollArea::vertical().show(ui, |ui| {
+                    let mut to_open = None;
+                    for (backend_id, info) in &self.cameras {
+                        CollapsingHeader::new(&info.display_name).id_source(&info).show(ui, |ui| {
+                            if ui
+                                .button("Connect \u{e63c}") // plug
+                                .on_hover_text("Connect")
+                                .clicked() {
+                                to_open = Some((backend_id.clone(), info.clone()));
+                            }
+                            ui.label(backend_id);
+                            Grid::new(&info).striped(true).show(ui, |ui| {
+                                let mut keys = info.other.keys().collect::<Vec<_>>();
+                                keys.sort();
+                                for k in keys {
+                                    let v = &info.other[k];
+                                    if !v.visible {
+                                        continue;
+                                    }
+                                    ui.label(&v.display_name);
+                                    ui.label(&v.value).on_hover_ui(|ui| {
+                                        ui.label(k);
+                                    });
+                                    ui.end_row();
+                                }
+                            });
+                        });
+                    }
+                    if let Some((backend_id, info)) = to_open {
+                        self.open_camera(&backend_id, info);
+                    }
+                });
+            });
+        });
+    }
+
+    fn is_any_task_running(&self) -> bool {
+        self.enum_task.is_some()
+    }
+
+    fn start_enumerate(&mut self, cx: &egui::Context) {
+        let cx = cx.clone();
+        let registry = self.backend_registry.clone();
+        let task = std::thread::spawn(move || {
+            scope_guard!(|| {
+                cx.request_repaint();
+            });
+
+            let keys = registry.all_packages().into_iter().map(|(id, _)| id).collect::<Vec<_>>();
+            let backends = BackendSet::new_with_registry(registry);
+            let mut all_devices = Vec::new();
+            for key in keys {
+                let backend = match backends.get_backend(&key).unwrap() {
+                    Ok(backend) => backend,
+                    Err(e) => {
+                        log::error!("Error getting backend: {e}");
+                        continue;
+                    }
+                };
+                let devices = match backend.enumerate() {
+                    Ok(devices) => devices,
+                    Err(e) => {
+                        log::error!("Error enumerating devices: {e}");
+                        continue;
+                    }
+                };
+                all_devices.extend(devices.into_iter().map(|d| (key.clone(), d)));
+            }
+            all_devices
+        });
+        self.enum_task = Some(task);
+    }
+
+    fn open_camera(&mut self, backend_id: &str, device_info: DeviceInfo) {
+        let backend_id = backend_id.to_string();
+        let mut preview = Preview::new();
+        let registry = self.backend_registry.clone();
+        preview.init(move || {
+            let backend = match registry.get_backend(backend_id).unwrap() {
+                Ok(backend) => backend,
+                Err(e) => {
+                    log::error!("Error getting backend: {e}");
+                    panic!("Error getting backend: {e}");
+                }
+            };
+            let camera = match backend.create(&device_info) {
+                Ok(camera) => camera,
+                Err(e) => {
+                    log::error!("Error opening camera: {e}");
+                    panic!("Error opening camera: {e}");
+                }
+            };
+            let Some(camera) = camera else {
+                log::error!("Camera not found");
+                panic!("Camera not found");
+            };
+            camera
+        });
+        // TODO use self.preview.init(...);
+        self.preview = preview;
+    }
+}
 
 pub struct Preview {
     state: Option<Arc<Mutex<PreviewState>>>,
     controls_window: bool,
-    zoom: Rect,
+    zoom: f32,
     fps: f32,
 }
 
@@ -94,7 +257,7 @@ impl Preview {
         Preview {
             state: None,
             controls_window: false,
-            zoom: Rect { min: (0.0, 0.0).into(), max: (1.0, 1.0).into() },
+            zoom: 1.0,
             fps: 0.0,
         }
     }
@@ -225,22 +388,29 @@ impl Preview {
                     .clicked() {
                     self.controls_window = true;
                 }
+                ui.add(Slider::new(&mut self.zoom, 0.1..=5.0).logarithmic(true).text("Zoom"));
                 ui.label(format!("fps: {:.2}", self.fps));
             });
             ui.separator();
             if let Some(texture_handle) = state.texture_handle.as_ref() {
                 let texture = SizedTexture::from_handle(texture_handle);
                 let available = ui.available_size();
+                // OLD:
+                // let image = Image::new(texture)
+                //     .max_width(available.x)
+                //     .max_height(available.y)
+                //     .shrink_to_fit()
+                //     .maintain_aspect_ratio(true)
+                //     .fit_to_original_size(4.0);
+                // ui.add(image);
                 //let (rect, response) = ui.allocate_exact_size(available, Sense::drag());
                 //let p = ui.painter();
                 //p.image(texture.id, rect, self.zoom, Color32::WHITE);
-                let image = Image::new(texture)
-                    .max_width(available.x)
-                    .max_height(available.y)
-                    .shrink_to_fit()
-                    .maintain_aspect_ratio(true)
-                    .fit_to_original_size(2.0);
-                ui.add(image);
+                ScrollArea::both().show(ui, |ui| {
+                    let image = Image::new(texture)
+                        .fit_to_exact_size(texture.size * self.zoom);
+                    ui.add(image);
+                });
             }
         });
     }

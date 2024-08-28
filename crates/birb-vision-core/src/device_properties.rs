@@ -10,7 +10,7 @@ pub use id::*;
 #[derive(Debug, Clone)]
 pub struct Node {
     /// A Friendly name for the property
-    pub display_name: Cow<'static, str>,
+    pub display_name: String,
 
     /// The property id
     ///
@@ -18,14 +18,12 @@ pub struct Node {
     /// - If [`None`], the property is not directly accessible. This is the case for groups.
     pub id: Option<NodeId>,
 
-    pub tooltip: Option<Cow<'static, str>>,
-    pub description: Option<Cow<'static, str>>,
+    pub tooltip: Option<String>,
+    pub description: Option<String>,
 
-    /// The visibility of the property
     pub visibility: Option<Visibility>,
 
-    pub imposed_access_mode: Option<AccessMode>,
-    pub access_mode: Option<AccessMode>,
+    pub access_mode: AccessMode,
 
     pub is_locked_ref: Option<NodeId>,
 
@@ -41,15 +39,14 @@ pub struct Node {
 }
 
 impl Node {
-    pub fn new(display_name: impl Into<Cow<'static, str>>) -> Self {
+    pub fn new(display_name: impl Into<String>) -> Self {
         Node {
             display_name: display_name.into(),
             id: None,
             tooltip: None,
             description: None,
             visibility: None,
-            imposed_access_mode: None,
-            access_mode: None,
+            access_mode: AccessMode::ReadWrite,
             is_locked_ref: None,
             address: None,
             address_ref: None,
@@ -61,16 +58,16 @@ impl Node {
         }
     }
 
-    pub fn new_with_id(name: impl Into<Cow<'static, str>>) -> Self {
-        let name = name.into();
+    pub fn new_with_id(id: impl Into<NodeId>) -> Self {
+        let id = id.into();
+        let name = format!("{:?}", id);
         Node {
             display_name: name.clone(),
-            id: Some(name.into()),
+            id: Some(id),
             tooltip: None,
             description: None,
             visibility: None,
-            imposed_access_mode: None,
-            access_mode: None,
+            access_mode: AccessMode::ReadWrite,
             is_locked_ref: None,
             address: None,
             address_ref: None,
@@ -199,6 +196,7 @@ impl Default for BoolProperty {
 }
 
 #[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize)]
 pub struct NumericProperty<T> {
     pub value: Option<T>,
     pub min: Option<T>,
@@ -232,6 +230,7 @@ impl<T> Default for NumericProperty<T> {
 }
 
 #[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize)]
 pub struct EnumProperty {
     pub value: Option<i64>,
     pub value_ref: Option<NodeId>, // TODO unify with a variant, maybe ValueOrRef or something similar to also replace Child
@@ -283,6 +282,7 @@ pub enum NumericSupport<T: Clone + 'static> {
 }
 
 #[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize)]
 pub struct EnumEntry {
     pub discriminant: i64,
     pub name: Cow<'static, str>,
@@ -290,6 +290,7 @@ pub struct EnumEntry {
 }
 
 #[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize)]
 pub struct StringProperty {
     pub max_length: u32,
     pub default: Option<String>,
@@ -302,4 +303,26 @@ impl Default for StringProperty {
             default: None,
         }
     }
+}
+
+#[derive(Debug, Clone)]
+#[derive(EnumAsInner)]
+#[derive(Serialize, Deserialize)]
+pub enum PropertyState {
+    Bool(bool),
+    Int(NumericProperty<i32>),
+    Float(NumericProperty<f64>),
+    Enum(EnumProperty),
+    String(StringProperty),
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[derive(EnumAsInner)]
+#[derive(Serialize, Deserialize)]
+pub enum PropertyValue {
+    Bool(bool),
+    Int(i64),
+    Float(f64),
+    Enum(i64),
+    String(String),
 }

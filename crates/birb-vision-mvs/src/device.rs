@@ -110,6 +110,10 @@ impl Debug for DeviceTypeInfo {
 }
 
 impl DeviceTypeInfo {
+    pub fn value(&self) -> u32 {
+        self.0
+    }
+
     pub fn product_subcategory(&self) -> u8 {
         (self.0 >> 8) as u8
     }
