@@ -49,6 +49,10 @@ impl DeviceInfo {
         }
     }
 
+    pub fn is_device_accessible(&self, mode: AccessMode) -> bool {
+        unsafe { (self.cx.ffi().MV_CC_IsDeviceAccessible)(&self.info as *const _ as *mut _, mode as _) }
+    }
+
     pub fn into_device(self, log: bool) -> Result<MVDevice, MVError> {
         MVDevice::new(self, log)
     }
