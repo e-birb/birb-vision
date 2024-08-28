@@ -1,6 +1,6 @@
 use std::{collections::{HashMap, HashSet}, ops::{Deref, DerefMut}, sync::{mpsc::Sender, Arc, Weak}, thread::JoinHandle, time::{Duration, Instant}};
 
-use birb_vision_core::{backend::{BackendRegistry, BackendSet, DeviceInfo}, AccessMode, CameraDevice, Child, EnumEntry, Event, Frame, Node, NodeId, NodeVariant, PropertyVariant, Representation};
+use birb_vision::core::{backend::{BackendRegistry, BackendSet, DeviceInfo}, AccessMode, CameraDevice, Child, EnumEntry, Event, Frame, Node, NodeId, NodeVariant, PropertyVariant, Representation};
 use defer::defer;
 use egui::{load::SizedTexture, mutex::Mutex, CollapsingHeader, Color32, ColorImage, DragValue, FontData, FontDefinitions, FontFamily, Grid, Image, ImageData, Rect, RichText, ScrollArea, Sense, Slider, TextBuffer, TextureFilter, TextureHandle, TextureOptions, Ui, Window};
 use material_icons::Icon;
