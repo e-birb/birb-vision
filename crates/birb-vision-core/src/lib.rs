@@ -224,6 +224,9 @@ pub enum DeviceError {
     #[error("Invalid Node ID")]
     InvalidNodeId,
 
+    #[error("Unsupported Format")]
+    UnsupportedFormat,
+
     //#[error("Error: {0}")]
     #[error(transparent)]
     Other(#[from] anyhow::Error),

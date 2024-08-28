@@ -681,6 +681,7 @@ name = "birb-vision-v4l"
 version = "0.1.0"
 dependencies = [
  "birb-vision-core",
+ "log",
  "v4l",
 ]
 

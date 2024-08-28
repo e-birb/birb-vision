@@ -165,7 +165,7 @@ impl CameraDevice for V4lDevice {
     }
 
     fn get_bool_property(&self, id: &NodeId) -> DeviceResult<bool> {
-        let control = self.dev.lock().unwrap().control(*id.as_i32().ok_or(InvalidNodeId)? as _).unwrap();
+        let control = self.dev.lock().unwrap().control(*id.as_i32().ok_or(InvalidNodeId)? as _)?;
         let Value::Boolean(value) = control.value else {
             panic!("Expected boolean value");
         };
@@ -174,7 +174,7 @@ impl CameraDevice for V4lDevice {
     fn get_int_property(&self, id: &NodeId) -> DeviceResult<NumericValue<i64>> {
         let controls = self.controls.borrow();
         let desc = controls.get(id).expect(&format!("Control {id:?} not found"));
-        let control = self.dev.lock().unwrap().control(*id.as_i32().ok_or(InvalidNodeId)? as _).unwrap();
+        let control = self.dev.lock().unwrap().control(*id.as_i32().ok_or(InvalidNodeId)? as _)?;
         let Value::Integer(value) = control.value else {
             panic!("Expected integer value");
         };
@@ -186,7 +186,7 @@ impl CameraDevice for V4lDevice {
     fn get_float_property(&self, id: &NodeId) -> DeviceResult<NumericValue<f64>> {
         let controls = self.controls.borrow();
         let desc = controls.get(id).unwrap();
-        let control = self.dev.lock().unwrap().control(*id.as_i32().ok_or(InvalidNodeId)? as _).unwrap();
+        let control = self.dev.lock().unwrap().control(*id.as_i32().ok_or(InvalidNodeId)? as _)?;
         let Value::Integer(value) = control.value else {
             panic!("Expected integer value");
         };
@@ -196,7 +196,7 @@ impl CameraDevice for V4lDevice {
         })
     }
     fn get_enum_property(&self, id: &NodeId) -> DeviceResult<EnumValue> {
-        let control = self.dev.lock().unwrap().control(*id.as_i32().ok_or(InvalidNodeId)? as _).unwrap();
+        let control = self.dev.lock().unwrap().control(*id.as_i32().ok_or(InvalidNodeId)? as _)?;
         let Value::Integer(value) = control.value else {
             panic!("Expected integer value");
         };
@@ -218,7 +218,7 @@ impl CameraDevice for V4lDevice {
         })
     }
     fn get_string_property(&self, id: &NodeId) -> DeviceResult<String> {
-        let control = self.dev.lock().unwrap().control(*id.as_i32().ok_or(InvalidNodeId)? as _).unwrap();
+        let control = self.dev.lock().unwrap().control(*id.as_i32().ok_or(InvalidNodeId)? as _)?;
         let Value::String(value) = control.value else {
             panic!("Expected string value");
         };
@@ -245,11 +245,11 @@ impl CameraDevice for V4lDevice {
         self.set_int_property(id, value)
     }
     fn set_string_property(&self, id: &NodeId, value: &str) -> DeviceResult {
-        self.dev.lock().unwrap().set_control(Control { id: *id.as_i32().ok_or(InvalidNodeId)? as _, value: Value::String(value.to_string()) }).unwrap();
+        self.dev.lock().unwrap().set_control(Control { id: *id.as_i32().ok_or(InvalidNodeId)? as _, value: Value::String(value.to_string()) })?;
         Ok(())
     }
     fn send_command(&self, id: &NodeId) -> DeviceResult {
-        self.dev.lock().unwrap().set_control(Control { id: *id.as_i32().ok_or(InvalidNodeId)? as _, value: Value::None }).unwrap();
+        self.dev.lock().unwrap().set_control(Control { id: *id.as_i32().ok_or(InvalidNodeId)? as _, value: Value::None })?;
         Ok(())
     }
 
@@ -260,7 +260,7 @@ impl CameraDevice for V4lDevice {
 
         let mut dev = self.dev.lock().unwrap();
 
-        let mut s = v4l::io::mmap::Stream::with_buffers(&mut dev, v4l::buffer::Type::VideoCapture, 4).unwrap();
+        let mut s = v4l::io::mmap::Stream::with_buffers(&mut dev, v4l::buffer::Type::VideoCapture, 4)?;
         s.set_timeout(Duration::from_secs(2));
 
         use birb_vision_core::image;
@@ -279,31 +279,29 @@ impl CameraDevice for V4lDevice {
                 let format = format.lock().unwrap().clone();
 
                 // TODO use the stride!!!
-                let image: Option<DynamicImage> = if format.fourcc == FourCC::new(b"YUYV") {
+                let image: DeviceResult<DynamicImage> = if format.fourcc == FourCC::new(b"YUYV") {
                     let start = Instant::now();
                     let data = yuyv422_to_rgb(data, false).unwrap();
                     println!("Converted in {:?}", start.elapsed());
                     let img = DynamicImage::ImageRgb8(RgbImage::from_raw(format.width as u32, format.height as u32, data).unwrap());
-                    Some(img)
+                    Ok(img)
                 } else if format.fourcc == FourCC::new(b"RGB3") {
                     let img = DynamicImage::ImageRgb8(RgbImage::from_raw(format.width as u32, format.height as u32, data.to_vec()).unwrap());
-                    Some(img)
+                    Ok(img)
                 } else if format.fourcc == FourCC::new(b"MJPG") {
                     let start = Instant::now();
                     //let img = birb_vision_core::decoders::decode_mjpg(data).unwrap();
                     //let img = DynamicImage::ImageRgb8(img);
                     let img = image::load_from_memory(&data).unwrap();
                     println!("Converted mjpeg in {:?}", start.elapsed());
-                    Some(img)
+                    Ok(img)
                 } else {
-                    panic!("Unsupported format: {}", format.fourcc);
-                    None
+                    log::error!("Unsupported format: {}", format.fourcc);
+                    Err(UnsupportedFormat)
                 };
                 drop(stream);
-                if let Some(image) = image {
-                    let event = Event::Frame(Ok(Frame::Image(image)));
-                    callback.lock().unwrap()(event);
-                }
+                let event = Event::Frame(image.map(Frame::Image));
+                callback.lock().unwrap()(event);
             }
         });
 
