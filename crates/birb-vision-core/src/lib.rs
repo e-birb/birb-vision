@@ -13,11 +13,11 @@ pub mod channels;
 pub use anyhow;
 pub use thiserror;
 
-mod frame;
+mod sample;
 mod device_properties;
 //mod pixel_format;
 
-pub use frame::*;
+pub use sample::*;
 pub use device_properties::*;
 //pub use pixel_format::*;
 
@@ -25,17 +25,9 @@ pub use futures;
 use serde::{Deserialize, Serialize};
 
 pub mod backend;
+mod event;
 
-#[derive(Debug)]
-#[derive(EnumAsInner)]
-// TODO #[derive(Serialize, Deserialize)]
-pub enum Event {
-    Frame(DeviceResult<Frame>),
-    Flushed, // TODO maybe remove
-    // TODO consider not having any events that are not "common" since the user may expect them
-    // but never emitted by the implementation. Another possibility would be to group them
-    // in another enum for non-common/ensured events.
-}
+pub use event::*;
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[derive(EnumAsInner)]
@@ -134,7 +126,7 @@ pub trait CameraDevice {
     // TODO Is this "no Pin requirement" good?
     //fn poll_events(&self, ctx: &mut std::task::Context) -> Poll<DeviceResult<Event>>;
 
-    fn set_stream_callback(&self, f: Box<dyn Fn(Event) + Send + Sync>) -> DeviceResult;
+    fn set_stream_callback(&self, f: Box<dyn for<'a> Fn(Event<'a>) + Send + Sync>) -> DeviceResult;
 }
 
 //impl<'a, T: CameraDevice + ?Sized> Future for NextFrame<'a, T> {
@@ -146,7 +138,7 @@ pub trait CameraDevice {
 //}
 
 pub trait CameraDeviceEx: CameraDevice {
-    fn get_one_frame<'a>(&'a self) -> impl Future<Output = DeviceResult<Frame>> + 'a {
+    fn get_one_frame<'a>(&'a self) -> impl Future<Output = DeviceResult<Sample<'static>>> + 'a {
         async move {
             let (tx, rx) = oneshot::channel();
             let tx = Mutex::new(Some(tx));
@@ -155,7 +147,7 @@ pub trait CameraDeviceEx: CameraDevice {
                 match event {
                     Event::Frame(frame) => {
                         if let Some(tx) = tx.lock().unwrap().take() {
-                            if let Err(e) = tx.send(frame) {
+                            if let Err(e) = tx.send(frame.map(|s| s.into_owned())) {
                                 log::error!("Error sending frame: {:?}", e);
                             }
                         }

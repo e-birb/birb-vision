@@ -1,6 +1,6 @@
 use std::{collections::{HashMap, HashSet}, ops::{Deref, DerefMut}, sync::{mpsc::Sender, Arc, Weak}, thread::JoinHandle, time::Instant};
 
-use birb_vision::core::{backend::{BackendRegistry, BackendSet, DeviceInfo}, AccessMode, CameraDevice, Child, EnumEntry, Event, Frame, Node, NodeId, NodeVariant, PropertyVariant, Representation};
+use birb_vision::core::{backend::{BackendRegistry, BackendSet, DeviceInfo}, AccessMode, CameraDevice, Child, EnumEntry, Event, Sample, Node, NodeId, NodeVariant, PropertyVariant, Representation};
 use egui::{load::SizedTexture, mutex::Mutex, CollapsingHeader, Color32, ColorImage, DragValue, FontData, FontDefinitions, FontFamily, Grid, Image, ImageData, RichText, ScrollArea, Slider, TextBuffer, TextureFilter, TextureHandle, TextureOptions, Ui, Window};
 use material_icons::Icon;
 use regex::Regex;
@@ -141,7 +141,9 @@ impl CameraControl {
                                 let Ok(frame) = frame else {
                                     return;
                                 };
-                                let Frame::Image(img) = frame;
+                                let Sample::Image(img) = frame else {
+                                    todo!()
+                                };
                                 let start = Instant::now();
                                 let img = img.to_rgb8();
                                 //println!("Converted in {:?}", start.elapsed());

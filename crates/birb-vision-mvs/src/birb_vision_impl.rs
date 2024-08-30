@@ -4,7 +4,7 @@ use std::borrow::Cow;
 
 use birb_vision_core::anyhow;
 
-use birb_vision_core::{CameraDevice, DeviceAccessMode, DeviceError, DeviceResult, EnumValue, Event, Frame, Node, NodeId, NumericValue};
+use birb_vision_core::{CameraDevice, DeviceAccessMode, DeviceError, DeviceResult, EnumValue, Event, Sample, Node, NodeId, NumericValue};
 use crate::ctx::convert_info;
 use crate::{genicam::parse_root, mvs_try, prelude::*};
 
@@ -157,7 +157,7 @@ impl CameraDevice for MVDevice {
 
     fn set_stream_callback(&self, f: Box<dyn Fn(Event) + Send + Sync>) -> DeviceResult {
         self.set_image_callback(Box::new(move |img| {
-            f(Event::Frame(Ok(Frame::Image(img))))
+            f(Event::Frame(Ok(Sample::Image(img))))
         }));
 
         // TODO

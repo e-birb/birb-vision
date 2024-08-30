@@ -1,6 +1,6 @@
 #![doc = include_str!("../README.md")]
 
-use std::{ffi::{c_uchar, c_void, CStr}, path::Path, pin::Pin, sync::Mutex, time::Duration};
+use std::{ffi::{c_uchar, c_void, CStr}, panic::{catch_unwind, UnwindSafe}, path::Path, pin::Pin, sync::Mutex, time::Duration};
 
 use birb_vision_core::image::DynamicImage;
 use device::{AccessMode, DeviceInfo};
@@ -374,33 +374,60 @@ impl Drop for MVDevice {
 
 #[allow(non_snake_case)]
 extern "C" fn frame_callback(pData: *mut c_uchar, pFrameInfo: *mut MV_FRAME_OUT_INFO_EX, pUser: *mut c_void) {
-    assert!(!pFrameInfo.is_null());
-    let info = unsafe { &*pFrameInfo };
-    let w = info.nWidth;
-    let h = info.nHeight;
-    //println!("Frame: {}x{}", w, h);
-
-    assert!(!pUser.is_null());
-    let callbacks = pUser as CallbacksPtr;
-    let callbacks = unsafe { &*callbacks };
-
-    assert!(!pData.is_null());
-    let data = unsafe { std::slice::from_raw_parts(pData as *const u8, info.nFrameLen as _) };
-    let image = decode_mv_image(w as _, h as _, data, info.enPixelType);
-    (callbacks.lock().unwrap().image_callback)(image);
+    try_no_panic(|| {
+        assert!(!pFrameInfo.is_null());
+        let info = unsafe { &*pFrameInfo };
+        let w = info.nWidth;
+        let h = info.nHeight;
+        //println!("Frame: {}x{}", w, h);
+    
+        assert!(!pUser.is_null());
+        let callbacks = pUser as CallbacksPtr;
+        let callbacks = unsafe { &*callbacks };
+    
+        assert!(!pData.is_null());
+        let data = unsafe { std::slice::from_raw_parts(pData as *const u8, info.nFrameLen as _) };
+        let image = decode_mv_image(w as _, h as _, data, info.enPixelType);
+        (callbacks.lock().unwrap().image_callback)(image);
+    });
 }
 
 #[allow(non_snake_case)]
 extern "C" fn evtent_callback(pEventInfo: *mut mvs_sys::MV_EVENT_OUT_INFO, pUser: *mut c_void) {
-    assert_ne!(pEventInfo, std::ptr::null_mut());
-    let info = unsafe { &*pEventInfo };
-    let name: &[u8; 128] = unsafe { std::mem::transmute(&info.EventName) };
-    let name = CStr::from_bytes_until_nul(name).unwrap();
-    println!("EVENT: {:?}", name);
+    try_no_panic(|| {
+        assert_ne!(pEventInfo, std::ptr::null_mut());
+        let info = unsafe { &*pEventInfo };
+        let name: &[u8; 128] = unsafe { std::mem::transmute(&info.EventName) };
+        let name = CStr::from_bytes_until_nul(name).unwrap();
+        println!("EVENT: {:?}", name);
 
-    assert!(!pUser.is_null());
-    let callbacks = pUser as CallbacksPtr;
-    let callbacks = unsafe { &*callbacks };
+        assert!(!pUser.is_null());
+        let callbacks = pUser as CallbacksPtr;
+        let callbacks = unsafe { &*callbacks };
 
-    (callbacks.lock().unwrap().event_callback)();
+        (callbacks.lock().unwrap().event_callback)();
+    });
+}
+
+// TODO maybe this is not possible to prove: #[no_panic::no_panic]
+fn try_no_panic(f: impl FnOnce() + UnwindSafe) {
+    let r = catch_unwind(f);
+
+    if let Err(e) = r {
+        let error: &str = if let Some(e) = e.downcast_ref::<String>() {
+            e
+        } else if let Some(e) = e.downcast_ref::<&str> () {
+            e
+        } else {
+            // This should never happen as panics can only be strings
+            "unknown error"
+        };
+
+        if let Err(_) = catch_unwind(move || {
+            log::error!("MVS callback panicked, callbacks shall never panic as exception cannot propagate in this context: {}", error);
+            //drop(e);
+        }) {
+            eprintln!("MVS callback panicked, callbacks shall never panic as exception cannot propagate in this context. -- Also failed to log or dropping the error! APP STATE MIGHT BE INVALID!");
+        }
+    }
 }

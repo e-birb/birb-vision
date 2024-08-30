@@ -11,6 +11,7 @@ roxmltree = "=0.20.0"
 semver = "1.0.23"
 birb-vision-core = { version = "0.1.0", path = "../birb-vision-core", optional = true }
 scopeguard = "1.2.0"
+no-panic = "0.1.30"
 
 [dev-dependencies]
 env_logger = "0.11.3"
