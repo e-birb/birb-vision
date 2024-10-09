@@ -7,7 +7,7 @@ members = [
     "crates/birb-vision-explorer",
     "crates/birb-vision-fake",
     #"crates/birb-vision-icube",
-    "crates/birb-vision-media-foundation",
+    #"crates/birb-vision-media-foundation",
     "crates/birb-vision-media-uvc",
     "crates/birb-vision-mvs",
     "crates/birb-vision-v4l", "crates/egui-interface", "examples/egui",
