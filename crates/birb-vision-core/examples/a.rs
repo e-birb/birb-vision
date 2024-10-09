@@ -1,4 +1,3 @@
-use std::borrow::Borrow;
 
 
 struct A<'a> {

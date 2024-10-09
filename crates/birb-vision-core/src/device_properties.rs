@@ -1,4 +1,4 @@
-use std::{borrow::Cow, fmt::{Debug, Formatter}, ops::{Deref, RangeInclusive}};
+use std::{borrow::Cow, fmt::{Debug, Formatter}, ops::RangeInclusive};
 
 use enum_as_inner::EnumAsInner;
 use serde::{Deserialize, Serialize};

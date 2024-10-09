@@ -3,7 +3,6 @@ use std::{borrow::Cow, fmt::{Debug, Formatter}};
 use enum_as_inner::EnumAsInner;
 use serde::{Deserialize, Serialize};
 
-use super::Node;
 
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]

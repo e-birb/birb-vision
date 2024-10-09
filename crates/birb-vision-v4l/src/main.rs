@@ -1,6 +1,6 @@
 use std::{io, time::Duration};
 
-use v4l::{buffer::Type, control::Description, io::traits::CaptureStream, prelude::*, Control};
+use v4l::{buffer::Type, control::Description, io::traits::CaptureStream, prelude::*};
 
 fn main() -> io::Result<()> {
     let path = "/dev/video0";

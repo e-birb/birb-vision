@@ -1,7 +1,7 @@
 use std::{cell::RefCell, collections::HashMap, error::Error, ops::Deref, path::Path, sync::{Arc, Mutex}, time::{Duration, Instant}};
 
 use birb_vision_core::{backend::{Backend, DeviceInfo, DeviceInfoEntry}, decoders::yuyv422_to_rgb, image::{DynamicImage, RgbImage}, BoolProperty, CameraDevice, Child, DeviceAccessMode, DeviceResult, EnumEntry, EnumProperty, EnumValue, Event, Sample, GroupNode, Node, NodeId, NodeVariant, NumericProperty, NumericValue, PropertyVariant, Representation, StringProperty};
-use v4l::{control::{MenuItem, Value}, io::traits::CaptureStream, video::Capture, Control, Device, Format, FourCC};
+use v4l::{control::{MenuItem, Value}, io::traits::CaptureStream, video::Capture, Control, Device, FourCC};
 
 use birb_vision_core::DeviceError::*;
 
