@@ -76,11 +76,11 @@ pub trait CameraDevice {
     /// The actual behavior is implementation-defined, and may not have any effect on some devices or in some
     /// configurations such as:
     /// - the camera is not streaming
-    /// - the camera is in not is software-triggerable mode or is in free-run mode
+    /// - the camera is in free-run mode or is in not software-triggerable
     ///
     /// # Notes
     /// - This method is similar to [OpenCV's `VideoCapture::grab`](https://github.com/opencv/opencv/blob/ae4a11b0c0986809d2f938f68343c8da99286b29/modules/videoio/include/opencv2/videoio.hpp#L878), but it is not guaranteed to have effect.
-    fn grab(&self) -> DeviceResult<()>;
+    fn grab(&self) -> DeviceResult;
 
     fn flush(&self) -> DeviceResult;
 
@@ -90,14 +90,6 @@ pub trait CameraDevice {
 
     fn set_stream_callback(&self, f: Box<dyn for<'a> Fn(Event<'a>) + Send + Sync>) -> DeviceResult;
 }
-
-//impl<'a, T: CameraDevice + ?Sized> Future for NextFrame<'a, T> {
-//    type Output = DeviceResult<Event>;
-//
-//    fn poll(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context) -> Poll<Self::Output> {
-//        self.device.poll_events(cx)
-//    }
-//}
 
 pub trait CameraDeviceEx: CameraDevice {
     fn get_one_frame<'a>(&'a self) -> impl Future<Output = DeviceResult<Sample<'static>>> + 'a {
@@ -125,49 +117,9 @@ pub trait CameraDeviceEx: CameraDevice {
             Ok(frame_result?)
         }
     }
-
-    //fn stream(&self, buf: usize) -> DeviceResult<BoxStream<Event>> {
-    //    let (tx, rx) = futures::channel::mpsc::channel(buf);
-    //    let tx = Mutex::new(tx);
-    //    self.set_stream_callback(Box::new(move |e| {
-    //        // TODO maybe just clone instead of using the mutex?
-    //        tx.lock().unwrap().try_send(e).unwrap(); // TODO handle error
-    //    }))?;
-    //    Ok(Box::pin(rx))
-    //}
-
-    /*fn next_event(&self) -> impl Future<Output = DeviceResult<Event>> {
-        NextFrame { device: self }
-    }
-
-    fn next_frame(&self) -> impl Future<Output = DeviceResult<Frame>> {
-        async {
-            loop {
-                match self.next_event().await? {
-                    Event::Frame(frame) => return frame,
-                    _ => continue,
-                }
-            }
-        }
-    }*/
 }
 
 impl<T: CameraDevice + ?Sized> CameraDeviceEx for T {}
-
-//#[derive(Debug)]
-//pub enum DeviceError {
-//    Unsupported,
-//    Other(Box<dyn std::error::Error>),
-//}
-
-//impl<E> From<E> for DeviceError
-//where
-//    E: Into<Box<dyn std::error::Error + 'static>> + 'static,
-//{
-//    fn from(value: E) -> Self {
-//        DeviceError::Other(value.into())
-//    }
-//}
 
 #[derive(thiserror::Error, Debug)]
 pub enum DeviceError {
@@ -213,15 +165,6 @@ pub enum DeviceError {
     //#[error("Error: {0}")]
     #[error(transparent)]
     Other(#[from] anyhow::Error),
-}
-
-impl DeviceError {
-    pub fn other<E>(e: E) -> Self
-    where
-        E: Into<anyhow::Error>,
-    {
-        DeviceError::Other(e.into())
-    }
 }
 
 pub type DeviceResult<T = ()> = Result<T, DeviceError>;
