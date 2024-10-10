@@ -1,6 +1,6 @@
 use std::{collections::{HashMap, HashSet}, ops::{Deref, DerefMut}, sync::{mpsc::Sender, Arc, Weak}, time::Instant};
 
-use birb_vision::core::{backend::DeviceInfo, AccessMode, CameraDevice, Child, EnumEntry, Event, Sample, Node, NodeId, NodeVariant, PropertyVariant, Representation};
+use birb_vision::core::{backend::DeviceInfo, AccessMode, CameraDevice, EnumEntry, Event, Node, NodeId, NodeVariant, PropertyState, PropertyValue, PropertyVariant, Representation, Sample};
 use egui::{load::SizedTexture, mutex::Mutex, Color32, ColorImage, DragValue, FontData, FontDefinitions, FontFamily, Grid, Image, ImageData, RichText, ScrollArea, Slider, TextBuffer, TextureFilter, TextureHandle, TextureOptions, Ui, Window};
 use material_icons::Icon;
 use regex::Regex;
@@ -113,7 +113,6 @@ impl CameraControl {
 
     pub fn init(
         &mut self,
-        display_name: impl Into<String>,
         init: impl FnOnce() -> Box<dyn CameraDevice> + Send + 'static,
     ) {
         let mut state = State::new();
@@ -127,7 +126,6 @@ impl CameraControl {
             move || {
                 let camera = init();
                 let info = camera.get_device_info().unwrap();
-                camera.open(Default::default()).unwrap();
                 state.on_state_mut(|state| {
                     state.device_info = Some(Arc::new(info));
                 });
@@ -143,13 +141,8 @@ impl CameraControl {
                                 let Sample::Image(img) = frame else {
                                     todo!()
                                 };
-                                let start = Instant::now();
                                 let img = img.to_rgb8();
-                                //println!("Converted in {:?}", start.elapsed());
-                                let start = Instant::now();
                                 let img = ColorImage::from_rgb([img.width() as usize, img.height() as usize], &img.into_raw());
-                                //println!("Converted to egui in {:?}", start.elapsed());
-                                let start = Instant::now();
                                 state.on_state_mut(move |s| {
                                     s.image = Some(img.into());
                                 });
@@ -162,16 +155,13 @@ impl CameraControl {
                     })
                 }).unwrap();
 
-                let properties = camera.control_description().unwrap();
-                let ui_properties = camera.properties().unwrap();
-                let mut properties = Properties::parse(&properties);
-                properties.root = ui_properties.id.clone().unwrap().into();
+                let mut properties = Properties::parse(&*camera);
                 properties.update_all_nodes(&*camera);
 
                 state.on_state_mut(|state| {
                     let re = state.filter_re();
                     let mut selected_nodes = HashSet::new();
-                    let root_id = properties.root.as_ref().unwrap();
+                    let root_id = &properties.root;
                     let root = properties.leafs.get(root_id).unwrap();
                     root.filter(&properties, &mut selected_nodes, &re);
                     // unnecessary? selected_nodes.insert(root_id.clone());
@@ -330,7 +320,7 @@ impl CameraControl {
                                 let re = state.filter_re();
                                 if let Some(props) = &state.props {
                                     let mut selected = HashSet::new();
-                                    let root_id = props.root.as_ref().unwrap();
+                                    let root_id = &props.root;
                                     let root = props.leafs.get(root_id).unwrap();
                                     root.filter(&props, &mut selected, &re);
                                     state.selected = selected;
@@ -350,10 +340,8 @@ impl CameraControl {
                             let selected = state.selected.clone();
                             if let Some(props) = state.props.as_mut() {
                                 //println!("OK 1");
-                                if let Some(root) = props.root.clone() {
-                                    //println!("OK 2");
-                                    props.show_property(ui, &selected, &root, &tx);
-                                }
+                                let root = props.root.clone();
+                                props.show_property(ui, &selected, &root, &tx);
                             }
                         });
                     });
@@ -394,21 +382,22 @@ impl Drop for CameraControl {
 }
 
 struct Properties {
-    root: Option<NodeId>,
+    root: NodeId,
     leafs: HashMap<NodeId, Property>,
 }
 
 impl Properties {
-    fn parse(node: &Node) -> Self {
+    fn parse(camera: &dyn CameraDevice) -> Self {
         let mut leafs = HashMap::new();
-        let root = Self::handle_node(node, &mut leafs);
+        let root = camera.property(&camera.root_property().unwrap()).unwrap();
+        let root = Self::handle_node(root, camera, &mut leafs);
         Self {
             root,
             leafs,
         }
     }
 
-    fn handle_node(node: &Node, leafs: &mut HashMap<NodeId, Property>) -> Option<NodeId> {
+    fn handle_node(node: Node, camera: &dyn CameraDevice, leafs: &mut HashMap<NodeId, Property>) -> NodeId {
         let id = node.id.clone();
 
         match &node.variant {
@@ -421,20 +410,21 @@ impl Properties {
                     children: Vec::new(),
                 };
                 for c in g.children.iter() {
-                    match c {
-                        Child::Ref(id) => {
-                            group.children.push(id.clone());
-                        },
-                        Child::Node(n) => {
-                            if let Some(id) = Self::handle_node(n, leafs) {
-                                group.children.push(id);
-                            }
-                        }
-                    }
+                    //match c {
+                    //    Child::Ref(id) => {
+                    //        group.children.push(id.clone());
+                    //    },
+                    //    Child::Node(n) => {
+                    //        if let Some(id) =  {
+                    //            group.children.push(id);
+                    //        }
+                    //    }
+                    //}
+                    let n = camera.property(c).unwrap();
+                    group.children.push(n.id.clone());
+                    Self::handle_node(n, camera, leafs);
                 }
-                if let Some(id) = &id {
-                    leafs.insert(id.clone(), Property::Group(group));
-                }
+                leafs.insert(id.clone(), Property::Group(group));
             },
             NodeVariant::Property(property) => {
                 match property {
@@ -447,9 +437,7 @@ impl Properties {
                             value: b.value.unwrap_or(false),
                             requested: b.value.unwrap_or(false),
                         };
-                        if let Some(id) = &id {
-                            leafs.insert(id.clone(), Property::Bool(prop));
-                        }
+                        leafs.insert(id.clone(), Property::Bool(prop));
                     },
                     PropertyVariant::Integer(i) => {
                         let prop = IntProp {
@@ -464,9 +452,7 @@ impl Properties {
                             max: i.max.unwrap_or(0),
                             unit: i.unit.as_ref().map(|s| s.to_string()),
                         };
-                        if let Some(id) = &id {
-                            leafs.insert(id.clone(), Property::Int(prop));
-                        }
+                        leafs.insert(id.clone(), Property::Int(prop));
                     },
                     PropertyVariant::Float(f) => {
                         let prop = FloatProp {
@@ -481,9 +467,7 @@ impl Properties {
                             max: f.max.unwrap_or(0.0),
                             unit: f.unit.as_ref().map(|s| s.to_string()),
                         };
-                        if let Some(id) = &id {
-                            leafs.insert(id.clone(), Property::Float(prop));
-                        }
+                        leafs.insert(id.clone(), Property::Float(prop));
                     },
                     PropertyVariant::Enum(e) => {
                         let prop = EnumProp {
@@ -495,9 +479,7 @@ impl Properties {
                             requested: e.value.unwrap_or(0),
                             entries: e.entries.clone().into_owned(),
                         };
-                        if let Some(id) = &id {
-                            leafs.insert(id.clone(), Property::Enum(prop));
-                        }
+                        leafs.insert(id.clone(), Property::Enum(prop));
                     },
                     PropertyVariant::String(s) => {
                         let prop = StringProp {
@@ -509,9 +491,7 @@ impl Properties {
                             requested: "TODO".to_string(),
                             max_length: s.max_length as _, // TODO
                         };
-                        if let Some(id) = &id {
-                            leafs.insert(id.clone(), Property::String(prop));
-                        }
+                        leafs.insert(id.clone(), Property::String(prop));
                     },
                     PropertyVariant::Command => {
                         let prop = CommandProp {
@@ -521,9 +501,7 @@ impl Properties {
                             },
                             requested: false,
                         };
-                        if let Some(id) = &id {
-                            leafs.insert(id.clone(), Property::Command(prop));
-                        }
+                        leafs.insert(id.clone(), Property::Command(prop));
                     },
                 }
             }
@@ -542,57 +520,92 @@ impl Properties {
         match node {
             Property::Group(_) => {},
             Property::Bool(b) => {
-                let v = match camera.get_bool_property(id) {
+                let v = match camera.get_property(id) {
                     Ok(v) => v,
                     Err(e) => {
                         log::error!("Error reading BOOL property: {id:?}: {e}");
                         return;
                     }
                 };
+                let v = match v {
+                    PropertyState::Bool(v) => v,
+                    _ => {
+                        log::error!("Error reading BOOL property: wrong type");
+                        return;
+                    },
+                };
                 b.set_value(v);
             },
             Property::Int(i) => {
-                let v = match camera.get_int_property(id) {
+                let v = match camera.get_property(id) {
                     Ok(v) => v,
                     Err(e) => {
                         log::error!("Error reading INT property: {id:?}: {e}");
                         return;
                     }
                 };
+                let v = match v {
+                    PropertyState::Int(v) => v,
+                    _ => {
+                        log::error!("Error reading INT property: wrong type");
+                        return;
+                    },
+                };
                 i.set_value(v.current);
                 i.min = *v.range.start();
                 i.max = *v.range.end();
             },
             Property::Float(f) => {
-                let v = match camera.get_float_property(id) {
+                let v = match camera.get_property(id) {
                     Ok(v) => v,
                     Err(e) => {
                         log::error!("Error reading FLOAT property: {id:?}: {e}");
                         return;
                     }
                 };
+                let v = match v {
+                    PropertyState::Float(v) => v,
+                    _ => {
+                        log::error!("Error reading FLOAT property: wrong type");
+                        return;
+                    },
+                };
                 f.set_value(v.current);
                 f.min = *v.range.start();
                 f.max = *v.range.end();
             },
             Property::Enum(e) => {
-                let v = match camera.get_enum_property(id) {
+                let v = match camera.get_property(id) {
                     Ok(v) => v,
                     Err(e) => {
                         log::error!("Error reading ENUM property: {id:?}: {e}");
                         return;
                     }
                 };
+                let v = match v {
+                    PropertyState::Enum(v) => v,
+                    _ => {
+                        log::error!("Error reading ENUM property: wrong type");
+                        return;
+                    },
+                };
                 // TODO use support
                 e.set_value(v.current);
             },
             Property::String(e) => {
-                let v = match camera.get_string_property(id) {
+                let v = match camera.get_property(id) {
                     Ok(v) => v,
                     Err(e) => {
                         log::error!("Error reading STRING property: {id:?}: {e}");
                         return;
                     }
+                };
+                let v = match v {
+                    PropertyState::String(v) => v,
+                    _ => {
+                        log::error!("Error reading STRING property: wrong type");
+                        return;
+                    },
                 };
                 // TODO use support
                 e.set_value(v);
@@ -624,7 +637,7 @@ impl Properties {
                 let v = b.requested;
                 // HACK: remove and proper erro handling in case of write/read failures:
                 b.requested = b.value;
-                if let Err(e) = camera.set_bool_property(id, v) {
+                if let Err(e) = camera.set_property(id, PropertyValue::Bool(v)) {
                     log::error!("Error writing BOOL property: {id:?}: {e}");
                 }
             },
@@ -635,7 +648,7 @@ impl Properties {
                 let v = i.requested;
                 // HACK: remove and proper erro handling in case of write/read failures:
                 i.requested = i.value;
-                if let Err(e) = camera.set_int_property(id, v) {
+                if let Err(e) = camera.set_property(id, PropertyValue::Int(v)) {
                     log::error!("Error writing INT property: {id:?}: {e}");
                 }
             },
@@ -646,7 +659,7 @@ impl Properties {
                 let v = f.requested;
                 // HACK: remove and proper erro handling in case of write/read failures:
                 f.requested = f.value;
-                if let Err(e) = camera.set_float_property(id, v) {
+                if let Err(e) = camera.set_property(id, PropertyValue::Float(v)) {
                     log::error!("Error writing FLOAT property: {id:?}: {e}");
                 }
             },
@@ -657,7 +670,7 @@ impl Properties {
                 let v = e.requested;
                 // HACK: remove and proper erro handling in case of write/read failures:
                 e.requested = e.value;
-                if let Err(e) = camera.set_enum_property(id, v) {
+                if let Err(e) = camera.set_property(id, PropertyValue::Enum(v)) {
                     log::error!("Error writing ENUM property: {id:?}: {e}");
                 }
             },
@@ -668,7 +681,7 @@ impl Properties {
                 let v = e.requested.clone();
                 // HACK: remove and proper erro handling in case of write/read failures:
                 e.requested = e.value.clone();
-                if let Err(e) = camera.set_string_property(id, &v) {
+                if let Err(e) = camera.set_property(id, PropertyValue::String(v)) {
                     log::error!("Error writing STRING property: {id:?}: {e}");
                 }
             },
@@ -677,7 +690,7 @@ impl Properties {
                     return false;
                 }
                 c.requested = false;
-                if let Err(e) = camera.send_command(id) {
+                if let Err(e) = camera.set_property(id, PropertyValue::Command) {
                     log::error!("Error sending COMMAND property: {id:?}: {e}");
                 }
             },
@@ -694,7 +707,7 @@ impl Properties {
         }
     }
 
-    pub fn show_property(&mut self, ui: &mut Ui, selected: &HashSet<NodeId>, id: &NodeId, send: &Sender<Command>) {
+    pub fn show_property(&mut self, ui: &mut Ui, selected: &HashSet<NodeId>, id: &NodeId, sender: &Sender<Command>) {
         let Some(property) = self.leafs.get_mut(id) else {
             ui.label(RichText::new(format!("&{:?}", id)).color(Color32::RED));
             return;
@@ -704,40 +717,40 @@ impl Properties {
             Property::Group(ref g) => {
                 let display_name = g.display_name.clone();
                 let children = g.children.clone();
-                Self::show_group(self, ui, selected, &display_name, children, send);
+                Self::show_group(self, ui, selected, &display_name, children, sender);
             },
-            Property::Bool(b) => Self::show_bool(ui, b, send),
-            Property::Int(i) => Self::show_int(ui, i, send),
-            Property::Float(f) => Self::show_float(ui, f, send),
-            Property::Enum(e) => Self::show_enum(ui, e, send),
-            Property::String(s) => Self::show_string(ui, s, send),
-            Property::Command(c) => Self::show_command(ui, c, send),
+            Property::Bool(b) => Self::show_bool(ui, b, sender),
+            Property::Int(i) => Self::show_int(ui, i, sender),
+            Property::Float(f) => Self::show_float(ui, f, sender),
+            Property::Enum(e) => Self::show_enum(ui, e, sender),
+            Property::String(s) => Self::show_string(ui, s, sender),
+            Property::Command(c) => Self::show_command(ui, c, sender),
         }
     }
 
-    pub fn show_group(&mut self, ui: &mut Ui, selected: &HashSet<NodeId>, display_name: &str, children: impl IntoIterator<Item = NodeId>, send: &Sender<Command>) {
+    pub fn show_group(&mut self, ui: &mut Ui, selected: &HashSet<NodeId>, display_name: &str, children: impl IntoIterator<Item = NodeId>, sender: &Sender<Command>) {
         ui.collapsing(display_name, |ui| {
             Grid::new(display_name).striped(true).show(ui, |ui| {
                 for id in children {
                     if !selected.contains(&id) {
                         continue;
                     }
-                    self.show_property(ui, selected, &id, send);
+                    self.show_property(ui, selected, &id, sender);
                     ui.end_row();
                 }
             });
         });
     }
 
-    pub fn show_bool(ui: &mut Ui, b: &mut BoolProp, send: &Sender<Command>) {
+    pub fn show_bool(ui: &mut Ui, b: &mut BoolProp, sender: &Sender<Command>) {
         ui.add_enabled_ui(b.access_mode.writable(), |ui| {
             if ui.checkbox(&mut b.requested, b.basic.display_name.as_str()).changed() {
-                send.send(Command::Write);
+                sender.send(Command::Write).unwrap();
             };
         });
     }
 
-    pub fn show_int(ui: &mut Ui, i: &mut IntProp, send: &Sender<Command>) {
+    pub fn show_int(ui: &mut Ui, i: &mut IntProp, sender: &Sender<Command>) {
         // TODO unit
         match i.representation {
             Representation::Hex => {
@@ -745,7 +758,7 @@ impl Properties {
                     ui.horizontal(|ui| {
                         ui.label("0x");
                         if ui.add(DragValue::new(&mut i.requested).hexadecimal(4, true, false)).changed() {
-                            send.send(Command::Write);
+                            sender.send(Command::Write).unwrap();
                         }
                         ui.label(i.basic.display_name.as_str())
                     });
@@ -755,7 +768,7 @@ impl Properties {
                 ui.add_enabled_ui(i.access_mode.writable(), |ui| {
                     ui.horizontal(|ui| {
                         if ui.add(DragValue::new(&mut i.requested)).changed() {
-                            send.send(Command::Write);
+                            sender.send(Command::Write).unwrap();
                         }
                         ui.label(i.basic.display_name.as_str())
                     });
@@ -764,14 +777,14 @@ impl Properties {
             Representation::Linear => {
                 ui.add_enabled_ui(i.access_mode.writable(), |ui| {
                     if ui.add(egui::Slider::new(&mut i.requested, i.min..=i.max).text(i.basic.display_name.as_str())).changed() {
-                        send.send(Command::Write);
+                        sender.send(Command::Write).unwrap();
                     }
                 });
             },
             Representation::Logarithmic => {
                 ui.add_enabled_ui(i.access_mode.writable(), |ui| {
                     if ui.add(egui::Slider::new(&mut i.requested, i.min..=i.max).text(i.basic.display_name.as_str()).logarithmic(true)).changed() {
-                        send.send(Command::Write);
+                        sender.send(Command::Write).unwrap();
                     }
                 });
             },
@@ -781,14 +794,14 @@ impl Properties {
         }
     }
 
-    pub fn show_float(ui: &mut Ui, f: &mut FloatProp, send: &Sender<Command>) {
+    pub fn show_float(ui: &mut Ui, f: &mut FloatProp, sender: &Sender<Command>) {
         // TODO unit
         match f.representation {
             Representation::PureNumber => {
                 ui.add_enabled_ui(f.access_mode.writable(), |ui| {
                     ui.horizontal(|ui| {
                         if ui.add(DragValue::new(&mut f.requested)).changed() {
-                            send.send(Command::Write);
+                            sender.send(Command::Write).unwrap();
                         }
                         ui.label(f.basic.display_name.as_str())
                     });
@@ -798,7 +811,7 @@ impl Properties {
                 ui.add_enabled_ui(f.access_mode.writable(), |ui| {
                     ui.horizontal(|ui| {
                         if ui.add(egui::Slider::new(&mut f.requested, f.min..=f.max).text(f.basic.display_name.as_str())).changed() {
-                            send.send(Command::Write);
+                            sender.send(Command::Write).unwrap();
                         }
                         ui.label(f.basic.display_name.as_str())
                     });
@@ -807,21 +820,21 @@ impl Properties {
             Representation::Logarithmic => {
                 ui.add_enabled_ui(f.access_mode.writable(), |ui| {
                     if ui.add(egui::Slider::new(&mut f.requested, f.min..=f.max).text(f.basic.display_name.as_str()).logarithmic(true)).changed() {
-                        send.send(Command::Write);
+                        sender.send(Command::Write).unwrap();
                     }
                 });
             },
             Representation::Hex | Representation::Boolean | Representation::Linear => {
                 ui.add_enabled_ui(f.access_mode.writable(), |ui| {
                     if ui.label(RichText::new(format!("invalid representation: {:?}", f.representation))).changed() {
-                        send.send(Command::Write);
+                        sender.send(Command::Write).unwrap();
                     };
                 });
             },
         }
     }
 
-    pub fn show_enum(ui: &mut Ui, e: &mut EnumProp, send: &Sender<Command>) {
+    pub fn show_enum(ui: &mut Ui, e: &mut EnumProp, sender: &Sender<Command>) {
         let selected_text = if let Some(entry) = e.entries.iter().find(|entry| entry.discriminant == e.requested) {
             entry.name.to_string()
         } else {
@@ -839,26 +852,26 @@ impl Properties {
         });
 
         if e.value != e.requested {
-            send.send(Command::Write);
+            sender.send(Command::Write).unwrap();
         }
     }
 
-    pub fn show_string(ui: &mut Ui, s: &mut StringProp, send: &Sender<Command>) {
+    pub fn show_string(ui: &mut Ui, s: &mut StringProp, sender: &Sender<Command>) {
         ui.add_enabled_ui(s.access_mode.writable(), |ui| {
             ui.horizontal(|ui| {
                 if ui.text_edit_singleline(&mut s.requested).changed() {
-                    send.send(Command::Write);
+                    sender.send(Command::Write).unwrap();
                 }
                 ui.label(&s.display_name);
             });
         });
     }
 
-    pub fn show_command(ui: &mut Ui, c: &mut CommandProp, send: &Sender<Command>) {
+    pub fn show_command(ui: &mut Ui, c: &mut CommandProp, sender: &Sender<Command>) {
         ui.add_enabled_ui(c.access_mode.writable(), |ui| {
             if ui.button(c.display_name.as_str()).clicked() {
                 c.requested = true;
-                send.send(Command::Write);
+                sender.send(Command::Write).unwrap();
             }
         });
     }

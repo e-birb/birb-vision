@@ -55,55 +55,17 @@ pub enum DeviceAccessMode {
     Monitor,
 }
 
-/// Ciao
-///
-/// # Device Access
-/// - [`is_device_accessible`]
-/// - [`is_open`]
-/// - [`open`]
-/// - [`close`]
-///
-/// # Acquisition
-/// - [`start_grabbing`]
-/// - [`stop_grabbing`]
-/// - [`grab`]
-/// - [`flush`]
-///
-/// # Streaming
-/// - [`stream`]
-///
-/// [`is_device_accessible`]: CameraDevice::is_device_accessible
-/// [`is_open`]: CameraDevice::is_open
-/// [`open`]: CameraDevice::open
-/// [`close`]: CameraDevice::close
-/// [`start_grabbing`]: CameraDevice::start_grabbing
-/// [`stop_grabbing`]: CameraDevice::stop_grabbing
-/// [`grab`]: CameraDevice::grab
-/// [`flush`]: CameraDevice::flush
-/// [`stream`]: CameraDevice::stream
 pub trait CameraDevice {
     fn get_device_info(&self) -> DeviceResult<DeviceInfo>;
 
-    fn is_device_accessible(&self, mode: DeviceAccessMode) -> bool;
-    fn is_open(&self) -> Option<DeviceAccessMode>;
-    fn open(&self, mode: DeviceAccessMode) -> DeviceResult;
-    fn close(&self) -> DeviceResult;
+    /// All controls
+    fn property(&self, id: &NodeId) -> DeviceResult<Node>;
 
-    fn control_description(&self) -> DeviceResult<Node>;
-    fn properties(&self) -> DeviceResult<Node>;
-    fn get_bool_property(&self, id: &NodeId) -> DeviceResult<bool>;
-    fn get_int_property(&self, id: &NodeId) -> DeviceResult<NumericValue<i64>>;
-    fn get_float_property(&self, id: &NodeId) -> DeviceResult<NumericValue<f64>>;
-    fn get_enum_property(&self, id: &NodeId) -> DeviceResult<EnumValue>;
-    fn get_string_property(&self, id: &NodeId) -> DeviceResult<String>; // TODO Cow
+    /// Root of the interesting properties to be exposed to the user
+    fn root_property(&self) -> DeviceResult<NodeId>;
 
-    fn set_property(&self, id: &NodeId, value: &PropertyValue) -> DeviceResult;
-    fn set_bool_property(&self, id: &NodeId, value: bool) -> DeviceResult;
-    fn set_int_property(&self, id: &NodeId, value: i64) -> DeviceResult;
-    fn set_float_property(&self, id: &NodeId, value: f64) -> DeviceResult;
-    fn set_enum_property(&self, id: &NodeId, value: i64) -> DeviceResult;
-    fn set_string_property(&self, id: &NodeId, value: &str) -> DeviceResult;
-    fn send_command(&self, id: &NodeId) -> DeviceResult;
+    fn get_property(&self, id: &NodeId) -> DeviceResult<PropertyState>;
+    fn set_property(&self, id: &NodeId, value: PropertyValue) -> DeviceResult;
 
     fn start_grabbing(&self) -> DeviceResult;
     fn stop_grabbing(&self) -> DeviceResult; // TODO a stream object

@@ -57,6 +57,10 @@ impl CameraDevice for MVDevice {
             .next().ok_or(DeviceError::Other(anyhow::Error::msg("Root node not found")))
     }
 
+    fn get_property(&self, id: &NodeId) -> DeviceResult<birb_vision_core::PropertyState> {
+        
+    }
+
     fn get_bool_property(&self, id: &NodeId) -> DeviceResult<bool> {
         self.get_bool_value(id.as_str().unwrap()).map_err(|e| e.into())
     }

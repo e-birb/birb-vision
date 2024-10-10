@@ -1,14 +1,14 @@
 use std::{cell::RefCell, collections::HashMap, error::Error, ops::Deref, path::Path, sync::{Arc, Mutex}, time::{Duration, Instant}};
 
-use birb_vision_core::{backend::{Backend, DeviceInfo, DeviceInfoEntry}, decoders::yuyv422_to_rgb, image::{DynamicImage, RgbImage}, BoolProperty, CameraDevice, Child, DeviceAccessMode, DeviceResult, EnumEntry, EnumProperty, EnumValue, Event, Sample, GroupNode, Node, NodeId, NodeVariant, NumericProperty, NumericValue, PropertyVariant, Representation, StringProperty};
-use v4l::{control::{MenuItem, Value}, io::traits::CaptureStream, video::Capture, Control, Device, FourCC};
+use birb_vision_core::{backend::{Backend, DeviceInfo, DeviceInfoEntry}, decoders::yuyv422_to_rgb, image::{DynamicImage, RgbImage}, CameraDevice, DeviceAccessMode, DeviceError, DeviceResult, EnumValue, Event, Node, NodeId, NodeVariant, NumericValue, PropertyState, PropertyValue, PropertyVariant, Sample};
+use v4l::{control::Value, io::traits::CaptureStream, video::Capture, Control, Device, FourCC};
 
 use birb_vision_core::DeviceError::*;
+mod control_compat;
 
 pub struct V4lDevice {
     info: Arc<DeviceInfo>,
     dev: Mutex<Device>,
-    controls: RefCell<HashMap<NodeId, v4l::control::Description>>,
     current_format: Arc<Mutex<v4l::Format>>,
 
     callback: Arc<Mutex<Box<dyn Fn(Event) + Send + Sync>>>,
@@ -19,6 +19,9 @@ pub struct V4lDevice {
     // (even though `v4l::Device` struct is). I'm just going to
     // assume it is not for now, better safe than sorry.
     _marker: *mut (),
+
+    properties: HashMap<NodeId, Node>,
+    root_property: NodeId,
 }
 
 impl V4lDevice {
@@ -34,15 +37,35 @@ impl V4lDevice {
         let format = dev.format().unwrap();
         //dev.set_format(&Format::new(format.width, format.height, FourCC::new(b"YUYV"))).unwrap();
 
+        let mut properties = HashMap::new();
+
+        for control in dev.query_controls().unwrap() {
+            let Some(node) = control_compat::parse(control) else {
+                continue;
+            };
+            let prev = properties.insert(node.id.clone(), node);
+            if let Some(_) = prev {
+                // TODO handle error
+                todo!();
+            }
+        }
+
+        let mut root = Node::new_with_id("birb-vision-v4l::Root");
+        root.display_name = "V4L2".into();
+        root.variant.as_group_mut().expect("root was not a group").children = properties.keys().cloned().collect::<Vec<_>>().into();
+        let root_id = root.id.clone();
+        properties.insert(root_id.clone(), root);
+
         Ok(Self {
             info: Arc::new(info),
             dev: Mutex::new(dev),
-            controls: RefCell::new(HashMap::new()),
             current_format: Arc::new(Mutex::new(format)),
             thread: RefCell::new(None),
             callback: Arc::new(Mutex::new(Box::new(|_| {}))),
             stream: RefCell::new(None),
             _marker: std::ptr::null_mut(),
+            properties,
+            root_property: root_id,
         })
     }
 }
@@ -52,213 +75,55 @@ impl CameraDevice for V4lDevice {
         Ok(self.info.deref().clone())
     }
 
-    fn is_device_accessible(&self, mode: DeviceAccessMode) -> bool {
-        // TODO
-        true
+    fn property(&self, id: &NodeId) -> DeviceResult<Node> {
+        self.properties.get(id).cloned().ok_or(DeviceError::InvalidNodeId)
     }
 
-    fn is_open(&self) -> Option<DeviceAccessMode> {
-        // TODO
-        None
+    fn root_property(&self) -> DeviceResult<NodeId> {
+        Ok(self.root_property.clone())
     }
 
-    fn open(&self, mode: DeviceAccessMode) -> DeviceResult {
-        // TODO maybe no-op
-        Ok(())
-    }
+    fn get_property(&self, id: &NodeId) -> DeviceResult<PropertyState> {
+        let control = self.dev.lock().unwrap().control(*id.as_i32().ok_or(InvalidNodeId)? as _)?;
 
-    fn close(&self) -> DeviceResult {
-        // TODO maybe no-op
-        Ok(())
-    }
+        let node = self.properties.get(id).expect(&format!("Control {id:?} not found"));
 
-    fn control_description(&self) -> DeviceResult<birb_vision_core::Node> {
-        use v4l::control::Type;
-
-        let controls = self.dev.lock().unwrap().query_controls().unwrap();
-        let mut nodes = Vec::<Node>::new();
-        for control in controls {
-            let value = self.dev.lock().unwrap().control(control.id);
-            let mut node: Node = Node::new_with_id(control.id as i32);
-            node.display_name = control.name.clone().into();
-            let variant: Option<NodeVariant> = match control.typ {
-                Type::Integer | Type::Integer64 => {
-                    let mut variant = NumericProperty::<i64>::default();
-                    variant.min = control.minimum.into();
-                    variant.max = control.maximum.into();
-                    variant.default = control.default.into();
-                    variant.increment = (control.step as i64).into();
-                    variant.representation = Some(if control.name.to_lowercase().starts_with("exposure") {
-                        Representation::Logarithmic
-                    } else {
-                        Representation::Linear
-                    });
-                    Some(PropertyVariant::Integer(variant).into())
+        match control.value {
+            Value::None => todo!(),
+            Value::Integer(current) => match &node.variant {
+                NodeVariant::Property(PropertyVariant::Integer(property)) => Ok(PropertyState::Int(NumericValue {
+                    current,
+                    range: (property.min.unwrap_or(0))..=(property.max.unwrap_or(0)),
+                })),
+                NodeVariant::Property(PropertyVariant::Enum(property)) => {
+                    Ok(PropertyState::Enum(EnumValue {
+                        current,
+                        support: property.entries.iter().map(|e| e.discriminant).collect::<Vec<_>>().into(),
+                    }))
                 },
-                Type::Boolean => {
-                    let mut variant = BoolProperty::default();
-                    variant.default = Some(control.default != 0);
-                    Some(PropertyVariant::Boolean(variant).into())
-                },
-                Type::Menu => {
-                    let mut variant = EnumProperty::default();
-                    variant.entries = control
-                        .items
-                        .as_ref().unwrap()
-                        .iter()
-                        .map(|(id, item)| {
-                            let MenuItem::Name(name) = item else {
-                                panic!("Expected name");
-                            };
-                            EnumEntry {
-                                discriminant: *id as i64,
-                                name: name.clone().into(),
-                                help: None,
-                            }
-                        })
-                        .collect::<Vec<_>>()
-                        .into();
-                    Some(PropertyVariant::Enum(variant).into())
-                },
-                Type::Button => {
-                    Some(PropertyVariant::Command.into())
-                },
-                Type::CtrlClass => {
-                    // TODO
-                    None
-                },
-                Type::String => {
-                    let variant = StringProperty::default();
-                    Some(PropertyVariant::String(variant).into())
-                },
-                Type::Bitmask => {
-                    // TODO
-                    None
-                },
-                Type::IntegerMenu => {
-                    // TODO
-                    None
-                },
-                Type::U8 | Type::U16 | Type::U32 => {
-                    // TODO
-                    None
-                },
-                Type::Area => {
-                    // TODO
-                    None
-                },
-            };
-            if let Some(variant) = variant {
-                node.variant = variant;
-                self.controls.borrow_mut().insert((control.id as i32).into(), control);
-                nodes.push(node);
-            }
+                _ => todo!(),
+            },
+            Value::Boolean(current) => Ok(PropertyState::Bool(current)),
+            Value::String(current) => Ok(PropertyState::String(current)),
+            _ => todo!(),
         }
-
-        let children = nodes
-            .into_iter()
-            .map(|n| Child::Node(n))
-            .collect::<Vec<Child>>();
-
-        let mut root = Node::new("Controls");
-        root.id = Some("root CONTROLS smdkwmfpeewopfmewpfmwepompwre".into());
-        root.variant = NodeVariant::Group(GroupNode {
-            children: children.into(),
-        });
-
-        Ok(root)
     }
 
-    fn properties(&self) -> DeviceResult<Node> {
-        self.control_description()
-    }
-
-    fn get_bool_property(&self, id: &NodeId) -> DeviceResult<bool> {
-        let control = self.dev.lock().unwrap().control(*id.as_i32().ok_or(InvalidNodeId)? as _)?;
-        let Value::Boolean(value) = control.value else {
-            panic!("Expected boolean value");
+    fn set_property(&self, id: &NodeId, value: birb_vision_core::PropertyValue) -> DeviceResult {
+        let dev = self.dev.lock().unwrap(); // TODO handle error
+        let value = match value {
+            PropertyValue::Bool(value) => Value::Boolean(value),
+            PropertyValue::Int(value) => Value::Integer(value),
+            PropertyValue::Float(_) => todo!(), // maybe unsupported?
+            PropertyValue::Enum(value) => Value::Integer(value),
+            PropertyValue::String(value) => Value::String(value.clone()),
+            PropertyValue::Command => Value::None,
         };
-        Ok(value)
-    }
-    fn get_int_property(&self, id: &NodeId) -> DeviceResult<NumericValue<i64>> {
-        let controls = self.controls.borrow();
-        let desc = controls.get(id).expect(&format!("Control {id:?} not found"));
-        let control = self.dev.lock().unwrap().control(*id.as_i32().ok_or(InvalidNodeId)? as _)?;
-        let Value::Integer(value) = control.value else {
-            panic!("Expected integer value");
-        };
-        Ok(NumericValue {
-            current: value,
-            range: (desc.minimum as i64)..=(desc.maximum as i64),
-        })
-    }
-    fn get_float_property(&self, id: &NodeId) -> DeviceResult<NumericValue<f64>> {
-        let controls = self.controls.borrow();
-        let desc = controls.get(id).unwrap();
-        let control = self.dev.lock().unwrap().control(*id.as_i32().ok_or(InvalidNodeId)? as _)?;
-        let Value::Integer(value) = control.value else {
-            panic!("Expected integer value");
-        };
-        Ok(NumericValue {
-            current: value as f64,
-            range: (desc.minimum as f64)..=(desc.maximum as f64),
-        })
-    }
-    fn get_enum_property(&self, id: &NodeId) -> DeviceResult<EnumValue> {
-        let control = self.dev.lock().unwrap().control(*id.as_i32().ok_or(InvalidNodeId)? as _)?;
-        let Value::Integer(value) = control.value else {
-            panic!("Expected integer value");
-        };
-        let controls = self.controls.borrow();
-        let desc = controls.get(id).unwrap();
-        let entries = desc.items.as_ref().unwrap().iter().map(|(id, item)| {
-            let MenuItem::Name(name) = item else {
-                panic!("Expected name");
-            };
-            EnumEntry {
-                discriminant: *id as i64,
-                name: name.clone().into(),
-                help: None,
-            }
-        }).collect::<Vec<_>>();
-        Ok(EnumValue {
-            current: value,
-            support: entries.iter().map(|e| e.discriminant).collect::<Vec<_>>().into(),
-        })
-    }
-    fn get_string_property(&self, id: &NodeId) -> DeviceResult<String> {
-        let control = self.dev.lock().unwrap().control(*id.as_i32().ok_or(InvalidNodeId)? as _)?;
-        let Value::String(value) = control.value else {
-            panic!("Expected string value");
-        };
-        Ok(value)
-    }
 
-    fn set_property(&self, id: &NodeId, value: &birb_vision_core::PropertyValue) -> DeviceResult {
-        todo!()
-    }
-
-    fn set_bool_property(&self, id: &NodeId, value: bool) -> DeviceResult {
-        self.dev.lock().unwrap().set_control(Control { id: *id.as_i32().ok_or(InvalidNodeId)? as _, value: Value::Boolean(value) })?;
-        Ok(())
-    }
-    fn set_int_property(&self, id: &NodeId, value: i64) -> DeviceResult {
-        self.dev.lock().unwrap().set_control(Control { id: *id.as_i32().ok_or(InvalidNodeId)? as _, value: Value::Integer(value) })?;
-        Ok(())
-    }
-    fn set_float_property(&self, id: &NodeId, value: f64) -> DeviceResult {
-        // TODO error
-        unimplemented!()
-    }
-    fn set_enum_property(&self, id: &NodeId, value: i64) -> DeviceResult {
-        self.set_int_property(id, value)
-    }
-    fn set_string_property(&self, id: &NodeId, value: &str) -> DeviceResult {
-        self.dev.lock().unwrap().set_control(Control { id: *id.as_i32().ok_or(InvalidNodeId)? as _, value: Value::String(value.to_string()) })?;
-        Ok(())
-    }
-    fn send_command(&self, id: &NodeId) -> DeviceResult {
-        self.dev.lock().unwrap().set_control(Control { id: *id.as_i32().ok_or(InvalidNodeId)? as _, value: Value::None })?;
+        dev.set_control(Control {
+            id: *id.as_i32().ok_or(InvalidNodeId)? as _,
+            value,
+        })?;
         Ok(())
     }
 

@@ -16,7 +16,7 @@ pub struct Node {
     ///
     /// # Notes
     /// - If [`None`], the property is not directly accessible. This is the case for groups.
-    pub id: Option<NodeId>,
+    pub id: NodeId,
 
     pub tooltip: Option<String>,
     pub description: Option<String>,
@@ -39,31 +39,12 @@ pub struct Node {
 }
 
 impl Node {
-    pub fn new(display_name: impl Into<String>) -> Self {
-        Node {
-            display_name: display_name.into(),
-            id: None,
-            tooltip: None,
-            description: None,
-            visibility: None,
-            access_mode: AccessMode::ReadWrite,
-            is_locked_ref: None,
-            address: None,
-            address_ref: None,
-            port_ref: None,
-            streamable: false,
-            variant: NodeVariant::Group(GroupNode {
-                children: Cow::Borrowed(&[]),
-            }),
-        }
-    }
-
     pub fn new_with_id(id: impl Into<NodeId>) -> Self {
         let id = id.into();
         let name = format!("{:?}", id);
         Node {
             display_name: name.clone(),
-            id: Some(id),
+            id,
             tooltip: None,
             description: None,
             visibility: None,
@@ -161,36 +142,7 @@ impl From<StringProperty> for NodeVariant {
 
 #[derive(Debug, Clone)]
 pub struct GroupNode {
-    pub children: Cow<'static, [Child]>,
-}
-
-#[derive(Clone)]
-#[derive(EnumAsInner)]
-//#[derive(Serialize, Deserialize)]
-pub enum Child {
-    Node(Node),
-    Ref(NodeId),
-}
-
-impl From<Node> for Child {
-    fn from(node: Node) -> Self {
-        Child::Node(node)
-    }
-}
-
-impl From<NodeId> for Child {
-    fn from(id: NodeId) -> Self {
-        Child::Ref(id)
-    }
-}
-
-impl Debug for Child {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Child::Node(node) => node.fmt(f),
-            Child::Ref(id) => write!(f, "Ref({:?})", id),
-        }
-    }
+    pub children: Cow<'static, [NodeId]>,
 }
 
 #[derive(Debug, Clone)]
@@ -263,11 +215,14 @@ impl Default for EnumProperty {
 }
 
 #[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize)]
 pub struct NumericValue<T> {
     pub current: T,
     pub range: RangeInclusive<T>, // TODO support not range
 }
 
+#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize)]
 pub struct EnumValue<'a> {
     pub current: i64,
     pub support: Cow<'a, [i64]>,
@@ -325,10 +280,10 @@ impl Default for StringProperty {
 #[derive(Serialize, Deserialize)]
 pub enum PropertyState {
     Bool(bool),
-    Int(NumericProperty<i32>),
-    Float(NumericProperty<f64>),
-    Enum(EnumProperty),
-    String(StringProperty),
+    Int(NumericValue<i64>),
+    Float(NumericValue<f64>),
+    Enum(EnumValue<'static>), // TODO ...
+    String(String),
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
@@ -340,4 +295,5 @@ pub enum PropertyValue {
     Float(f64),
     Enum(i64),
     String(String),
+    Command,
 }

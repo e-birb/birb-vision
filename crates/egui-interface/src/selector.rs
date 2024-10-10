@@ -155,7 +155,7 @@ impl CameraManager {
         self.camera_control = CameraControl::new(); // Close current camera
         let mut preview = CameraControl::new();
         let registry = self.backend_registry.clone();
-        preview.init(device_info.display_name.clone(), move || {
+        preview.init(move || {
             let backend = match registry.get_backend(backend_id).unwrap() {
                 Ok(backend) => backend,
                 Err(e) => {

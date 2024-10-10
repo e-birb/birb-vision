@@ -1,3 +1,4 @@
+use birb_vision_core::backend::BackendPackage;
 pub use birb_vision_core as core;
 
 use core::backend::BackendRegistry;
