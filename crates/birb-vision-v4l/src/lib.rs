@@ -1,6 +1,6 @@
 use std::{cell::RefCell, collections::HashMap, error::Error, ops::Deref, path::Path, sync::{Arc, Mutex}, time::{Duration, Instant}};
 
-use birb_vision_core::{anyhow::{anyhow, bail}, backend::{Backend, DeviceInfo, DeviceInfoEntry}, decoders::yuyv422_to_rgb, image::{DynamicImage, RgbImage}, CameraDevice, DeviceAccessMode, DeviceError, DeviceResult, EnumValue, Event, GroupNode, Node, NodeId, NodeVariant, NumericValue, PropertyState, PropertyValue, PropertyVariant, Sample};
+use birb_vision_core::{anyhow::anyhow, backend::{Backend, DeviceInfo, DeviceInfoEntry}, decoders::yuyv422_to_rgb, image::{DynamicImage, RgbImage}, CameraDevice, DeviceError, DeviceResult, EnumValue, Event, GroupNode, Node, NodeId, NodeVariant, NumericValue, PropertyState, PropertyValue, PropertyVariant, Sample};
 use v4l::{control::Value, io::traits::CaptureStream, video::Capture, Control, Device, FourCC};
 
 use birb_vision_core::DeviceError::*;
@@ -98,7 +98,10 @@ impl CameraDevice for V4lDevice {
         match &node.variant {
             NodeVariant::Group(_) => Err(anyhow!("Cannot read a group node"))?,
             NodeVariant::Property(property) => match property {
-                PropertyVariant::Boolean(_) => todo!(),
+                PropertyVariant::Boolean(_) => match value {
+                    Value::Boolean(current) => Ok(PropertyState::Bool(current)),
+                    _ => Err(anyhow!("Expected boolean value but the current control value was {value:?}"))?,
+                },
                 PropertyVariant::Integer(property) => match value {
                     Value::Integer(current) => Ok(PropertyState::Int(NumericValue {
                         current,
