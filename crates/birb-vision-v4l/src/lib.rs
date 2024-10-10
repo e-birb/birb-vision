@@ -1,6 +1,6 @@
 use std::{cell::RefCell, collections::HashMap, error::Error, ops::Deref, path::Path, sync::{Arc, Mutex}, time::{Duration, Instant}};
 
-use birb_vision_core::{backend::{Backend, DeviceInfo, DeviceInfoEntry}, decoders::yuyv422_to_rgb, image::{DynamicImage, RgbImage}, CameraDevice, DeviceAccessMode, DeviceError, DeviceResult, EnumValue, Event, Node, NodeId, NodeVariant, NumericValue, PropertyState, PropertyValue, PropertyVariant, Sample};
+use birb_vision_core::{backend::{Backend, DeviceInfo, DeviceInfoEntry}, decoders::yuyv422_to_rgb, image::{DynamicImage, RgbImage}, CameraDevice, DeviceAccessMode, DeviceError, DeviceResult, EnumValue, Event, GroupNode, Node, NodeId, NodeVariant, NumericValue, PropertyState, PropertyValue, PropertyVariant, Sample};
 use v4l::{control::Value, io::traits::CaptureStream, video::Capture, Control, Device, FourCC};
 
 use birb_vision_core::DeviceError::*;
@@ -37,12 +37,17 @@ impl V4lDevice {
         let format = dev.format().unwrap();
         //dev.set_format(&Format::new(format.width, format.height, FourCC::new(b"YUYV"))).unwrap();
 
+        let mut root = Node::new_with_id("birb-vision-v4l::Root");
+        root.display_name = "V4L2".into();
+        let mut root_children = Vec::new();
+
         let mut properties = HashMap::new();
 
         for control in dev.query_controls().unwrap() {
             let Some(node) = control_compat::parse(control) else {
                 continue;
             };
+            root_children.push(node.id.clone());
             let prev = properties.insert(node.id.clone(), node);
             if let Some(_) = prev {
                 // TODO handle error
@@ -50,9 +55,10 @@ impl V4lDevice {
             }
         }
 
-        let mut root = Node::new_with_id("birb-vision-v4l::Root");
-        root.display_name = "V4L2".into();
-        root.variant.as_group_mut().expect("root was not a group").children = properties.keys().cloned().collect::<Vec<_>>().into();
+        root.variant = NodeVariant::Group(GroupNode {
+            children: root_children.into(),
+        });
+
         let root_id = root.id.clone();
         properties.insert(root_id.clone(), root);
 
