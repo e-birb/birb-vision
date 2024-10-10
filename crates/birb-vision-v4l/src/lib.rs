@@ -1,6 +1,6 @@
 use std::{cell::RefCell, collections::HashMap, error::Error, ops::Deref, path::Path, sync::{Arc, Mutex}, time::{Duration, Instant}};
 
-use birb_vision_core::{backend::{Backend, DeviceInfo, DeviceInfoEntry}, decoders::yuyv422_to_rgb, image::{DynamicImage, RgbImage}, CameraDevice, DeviceAccessMode, DeviceError, DeviceResult, EnumValue, Event, GroupNode, Node, NodeId, NodeVariant, NumericValue, PropertyState, PropertyValue, PropertyVariant, Sample};
+use birb_vision_core::{anyhow::{anyhow, bail}, backend::{Backend, DeviceInfo, DeviceInfoEntry}, decoders::yuyv422_to_rgb, image::{DynamicImage, RgbImage}, CameraDevice, DeviceAccessMode, DeviceError, DeviceResult, EnumValue, Event, GroupNode, Node, NodeId, NodeVariant, NumericValue, PropertyState, PropertyValue, PropertyVariant, Sample};
 use v4l::{control::Value, io::traits::CaptureStream, video::Capture, Control, Device, FourCC};
 
 use birb_vision_core::DeviceError::*;
@@ -91,27 +91,36 @@ impl CameraDevice for V4lDevice {
 
     fn get_property(&self, id: &NodeId) -> DeviceResult<PropertyState> {
         let control = self.dev.lock().unwrap().control(*id.as_i32().ok_or(InvalidNodeId)? as _)?;
+        let value = control.value;
 
         let node = self.properties.get(id).expect(&format!("Control {id:?} not found"));
 
-        match control.value {
-            Value::None => todo!(),
-            Value::Integer(current) => match &node.variant {
-                NodeVariant::Property(PropertyVariant::Integer(property)) => Ok(PropertyState::Int(NumericValue {
-                    current,
-                    range: (property.min.unwrap_or(0))..=(property.max.unwrap_or(0)),
-                })),
-                NodeVariant::Property(PropertyVariant::Enum(property)) => {
-                    Ok(PropertyState::Enum(EnumValue {
+        match &node.variant {
+            NodeVariant::Group(_) => Err(anyhow!("Cannot read a group node"))?,
+            NodeVariant::Property(property) => match property {
+                PropertyVariant::Boolean(_) => todo!(),
+                PropertyVariant::Integer(property) => match value {
+                    Value::Integer(current) => Ok(PropertyState::Int(NumericValue {
+                        current,
+                        range: (property.min.unwrap_or(0))..=(property.max.unwrap_or(0)),
+                    })),
+                    _ => Err(anyhow!("Expected integer value but the current control value was {value:?}"))?,
+                },
+                PropertyVariant::Float(_) => unimplemented!("v4l does not support float properties"),
+                PropertyVariant::Enum(property) => match value {
+                    Value::Integer(current) => Ok(PropertyState::Enum(EnumValue {
                         current,
                         support: property.entries.iter().map(|e| e.discriminant).collect::<Vec<_>>().into(),
-                    }))
+                    })),
+                    _ => Err(anyhow!("Expected integer value but the current control value was {value:?}"))?,
                 },
-                _ => todo!(),
+                PropertyVariant::String(_) => match value {
+                    Value::String(current) => Ok(PropertyState::String(current)),
+                    _ => Err(anyhow!("Expected string value but the current control value was {value:?}"))?,
+                },
+                PropertyVariant::Command => Err(anyhow!("Cannot read a command property"))?,
             },
-            Value::Boolean(current) => Ok(PropertyState::Bool(current)),
-            Value::String(current) => Ok(PropertyState::String(current)),
-            _ => todo!(),
+            NodeVariant::Port => todo!(),
         }
     }
 
