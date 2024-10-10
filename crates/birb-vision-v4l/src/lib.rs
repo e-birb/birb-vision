@@ -1,7 +1,7 @@
 use std::{cell::RefCell, collections::HashMap, error::Error, ops::Deref, path::Path, sync::{Arc, Mutex}, time::{Duration, Instant}};
 
-use birb_vision_core::{anyhow::anyhow, backend::{Backend, DeviceInfo, DeviceInfoEntry}, decoders::yuyv422_to_rgb, image::{DynamicImage, RgbImage}, CameraDevice, DeviceError, DeviceResult, EnumValue, Event, GroupNode, Node, NodeId, NodeVariant, NumericValue, PropertyState, PropertyValue, PropertyVariant, Sample};
-use v4l::{control::Value, io::traits::CaptureStream, video::Capture, Control, Device, FourCC};
+use birb_vision_core::{anyhow::anyhow, backend::{Backend, DeviceInfo, DeviceInfoEntry}, decoders::yuyv422_to_rgb, image::{DynamicImage, RgbImage}, CameraDevice, DeviceError, DeviceResult, Event, GroupNode, Node, NodeId, NodeVariant, PropertyState, PropertyValue, Sample};
+use v4l::{io::traits::CaptureStream, video::Capture, Control, Device, FourCC};
 
 use birb_vision_core::DeviceError::*;
 mod control_compat;
@@ -90,58 +90,23 @@ impl CameraDevice for V4lDevice {
     }
 
     fn get_property(&self, id: &NodeId) -> DeviceResult<PropertyState> {
-        let control = self.dev.lock().unwrap().control(*id.as_i32().ok_or(InvalidNodeId)? as _)?;
-        let value = control.value;
+        let node = self.properties.get(id).ok_or(anyhow!("Control {id:?} not found"))?;
 
-        let node = self.properties.get(id).expect(&format!("Control {id:?} not found"));
+        // read the value from the device
+        let value = self.dev
+            .lock().unwrap()
+            .control(*id.as_i32().ok_or(InvalidNodeId)? as _)?
+            .value;
 
-        match &node.variant {
-            NodeVariant::Group(_) => Err(anyhow!("Cannot read a group node"))?,
-            NodeVariant::Property(property) => match property {
-                PropertyVariant::Boolean(_) => match value {
-                    Value::Boolean(current) => Ok(PropertyState::Bool(current)),
-                    _ => Err(anyhow!("Expected boolean value but the current control value was {value:?}"))?,
-                },
-                PropertyVariant::Integer(property) => match value {
-                    Value::Integer(current) => Ok(PropertyState::Int(NumericValue {
-                        current,
-                        range: (property.min.unwrap_or(0))..=(property.max.unwrap_or(0)),
-                    })),
-                    _ => Err(anyhow!("Expected integer value but the current control value was {value:?}"))?,
-                },
-                PropertyVariant::Float(_) => unimplemented!("v4l does not support float properties"),
-                PropertyVariant::Enum(property) => match value {
-                    Value::Integer(current) => Ok(PropertyState::Enum(EnumValue {
-                        current,
-                        support: property.entries.iter().map(|e| e.discriminant).collect::<Vec<_>>().into(),
-                    })),
-                    _ => Err(anyhow!("Expected integer value but the current control value was {value:?}"))?,
-                },
-                PropertyVariant::String(_) => match value {
-                    Value::String(current) => Ok(PropertyState::String(current)),
-                    _ => Err(anyhow!("Expected string value but the current control value was {value:?}"))?,
-                },
-                PropertyVariant::Command => Err(anyhow!("Cannot read a command property"))?,
-            },
-            NodeVariant::Port => todo!(),
-        }
+        control_compat::node_value_to_property_state(node, value)
     }
 
-    fn set_property(&self, id: &NodeId, value: birb_vision_core::PropertyValue) -> DeviceResult {
-        let dev = self.dev.lock().unwrap(); // TODO handle error
-        let value = match value {
-            PropertyValue::Bool(value) => Value::Boolean(value),
-            PropertyValue::Int(value) => Value::Integer(value),
-            PropertyValue::Float(_) => todo!(), // maybe unsupported?
-            PropertyValue::Enum(value) => Value::Integer(value),
-            PropertyValue::String(value) => Value::String(value.clone()),
-            PropertyValue::Command => Value::None,
-        };
-
-        dev.set_control(Control {
+    fn set_property(&self, id: &NodeId, value: PropertyValue) -> DeviceResult {
+        self.dev.lock().unwrap().set_control(Control {
             id: *id.as_i32().ok_or(InvalidNodeId)? as _,
-            value,
+            value: control_compat::property_value_to_v4l(value)?,
         })?;
+
         Ok(())
     }
 

@@ -1,5 +1,5 @@
-use birb_vision_core::{BoolProperty, EnumEntry, EnumProperty, Node, NodeVariant, NumericProperty, PropertyVariant, Representation, StringProperty};
-use v4l::control::{MenuItem, Type};
+use birb_vision_core::{anyhow::anyhow, BoolProperty, DeviceResult, EnumEntry, EnumProperty, EnumValue, Node, NodeVariant, NumericProperty, NumericValue, PropertyState, PropertyValue, PropertyVariant, Representation, StringProperty};
+use v4l::control::{MenuItem, Type, Value};
 
 
 pub fn parse(control: v4l::control::Description) -> Option<Node> {
@@ -77,4 +77,49 @@ pub fn parse(control: v4l::control::Description) -> Option<Node> {
         node.variant = variant;
         node
     })
+}
+
+pub fn node_value_to_property_state(node: &Node, value: v4l::control::Value) -> DeviceResult<PropertyState> {
+    match &node.variant {
+        NodeVariant::Group(_) => Err(anyhow!("Cannot read a group node"))?,
+        NodeVariant::Property(property) => match property {
+            PropertyVariant::Boolean(_) => match value {
+                Value::Boolean(current) => Ok(PropertyState::Bool(current)),
+                _ => Err(anyhow!("Expected boolean value but the current control value was {value:?}"))?,
+            },
+            PropertyVariant::Integer(property) => match value {
+                Value::Integer(current) => Ok(PropertyState::Int(NumericValue {
+                    current,
+                    range: (property.min.unwrap_or(0))..=(property.max.unwrap_or(0)),
+                })),
+                _ => Err(anyhow!("Expected integer value but the current control value was {value:?}"))?,
+            },
+            PropertyVariant::Float(_) => unimplemented!("v4l does not support float properties"),
+            PropertyVariant::Enum(property) => match value {
+                Value::Integer(current) => Ok(PropertyState::Enum(EnumValue {
+                    current,
+                    support: property.entries.iter().map(|e| e.discriminant).collect::<Vec<_>>().into(),
+                })),
+                _ => Err(anyhow!("Expected integer value but the current control value was {value:?}"))?,
+            },
+            PropertyVariant::String(_) => match value {
+                Value::String(current) => Ok(PropertyState::String(current)),
+                _ => Err(anyhow!("Expected string value but the current control value was {value:?}"))?,
+            },
+            PropertyVariant::Command => Err(anyhow!("Cannot read a command property"))?,
+        },
+        NodeVariant::Port => todo!(),
+    }
+}
+
+pub fn property_value_to_v4l(value: PropertyValue) -> DeviceResult<Value> {
+    let value = match value {
+        PropertyValue::Bool(value) => Value::Boolean(value),
+        PropertyValue::Int(value) => Value::Integer(value),
+        PropertyValue::Float(_) => todo!(), // maybe unsupported?
+        PropertyValue::Enum(value) => Value::Integer(value),
+        PropertyValue::String(value) => Value::String(value.clone()),
+        PropertyValue::Command => Value::None,
+    };
+    Ok(value)
 }
