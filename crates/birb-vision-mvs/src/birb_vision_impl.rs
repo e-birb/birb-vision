@@ -2,10 +2,12 @@
 
 use std::borrow::Cow;
 
-use birb_vision_core::anyhow;
+use birb_vision_core::anyhow::anyhow;
+use birb_vision_core::{NodeVariant, PropertyState, PropertyValue, PropertyVariant};
 
-use birb_vision_core::{CameraDevice, DeviceAccessMode, DeviceError, DeviceResult, EnumValue, Event, Sample, Node, NodeId, NumericValue};
+use birb_vision_core::{CameraDevice, DeviceResult, EnumValue, Event, Sample, Node, NodeId, NumericValue};
 use crate::ctx::convert_info;
+use crate::genicam::{ROOT_ID, USER_ROOT_ID};
 use crate::{genicam::parse_root, mvs_try, prelude::*};
 
 impl CameraDevice for MVDevice {
@@ -13,115 +15,85 @@ impl CameraDevice for MVDevice {
         Ok(convert_info(self.get_info()?))
     }
 
-    fn is_device_accessible(&self, mode: DeviceAccessMode) -> bool {
-        todo!()
-    }
-
-    fn is_open(&self) -> Option<DeviceAccessMode> {
-        todo!()
-    }
-
-    fn open(&self, mode: DeviceAccessMode) -> DeviceResult<()> {
-        MVDevice::open(
-            self,
-            AccessMode::Exclusive,
-            None,
-        ).map_err(|e| e.into())
-    }
-
-    fn close(&self) -> DeviceResult<()> {
-        MVDevice::close(self).map_err(|e| e.into())
-    }
-
-    fn control_description(&self) -> DeviceResult<Node> {
+    fn all_properties(&self) -> DeviceResult<Vec<Node>> {
         let xml = self.get_GenICam_xml()?;
         std::fs::write("mvs.xml", &xml).unwrap();
         let doc = roxmltree::Document::parse(&xml).unwrap();
-        let r = doc.root_element();
-        let node = parse_root(r);
+        let xml_root = doc.root_element();
+        let mut list = vec![];
+        let root = parse_root(xml_root, ROOT_ID, &mut list);
+        list.push(root);
 
-        Ok(node)
-    }
-
-    fn properties(&self) -> DeviceResult<Node> {
-        let e: Box<dyn std::error::Error + 'static> = "a".into();
-
-        self
-            .control_description()?
-            .variant.into_group().unwrap()
-            .children.into_iter()
-            .cloned()
-            .filter_map(|n| n.into_node().ok())
-            .filter(|n| n.variant.is_group())
-            .filter(|g| g.id.as_ref().map(|id| id.as_str() == Some("Root")).unwrap_or(false))
-            .next().ok_or(DeviceError::Other(anyhow::Error::msg("Root node not found")))
+        Ok(list)
     }
 
-    fn get_property(&self, id: &NodeId) -> DeviceResult<birb_vision_core::PropertyState> {
-        
+    fn root_property(&self) -> DeviceResult<NodeId> {
+        Ok(ROOT_ID)
     }
 
-    fn get_bool_property(&self, id: &NodeId) -> DeviceResult<bool> {
-        self.get_bool_value(id.as_str().unwrap()).map_err(|e| e.into())
+    fn user_root_property(&self) -> DeviceResult<NodeId> {
+        Ok(USER_ROOT_ID)
     }
 
-    fn get_int_property(&self, id: &NodeId) -> DeviceResult<NumericValue<i64>> {
-        self
-            .get_int_value(id.as_str().unwrap())
-            .map_err(|e| e.into())
-            .map(|v| NumericValue::<i64> {
-                current: v.current() as _,
-                range: v.min() as _ ..= v.max() as _,
-            })
+    // TODO use this to exclude 
+    //fn properties(&self) -> DeviceResult<Node> {
+    //    let e: Box<dyn std::error::Error + 'static> = "a".into();
+//
+    //    self
+    //        .control_description()?
+    //        .variant.into_group().unwrap()
+    //        .children.into_iter()
+    //        .cloned()
+    //        .filter_map(|n| n.into_node().ok())
+    //        .filter(|n| n.variant.is_group())
+    //        .filter(|g| g.id.as_ref().map(|id| id.as_str() == Some("Root")).unwrap_or(false))
+    //        .next().ok_or(DeviceError::Other(anyhow::Error::msg("Root node not found")))
+    //}
+
+    fn read_property(&self, node: &Node) -> DeviceResult<PropertyState> {
+        let id = node.id.as_str().unwrap();
+        let r = match &node.variant {
+            NodeVariant::Property(variant) => match variant {
+                PropertyVariant::Bool(_) => PropertyState::Bool(self.get_bool_value(id)?),
+                PropertyVariant::Integer(_) => self
+                    .get_int_value(id)
+                    .map(|v| PropertyState::Int(NumericValue::<i64> {
+                        current: v.current() as _,
+                        range: v.min() as _ ..= v.max() as _,
+                    }))?,
+                PropertyVariant::Float(_) => self
+                    .get_float_value(id)
+                    .map(|v| PropertyState::Float(NumericValue::<f64> {
+                        current: v.current() as _,
+                        range: v.min() as _ ..= v.max() as _,
+                    }))?,
+                PropertyVariant::Enum(_) => self
+                    .get_enum_value(id)
+                    .map(|v| PropertyState::Enum(EnumValue {
+                        current: v.current_value() as _,
+                        support: Cow::Owned(v.support().iter().map(|v| *v as i64).collect::<Vec<_>>()),
+                    }))?,
+                PropertyVariant::String(_) => self
+                    .get_string_value(id)
+                    .map(|s| PropertyState::String(s.current_value().to_string()))?,
+                PropertyVariant::Command => Err(anyhow!("Cannot read a command property"))?,
+            },
+            NodeVariant::Group(_) => Err(anyhow!("Cannot read a group property"))?,
+            NodeVariant::Port => todo!(),
+        };
+        Ok(r)
     }
 
-    fn get_float_property(&self, id: &NodeId) -> DeviceResult<NumericValue<f64>> {
-        self
-            .get_float_value(id.as_str().unwrap())
-            .map_err(|e| e.into())
-            .map(|v| NumericValue::<f64> {
-                current: v.current() as _,
-                range: v.min() as _ ..= v.max() as _,
-            })
-    }
-    fn get_enum_property(&self, id: &NodeId) -> DeviceResult<EnumValue> {
-        self
-            .get_enum_value(id.as_str().unwrap())
-            .map_err(|e| e.into())
-            .map(|v| EnumValue {
-                current: v.current_value() as _,
-                support: Cow::Owned(v.support().iter().map(|v| *v as i64).collect::<Vec<_>>()),
-            })
-    }
-
-    fn get_string_property(&self, id: &NodeId) -> DeviceResult<String> {
-        self
-            .get_string_value(id.as_str().unwrap())
-            .map_err(|e| e.into())
-            .map(|s| s.current_value().to_string())
-    }
-
-    fn set_property(&self, id: &NodeId, value: &birb_vision_core::PropertyValue) -> DeviceResult {
-        todo!()
-    }
-
-    fn set_bool_property(&self, id: &NodeId, value: bool) -> DeviceResult {
-        self.set_bool_value(id.as_str().unwrap(), value).map_err(|e| e.into())
-    }
-    fn set_int_property(&self, id: &NodeId, value: i64) -> DeviceResult {
-        self.set_int_value(id.as_str().unwrap(), value as _).map_err(|e| e.into())
-    }
-    fn set_float_property(&self, id: &NodeId, value: f64) -> DeviceResult {
-        self.set_float_value(id.as_str().unwrap(), value as _).map_err(|e| e.into())
-    }
-    fn set_enum_property(&self, id: &NodeId, value: i64) -> DeviceResult {
-        self.set_enum_value(id.as_str().unwrap(), value as _).map_err(|e| e.into())
-    }
-    fn set_string_property(&self, id: &NodeId, value: &str) -> DeviceResult {
-        self.set_string_value(id.as_str().unwrap(), value).map_err(|e| e.into())
-    }
-    fn send_command(&self, id: &NodeId) -> DeviceResult {
-        self.set_command_value(id.as_str().unwrap()).map_err(|e| e.into())
+    fn write_property(&self, node: &Node, value: PropertyValue) -> DeviceResult {
+        let id = node.id.as_str().unwrap();
+        match value {
+            PropertyValue::Bool(value) => self.set_bool_value(id, value).map_err(|e| e.into()),
+            PropertyValue::Integer(value) => self.set_int_value(id, value as _).map_err(|e| e.into()),
+            PropertyValue::Float(value) => self.set_float_value(id, value as _).map_err(|e| e.into()),
+            PropertyValue::Enum(value) => self.set_enum_value(id, value as _).map_err(|e| e.into()),
+            PropertyValue::String(value) => self.set_string_value(id, &value).map_err(|e| e.into()),
+            PropertyValue::Command => self.set_command_value(id).map_err(|e| e.into()),
+        }
     }
 
     fn start_grabbing(&self) -> DeviceResult<()> {

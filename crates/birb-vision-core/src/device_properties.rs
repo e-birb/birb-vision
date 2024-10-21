@@ -107,7 +107,7 @@ impl From<GroupNode> for NodeVariant {
 
 impl From<BoolProperty> for NodeVariant {
     fn from(prop: BoolProperty) -> Self {
-        NodeVariant::Property(PropertyVariant::Boolean(prop))
+        NodeVariant::Property(PropertyVariant::Bool(prop))
     }
 }
 
@@ -120,7 +120,7 @@ impl From<PropertyVariant> for NodeVariant {
 #[derive(Debug, Clone)]
 #[derive(EnumAsInner)]
 pub enum PropertyVariant {
-    Boolean(BoolProperty),
+    Bool(BoolProperty),
     Integer(NumericProperty<i64>),
     Float(NumericProperty<f64>),
     Enum(EnumProperty),
@@ -291,7 +291,7 @@ pub enum PropertyState {
 #[derive(Serialize, Deserialize)]
 pub enum PropertyValue {
     Bool(bool),
-    Int(i64),
+    Integer(i64),
     Float(f64),
     Enum(i64),
     String(String),

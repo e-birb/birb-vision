@@ -1,8 +1,8 @@
 #![doc = include_str!("../README.md")]
 
-use std::{collections::HashMap, ffi::{c_uchar, c_void, CStr}, panic::{catch_unwind, UnwindSafe}, path::Path, pin::Pin, sync::Mutex, time::Duration};
+use std::{ffi::{c_uchar, c_void, CStr}, panic::{catch_unwind, UnwindSafe}, path::Path, pin::Pin, sync::Mutex, time::Duration};
 
-use birb_vision_core::{image::DynamicImage, Node, NodeId};
+use birb_vision_core::image::DynamicImage;
 use device::{AccessMode, DeviceInfo};
 pub use log;
 
@@ -54,8 +54,6 @@ pub struct MVDevice {
     handle: *mut c_void,
 
     callbacks: Pin<Box<Mutex<Callbacks>>>,
-
-    nodes: Option<HashMap<NodeId, Node>>,
 }
 
 struct Callbacks {

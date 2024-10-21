@@ -162,7 +162,7 @@ impl CameraControl {
                     let re = state.filter_re();
                     let mut selected_nodes = HashSet::new();
                     let root_id = &properties.root;
-                    let root = properties.leafs.get(root_id).unwrap();
+                    let (_, root) = properties.leafs.get(root_id).unwrap();
                     root.filter(&properties, &mut selected_nodes, &re);
                     // unnecessary? selected_nodes.insert(root_id.clone());
 
@@ -321,7 +321,7 @@ impl CameraControl {
                                 if let Some(props) = &state.props {
                                     let mut selected = HashSet::new();
                                     let root_id = &props.root;
-                                    let root = props.leafs.get(root_id).unwrap();
+                                    let (_, root) = props.leafs.get(root_id).unwrap();
                                     root.filter(&props, &mut selected, &re);
                                     state.selected = selected;
                                 }
@@ -383,23 +383,24 @@ impl Drop for CameraControl {
 
 struct Properties {
     root: NodeId,
-    leafs: HashMap<NodeId, Property>,
+    leafs: HashMap<NodeId, (Node, Property)>,
 }
 
 impl Properties {
     fn parse(camera: &dyn CameraDevice) -> Self {
-        let mut leafs = HashMap::new();
-        let root = camera.property(&camera.root_property().unwrap()).unwrap();
-        let root = Self::handle_node(root, camera, &mut leafs);
+        let mut leafs: HashMap<NodeId, (Node, Property)> = HashMap::new();
+        let nodes = camera.all_properties().unwrap();
+        for node in nodes {
+            let property = Self::handle_node(&node, camera);
+            leafs.insert(node.id.clone(), (node,property)); // TODO check result
+        }
         Self {
-            root,
+            root: camera.user_root_property().unwrap(),
             leafs,
         }
     }
 
-    fn handle_node(node: Node, camera: &dyn CameraDevice, leafs: &mut HashMap<NodeId, Property>) -> NodeId {
-        let id = node.id.clone();
-
+    fn handle_node(node: &Node, camera: &dyn CameraDevice) -> Property {
         match &node.variant {
             NodeVariant::Group(g) => {
                 let mut group = Group {
@@ -410,25 +411,13 @@ impl Properties {
                     children: Vec::new(),
                 };
                 for c in g.children.iter() {
-                    //match c {
-                    //    Child::Ref(id) => {
-                    //        group.children.push(id.clone());
-                    //    },
-                    //    Child::Node(n) => {
-                    //        if let Some(id) =  {
-                    //            group.children.push(id);
-                    //        }
-                    //    }
-                    //}
-                    let n = camera.property(c).unwrap();
-                    group.children.push(n.id.clone());
-                    Self::handle_node(n, camera, leafs);
+                    group.children.push(c.clone());
                 }
-                leafs.insert(id.clone(), Property::Group(group));
+                Property::Group(group)
             },
             NodeVariant::Property(property) => {
                 match property {
-                    PropertyVariant::Boolean(b) => {
+                    PropertyVariant::Bool(b) => {
                         let prop = BoolProp {
                             basic: BasicProperty {
                                 display_name: node.display_name.as_str().to_string(),
@@ -437,7 +426,7 @@ impl Properties {
                             value: b.value.unwrap_or(false),
                             requested: b.value.unwrap_or(false),
                         };
-                        leafs.insert(id.clone(), Property::Bool(prop));
+                        Property::Bool(prop)
                     },
                     PropertyVariant::Integer(i) => {
                         let prop = IntProp {
@@ -452,7 +441,7 @@ impl Properties {
                             max: i.max.unwrap_or(0),
                             unit: i.unit.as_ref().map(|s| s.to_string()),
                         };
-                        leafs.insert(id.clone(), Property::Int(prop));
+                        Property::Integer(prop)
                     },
                     PropertyVariant::Float(f) => {
                         let prop = FloatProp {
@@ -467,7 +456,7 @@ impl Properties {
                             max: f.max.unwrap_or(0.0),
                             unit: f.unit.as_ref().map(|s| s.to_string()),
                         };
-                        leafs.insert(id.clone(), Property::Float(prop));
+                        Property::Float(prop)
                     },
                     PropertyVariant::Enum(e) => {
                         let prop = EnumProp {
@@ -479,7 +468,7 @@ impl Properties {
                             requested: e.value.unwrap_or(0),
                             entries: e.entries.clone().into_owned(),
                         };
-                        leafs.insert(id.clone(), Property::Enum(prop));
+                        Property::Enum(prop)
                     },
                     PropertyVariant::String(s) => {
                         let prop = StringProp {
@@ -491,7 +480,7 @@ impl Properties {
                             requested: "TODO".to_string(),
                             max_length: s.max_length as _, // TODO
                         };
-                        leafs.insert(id.clone(), Property::String(prop));
+                        Property::String(prop)
                     },
                     PropertyVariant::Command => {
                         let prop = CommandProp {
@@ -501,26 +490,24 @@ impl Properties {
                             },
                             requested: false,
                         };
-                        leafs.insert(id.clone(), Property::Command(prop));
+                        Property::Command(prop)
                     },
                 }
             }
             _ => todo!(),
         }
-
-        id
     }
 
     pub fn update_node(&mut self, camera: &dyn CameraDevice, id: &NodeId) {
-        let Some(node) = self.leafs.get_mut(id) else {
+        let Some((node, property)) = self.leafs.get_mut(id) else {
             log::error!("Node not found: {id:?}");
             return;
         };
 
-        match node {
+        match property {
             Property::Group(_) => {},
             Property::Bool(b) => {
-                let v = match camera.get_property(id) {
+                let v = match camera.read_property(node) {
                     Ok(v) => v,
                     Err(e) => {
                         log::error!("Error reading BOOL property: {id:?}: {e}");
@@ -536,8 +523,8 @@ impl Properties {
                 };
                 b.set_value(v);
             },
-            Property::Int(i) => {
-                let v = match camera.get_property(id) {
+            Property::Integer(i) => {
+                let v = match camera.read_property(node) {
                     Ok(v) => v,
                     Err(e) => {
                         log::error!("Error reading INT property: {id:?}: {e}");
@@ -556,7 +543,7 @@ impl Properties {
                 i.max = *v.range.end();
             },
             Property::Float(f) => {
-                let v = match camera.get_property(id) {
+                let v = match camera.read_property(node) {
                     Ok(v) => v,
                     Err(e) => {
                         log::error!("Error reading FLOAT property: {id:?}: {e}");
@@ -575,7 +562,7 @@ impl Properties {
                 f.max = *v.range.end();
             },
             Property::Enum(e) => {
-                let v = match camera.get_property(id) {
+                let v = match camera.read_property(node) {
                     Ok(v) => v,
                     Err(e) => {
                         log::error!("Error reading ENUM property: {id:?}: {e}");
@@ -593,7 +580,7 @@ impl Properties {
                 e.set_value(v.current);
             },
             Property::String(e) => {
-                let v = match camera.get_property(id) {
+                let v = match camera.read_property(node) {
                     Ok(v) => v,
                     Err(e) => {
                         log::error!("Error reading STRING property: {id:?}: {e}");
@@ -621,12 +608,12 @@ impl Properties {
     }
 
     pub fn write_node(&mut self, camera: &dyn CameraDevice, id: &NodeId, force: bool)-> bool {
-        let Some(node) = self.leafs.get_mut(id) else {
+        let Some((node, property)) = self.leafs.get_mut(id) else {
             log::error!("Node not found: {id:?}");
             return false;
         };
 
-        match node {
+        match property {
             Property::Group(_) => {
                 return false;
             },
@@ -637,18 +624,18 @@ impl Properties {
                 let v = b.requested;
                 // HACK: remove and proper erro handling in case of write/read failures:
                 b.requested = b.value;
-                if let Err(e) = camera.set_property(id, PropertyValue::Bool(v)) {
+                if let Err(e) = camera.write_property(node, PropertyValue::Bool(v)) {
                     log::error!("Error writing BOOL property: {id:?}: {e}");
                 }
             },
-            Property::Int(i) => {
+            Property::Integer(i) => {
                 if !force && i.value == i.requested {
                     return false;
                 }
                 let v = i.requested;
                 // HACK: remove and proper erro handling in case of write/read failures:
                 i.requested = i.value;
-                if let Err(e) = camera.set_property(id, PropertyValue::Int(v)) {
+                if let Err(e) = camera.write_property(node, PropertyValue::Integer(v)) {
                     log::error!("Error writing INT property: {id:?}: {e}");
                 }
             },
@@ -659,7 +646,7 @@ impl Properties {
                 let v = f.requested;
                 // HACK: remove and proper erro handling in case of write/read failures:
                 f.requested = f.value;
-                if let Err(e) = camera.set_property(id, PropertyValue::Float(v)) {
+                if let Err(e) = camera.write_property(node, PropertyValue::Float(v)) {
                     log::error!("Error writing FLOAT property: {id:?}: {e}");
                 }
             },
@@ -670,7 +657,7 @@ impl Properties {
                 let v = e.requested;
                 // HACK: remove and proper erro handling in case of write/read failures:
                 e.requested = e.value;
-                if let Err(e) = camera.set_property(id, PropertyValue::Enum(v)) {
+                if let Err(e) = camera.write_property(node, PropertyValue::Enum(v)) {
                     log::error!("Error writing ENUM property: {id:?}: {e}");
                 }
             },
@@ -681,7 +668,7 @@ impl Properties {
                 let v = e.requested.clone();
                 // HACK: remove and proper erro handling in case of write/read failures:
                 e.requested = e.value.clone();
-                if let Err(e) = camera.set_property(id, PropertyValue::String(v)) {
+                if let Err(e) = camera.write_property(node, PropertyValue::String(v)) {
                     log::error!("Error writing STRING property: {id:?}: {e}");
                 }
             },
@@ -690,7 +677,7 @@ impl Properties {
                     return false;
                 }
                 c.requested = false;
-                if let Err(e) = camera.set_property(id, PropertyValue::Command) {
+                if let Err(e) = camera.write_property(node, PropertyValue::Command) {
                     log::error!("Error sending COMMAND property: {id:?}: {e}");
                 }
             },
@@ -708,7 +695,7 @@ impl Properties {
     }
 
     pub fn show_property(&mut self, ui: &mut Ui, selected: &HashSet<NodeId>, id: &NodeId, sender: &Sender<Command>) {
-        let Some(property) = self.leafs.get_mut(id) else {
+        let Some((node, property)) = self.leafs.get_mut(id) else {
             ui.label(RichText::new(format!("&{:?}", id)).color(Color32::RED));
             return;
         };
@@ -720,7 +707,7 @@ impl Properties {
                 Self::show_group(self, ui, selected, &display_name, children, sender);
             },
             Property::Bool(b) => Self::show_bool(ui, b, sender),
-            Property::Int(i) => Self::show_int(ui, i, sender),
+            Property::Integer(i) => Self::show_int(ui, i, sender),
             Property::Float(f) => Self::show_float(ui, f, sender),
             Property::Enum(e) => Self::show_enum(ui, e, sender),
             Property::String(s) => Self::show_string(ui, s, sender),
@@ -880,7 +867,7 @@ impl Properties {
 enum Property {
     Group(Group),
     Bool(BoolProp),
-    Int(IntProp),
+    Integer(IntProp),
     Float(FloatProp),
     Enum(EnumProp),
     String(StringProp),
@@ -917,7 +904,7 @@ impl Property {
         let mut any_child_selected = false;
         for child_id in self.children() {
             //println!("child id: {:?}", child_id);
-            let Some(child) = props.leafs.get(child_id) else {
+            let Some((_, child)) = props.leafs.get(child_id) else {
                 continue;
             };
             let selected = child.filter(props, selected_set, re_for_child);
@@ -938,7 +925,7 @@ impl Deref for Property {
         match self {
             Property::Group(g) => &g.basic,
             Property::Bool(b) => &b.basic,
-            Property::Int(i) => &i.basic,
+            Property::Integer(i) => &i.basic,
             Property::Float(f) => &f.basic,
             Property::Enum(e) => &e.basic,
             Property::String(s) => &s.basic,
@@ -952,7 +939,7 @@ impl DerefMut for Property {
         match self {
             Property::Group(g) => &mut g.basic,
             Property::Bool(b) => &mut b.basic,
-            Property::Int(i) => &mut i.basic,
+            Property::Integer(i) => &mut i.basic,
             Property::Float(f) => &mut f.basic,
             Property::Enum(e) => &mut e.basic,
             Property::String(s) => &mut s.basic,

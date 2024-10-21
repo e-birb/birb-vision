@@ -8,13 +8,17 @@ pub trait CameraDevice {
     fn get_device_info(&self) -> DeviceResult<DeviceInfo>;
 
     /// All controls
-    fn property(&self, id: &NodeId) -> DeviceResult<Node>;
+    fn all_properties(&self) -> DeviceResult<Vec<Node>>;
 
-    /// Root of the interesting properties to be exposed to the user
     fn root_property(&self) -> DeviceResult<NodeId>;
 
-    fn get_property(&self, id: &NodeId) -> DeviceResult<PropertyState>;
-    fn set_property(&self, id: &NodeId, value: PropertyValue) -> DeviceResult;
+    /// Root of the interesting properties to be exposed to the user
+    fn user_root_property(&self) -> DeviceResult<NodeId> {
+        self.root_property()
+    }
+
+    fn read_property(&self, node: &Node) -> DeviceResult<PropertyState>;
+    fn write_property(&self, node: &Node, value: PropertyValue) -> DeviceResult;
 
     fn start_grabbing(&self) -> DeviceResult;
     fn stop_grabbing(&self) -> DeviceResult; // TODO a stream object

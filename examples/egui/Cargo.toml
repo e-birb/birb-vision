@@ -13,7 +13,7 @@ env_logger = "0.11.5"
 # Optional dependencies
 
 [target.'cfg(unix)'.dependencies]
-birb-vision = { path = "../../crates/birb-vision", features = ["v4l"] }
+birb-vision = { path = "../../crates/birb-vision", features = ["mvs", "v4l"] }
 
 [target.'cfg(windows)'.dependencies]
 birb-vision = { path = "../../crates/birb-vision", features = ["mvs"] }

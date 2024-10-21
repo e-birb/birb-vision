@@ -1,6 +1,6 @@
 use std::{cell::RefCell, collections::HashMap, error::Error, ops::Deref, path::Path, sync::{Arc, Mutex}, time::{Duration, Instant}};
 
-use birb_vision_core::{anyhow::anyhow, backend::{Backend, DeviceInfo, DeviceInfoEntry}, decoders::yuyv422_to_rgb, image::{DynamicImage, RgbImage}, CameraDevice, DeviceError, DeviceResult, Event, GroupNode, Node, NodeId, NodeVariant, PropertyState, PropertyValue, Sample};
+use birb_vision_core::{anyhow::anyhow, backend::{Backend, DeviceInfo, DeviceInfoEntry}, decoders::yuyv422_to_rgb, image::{DynamicImage, RgbImage}, CameraDevice, DeviceResult, Event, GroupNode, Node, NodeId, NodeVariant, PropertyState, PropertyValue, Sample};
 use v4l::{io::traits::CaptureStream, video::Capture, Control, Device, FourCC};
 
 use birb_vision_core::DeviceError::*;
@@ -81,15 +81,21 @@ impl CameraDevice for V4lDevice {
         Ok(self.info.deref().clone())
     }
 
-    fn property(&self, id: &NodeId) -> DeviceResult<Node> {
-        self.properties.get(id).cloned().ok_or(DeviceError::InvalidNodeId)
+    fn all_properties(&self) -> DeviceResult<Vec<Node>> {
+        Ok(self
+            .properties
+            .iter()
+            .map(|(_, v)| v.clone())
+            .collect()
+        )
     }
 
     fn root_property(&self) -> DeviceResult<NodeId> {
         Ok(self.root_property.clone())
     }
 
-    fn get_property(&self, id: &NodeId) -> DeviceResult<PropertyState> {
+    fn read_property(&self, node: &Node) -> DeviceResult<PropertyState> {
+        let id = &node.id; // TODO since now we take node as a parameter, the V4lDevice::properties machinery is not necessary anymore
         let node = self.properties.get(id).ok_or(anyhow!("Control {id:?} not found"))?;
 
         // read the value from the device
@@ -101,7 +107,8 @@ impl CameraDevice for V4lDevice {
         control_compat::node_value_to_property_state(node, value)
     }
 
-    fn set_property(&self, id: &NodeId, value: PropertyValue) -> DeviceResult {
+    fn write_property(&self, node: &Node, value: PropertyValue) -> DeviceResult {
+        let id = &node.id; // TODO since now we take node as a parameter, the V4lDevice::properties machinery is not necessary anymore
         self.dev.lock().unwrap().set_control(Control {
             id: *id.as_i32().ok_or(InvalidNodeId)? as _,
             value: control_compat::property_value_to_v4l(value)?,

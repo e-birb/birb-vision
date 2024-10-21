@@ -475,6 +475,7 @@ impl Backend for MVContext {
             let birb_info = convert_info(dev_info.clone());
             if birb_info.other.get("serial_number").map(|x| x.value.clone()).unwrap_or_default() == serial {
                 let dev = dev_info.into_device(false)?;
+                dev.open(AccessMode::Exclusive, None)?;
                 return Ok(Some(Box::new(dev)));
             }
         }

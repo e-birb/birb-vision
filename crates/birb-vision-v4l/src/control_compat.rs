@@ -23,7 +23,7 @@ pub fn parse(control: v4l::control::Description) -> Option<Node> {
         Type::Boolean => {
             let mut variant = BoolProperty::default();
             variant.default = Some(control.default != 0);
-            Some(PropertyVariant::Boolean(variant).into())
+            Some(PropertyVariant::Bool(variant).into())
         },
         Type::Menu => {
             let mut variant = EnumProperty::default();
@@ -83,7 +83,7 @@ pub fn node_value_to_property_state(node: &Node, value: v4l::control::Value) -> 
     match &node.variant {
         NodeVariant::Group(_) => Err(anyhow!("Cannot read a group node"))?,
         NodeVariant::Property(property) => match property {
-            PropertyVariant::Boolean(_) => match value {
+            PropertyVariant::Bool(_) => match value {
                 Value::Boolean(current) => Ok(PropertyState::Bool(current)),
                 _ => Err(anyhow!("Expected boolean value but the current control value was {value:?}"))?,
             },
@@ -115,7 +115,7 @@ pub fn node_value_to_property_state(node: &Node, value: v4l::control::Value) -> 
 pub fn property_value_to_v4l(value: PropertyValue) -> DeviceResult<Value> {
     let value = match value {
         PropertyValue::Bool(value) => Value::Boolean(value),
-        PropertyValue::Int(value) => Value::Integer(value),
+        PropertyValue::Integer(value) => Value::Integer(value),
         PropertyValue::Float(_) => todo!(), // maybe unsupported?
         PropertyValue::Enum(value) => Value::Integer(value),
         PropertyValue::String(value) => Value::String(value.clone()),

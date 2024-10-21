@@ -1,32 +1,43 @@
-use birb_vision_core::{AccessMode, BoolProperty, Child, EnumEntry, EnumProperty, GroupNode, Node, NodeVariant, NumericProperty, PropertyVariant, Representation, StringProperty, Visibility};
+use std::borrow::Cow;
+
+use birb_vision_core::{AccessMode, BoolProperty, EnumEntry, EnumProperty, GroupNode, Node, NodeId, NodeVariant, NumericProperty, PropertyVariant, Representation, StringProperty, Visibility};
 use roxmltree::Node as XmlNode;
 
-fn parse_child_or_property(xml_node: XmlNode, current: &mut Node) -> Option<Child> {
-    fn todo_node(xml_node: XmlNode) -> Option<Child> {
+pub const ROOT_ID: NodeId = NodeId::String(Cow::Borrowed("Camera actual Root"));
+pub const USER_ROOT_ID: NodeId = NodeId::String(Cow::Borrowed("Root"));
+
+fn parse_child_or_property(xml_node: XmlNode, current: &mut Node, list: &mut Vec<Node>) -> Option<NodeId> {
+    fn todo_node(xml_node: XmlNode) -> Option<NodeId> {
         log::warn!("TODO: {}", xml_node.tag_name().name());
         None
     }
 
+    let append = |node: Node, list: &mut Vec<Node>| {
+        let id = node.id.clone();
+        list.push(node);
+        id
+    };
+
     match xml_node.tag_name().name() {
         "" => None,
-        "RegisterDescription" => Some(Child::Node(parse_root(xml_node))),
-        "Category" | "Group" => Some(Child::Node(parse_group(xml_node))),
-        "pFeature" => Some(Child::Ref(xml_node.text().unwrap().to_string().into())),
-        "Port" => Some(Child::Node(parse_port(xml_node))),
-        "Integer" => Some(Child::Node(parse_integer(xml_node))),
-        "Float" => Some(Child::Node(parse_float(xml_node))),
+        "RegisterDescription" => Some(append(parse_root(xml_node, ROOT_ID, list), list)),
+        "Category" | "Group" => Some(append(parse_group(xml_node, list), list)),
+        "pFeature" => Some(NodeId::String(xml_node.text().unwrap().to_string().into())),
+        "Port" => Some(append(parse_port(xml_node, list), list)),
+        "Integer" => Some(append(parse_integer(xml_node, list), list)),
+        "Float" => Some(append(parse_float(xml_node, list), list)),
         "IntReg" => todo_node(xml_node),
         "StructReg" => todo_node(xml_node),
-        "Enumeration" => Some(Child::Node(parse_enum(xml_node))),
-        "StringReg" => Some(Child::Node(parse_string(xml_node))),
-        "Boolean" => Some(Child::Node(parse_bool(xml_node))),
+        "Enumeration" => Some(append(parse_enum(xml_node, list), list)),
+        "StringReg" => Some(append(parse_string(xml_node, list), list)),
+        "Boolean" => Some(append(parse_bool(xml_node, list), list)),
         //"Command" => Some(Child::Node(parse_command(xml_node))),
         "MaskedIntReg" => todo_node(xml_node),
         "IntSwissKnife" => todo_node(xml_node),
         "SwissKnife" => todo_node(xml_node),
         "Converter" => todo_node(xml_node),
         "Register" => todo_node(xml_node), // !!!
-        "Command" => Some(Child::Node(parse_command(xml_node))),
+        "Command" => Some(append(parse_command(xml_node, list), list)),
 
         "ToolTip" => {
             current.tooltip = Some(xml_node.text().unwrap().to_string().into());
@@ -114,12 +125,12 @@ fn parse_child_or_property(xml_node: XmlNode, current: &mut Node) -> Option<Chil
     }
 }
 
-pub fn parse_root(xml_node: XmlNode) -> Node {
-    let mut node = Node::new("Device");
+pub fn parse_root(xml_root: XmlNode, root_id: NodeId, list: &mut Vec<Node>) -> Node {
+    let mut node = Node::new_with_id(root_id);
 
     let mut children = Vec::new();
-    for child in xml_node.children() {
-        if let Some(child_node) = parse_child_or_property(child, &mut node) {
+    for child in xml_root.children() {
+        if let Some(child_node) = parse_child_or_property(child, &mut node, list) {
             children.push(child_node);
         }
     }
@@ -127,17 +138,18 @@ pub fn parse_root(xml_node: XmlNode) -> Node {
     node.variant = GroupNode {
         children: children.into(),
     }.into();
+
     node
 }
 
-fn parse_group(xml_node: XmlNode) -> Node {
+fn parse_group(xml_node: XmlNode, list: &mut Vec<Node>) -> Node {
     let name = xml_node.attribute("Name").map(|n| n.to_string()).unwrap_or_else(|| "comment=".to_string() + &xml_node.attribute("Comment").unwrap()).to_string();
     println!("Group NAME: {}", name);
     let mut node = Node::new_with_id(name);
 
     let mut children = Vec::new();
     for child in xml_node.children() {
-        if let Some(child_node) = parse_child_or_property(child, &mut node) {
+        if let Some(child_node) = parse_child_or_property(child, &mut node, list) {
             children.push(child_node);
         }
     }
@@ -149,7 +161,7 @@ fn parse_group(xml_node: XmlNode) -> Node {
     node
 }
 
-fn parse_port(xml_node: XmlNode) -> Node {
+fn parse_port(xml_node: XmlNode, list: &mut Vec<Node>) -> Node {
     let name = xml_node.attribute("Name").unwrap().to_string();
     let mut node = Node::new_with_id(name);
 
@@ -163,7 +175,7 @@ fn parse_port(xml_node: XmlNode) -> Node {
             _ => {},
         }
 
-        if parse_child_or_property(child, &mut node).is_some() {
+        if parse_child_or_property(child, &mut node, list).is_some() {
             panic!("Port cannot have children");
         }
     }
@@ -184,7 +196,7 @@ fn parse_int_value(xml_node: XmlNode) -> i64 {
     parse_int_value_from_string(string)
 }
 
-pub fn parse_integer(xml_node: XmlNode) -> Node {
+pub fn parse_integer(xml_node: XmlNode, list: &mut Vec<Node>) -> Node {
     let name = xml_node.attribute("Name").unwrap().to_string();
     let is_exposure = name == "ExposureTime";
     let mut node = Node::new_with_id(name);
@@ -246,7 +258,7 @@ pub fn parse_integer(xml_node: XmlNode) -> Node {
             _ => {},
         }
 
-        if parse_child_or_property(child, &mut node).is_some() {
+        if parse_child_or_property(child, &mut node, list).is_some() {
             panic!("Integer cannot have children");
         }
     }
@@ -255,7 +267,7 @@ pub fn parse_integer(xml_node: XmlNode) -> Node {
     node
 }
 
-pub fn parse_float(xml_node: XmlNode) -> Node {
+pub fn parse_float(xml_node: XmlNode, list: &mut Vec<Node>) -> Node {
     let name = xml_node.attribute("Name").unwrap().to_string();
     let is_exposure = name == "ExposureTime";
     let mut node = Node::new_with_id(name);
@@ -317,7 +329,7 @@ pub fn parse_float(xml_node: XmlNode) -> Node {
             _ => {},
         }
 
-        if parse_child_or_property(child, &mut node).is_some() {
+        if parse_child_or_property(child, &mut node, list).is_some() {
             panic!("Integer cannot have children");
         }
     }
@@ -326,7 +338,7 @@ pub fn parse_float(xml_node: XmlNode) -> Node {
     node
 }
 
-pub fn parse_enum(xml_node: XmlNode) -> Node {
+pub fn parse_enum(xml_node: XmlNode, list: &mut Vec<Node>) -> Node {
     let name = xml_node.attribute("Name").unwrap().to_string();
     let mut node = Node::new_with_id(name);
     let mut variant = EnumProperty {
@@ -362,7 +374,7 @@ pub fn parse_enum(xml_node: XmlNode) -> Node {
             _ => {},
         }
 
-        if parse_child_or_property(child, &mut node).is_some() {
+        if parse_child_or_property(child, &mut node, list).is_some() {
             panic!("Integer cannot have children");
         }
     }
@@ -372,7 +384,7 @@ pub fn parse_enum(xml_node: XmlNode) -> Node {
     node
 }
 
-fn parse_string(xml_node: XmlNode) -> Node {
+fn parse_string(xml_node: XmlNode, list: &mut Vec<Node>) -> Node {
     let name = xml_node.attribute("Name").unwrap().to_string();
     let mut node = Node::new_with_id(name);
     let mut prop = StringProperty::default();
@@ -386,7 +398,7 @@ fn parse_string(xml_node: XmlNode) -> Node {
             _ => {},
         }
 
-        if parse_child_or_property(child, &mut node).is_some() {
+        if parse_child_or_property(child, &mut node, list).is_some() {
             panic!("Integer cannot have children");
         }
     }
@@ -395,7 +407,7 @@ fn parse_string(xml_node: XmlNode) -> Node {
     node
 }
 
-fn parse_bool(xml_node: XmlNode) -> Node {
+fn parse_bool(xml_node: XmlNode, list: &mut Vec<Node>) -> Node {
     let name = xml_node.attribute("Name").unwrap().to_string();
     let mut node = Node::new_with_id(name);
     let mut prop = BoolProperty::default();
@@ -423,16 +435,16 @@ fn parse_bool(xml_node: XmlNode) -> Node {
             _ => {},
         }
 
-        if parse_child_or_property(child, &mut node).is_some() {
+        if parse_child_or_property(child, &mut node, list).is_some() {
             panic!("Integer cannot have children");
         }
     }
 
-    node.variant = NodeVariant::Property(PropertyVariant::Boolean(prop));
+    node.variant = NodeVariant::Property(PropertyVariant::Bool(prop));
     node
 }
 
-fn parse_command(xml_node: XmlNode) -> Node {
+fn parse_command(xml_node: XmlNode, list: &mut Vec<Node>) -> Node {
     let name = xml_node.attribute("Name").unwrap().to_string();
     let mut node = Node::new_with_id(name);
 
@@ -457,7 +469,7 @@ fn parse_command(xml_node: XmlNode) -> Node {
             _ => {},
         }
 
-        if parse_child_or_property(child, &mut node).is_some() {
+        if parse_child_or_property(child, &mut node, list).is_some() {
             panic!("Integer cannot have children");
         }
     }
