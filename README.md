@@ -3,6 +3,8 @@
 
 ## Crates
 
+See #7
+
 - [`birb-vision`](./crates/birb-vision/): the core crate
 - **interfaces**: some provided interfaces
   - [`birb-vision-fake`](./crates/birb-vision-icube/): fake cameras for testing
