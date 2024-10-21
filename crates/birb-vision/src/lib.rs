@@ -24,5 +24,14 @@ pub fn all_backends() -> BackendRegistry {
         .with_display_name("Video4Linux (v4l)")
     ).unwrap();
 
+    #[cfg(feature = "icube")]
+    set.register(
+        BackendPackage::from_builder_fn(|| {
+            let ctx = birb_vision_icube::iCubeContext::new()?;
+            Ok(ctx)
+        })
+        .with_display_name("Hikrobot (MVS SDK)")
+    ).unwrap();
+
     set
 }

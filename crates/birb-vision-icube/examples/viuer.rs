@@ -1,11 +1,11 @@
 use birb_vision_icube::{iCubeContext, CallbackEventType};
-use birb_vision_core::{CameraDeviceEx, CameraDevice};
+use birb_vision_core::CameraDevice;
 
 
 fn main() {
-    //env_logger::builder()
-    //    .filter_level(log::LevelFilter::Debug)
-    //    .init();
+    env_logger::builder()
+        .filter_level(log::LevelFilter::Debug)
+        .init();
 
     let cx = iCubeContext::new()
         .expect("failed to create iCube context, is the SDK installed?");
@@ -23,8 +23,10 @@ fn main() {
             }));
 
             camera.start_grabbing().expect("failed to start grabbing");
+            println!("grabbing started...");
             std::thread::sleep(std::time::Duration::from_secs(5));
-            //camera.stop_grabbing().expect("failed to stop grabbing");
+            camera.stop_grabbing().expect("failed to stop grabbing");
+            println!("grabbing stopped...");
         }
     });
 }

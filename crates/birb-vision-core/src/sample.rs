@@ -1,7 +1,7 @@
 use std::{borrow::Cow, fmt::Debug};
 
 use enum_as_inner::EnumAsInner;
-use image::{DynamicImage, FlatSamples};
+use image::DynamicImage;
 use serde::{Deserialize, Serialize};
 
 mod pixel_format;
@@ -31,12 +31,6 @@ pub use pixel_format::PixelFormat;
 pub enum Sample<'a> {
     /// An owned image
     Image(DynamicImage),
-
-    /// A flat [`image`] sample
-    ///
-    /// # Notes
-    /// - see 
-    FlatImageSample(FlatSamples<Cow<'a, [u8]>>),
 
     /// A flat sample (more generic than [`Sample::FlatImageSample`])
     FlatSample(FlatSample<Cow<'a, [u8]>>),

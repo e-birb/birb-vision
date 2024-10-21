@@ -199,7 +199,7 @@ pub trait Backend: 'static {
     }
 
     /// Enumerate all devices.
-    fn enumerate(&self, transport_layers: &[String]) -> Result<Vec<DeviceInfo>, Box<dyn Error>>;
+    fn enumerate(&self, transport_layers: &[String]) -> anyhow::Result<Vec<DeviceInfo>>;
 
     /// Find a device by its information.
     ///
@@ -209,7 +209,7 @@ pub trait Backend: 'static {
     /// # Notes
     /// The default implementation actually calls [`Backend::create`] and returns the device information,
     /// but implementations should provide a more efficient way to find a device.
-    fn find(&self, info: &DeviceInfo) -> Result<Vec<DeviceInfo>, Box<dyn Error>> {
+    fn find(&self, info: &DeviceInfo) -> anyhow::Result<Vec<DeviceInfo>> {
         let device = self.create(info)?;
         if let Some(device) = device {
             let info = device.get_device_info()?;
@@ -222,7 +222,7 @@ pub trait Backend: 'static {
     /// Try to create a device.
     ///
     /// If no corresponding device is found, this function should return `Ok(None)`.
-    fn create(&self, info: &DeviceInfo) -> Result<Option<Box<dyn CameraDevice>>, Box<dyn Error>>;
+    fn create(&self, info: &DeviceInfo) -> anyhow::Result<Option<Box<dyn CameraDevice>>>;
 }
 
 pub trait GenericDeviceInfo {

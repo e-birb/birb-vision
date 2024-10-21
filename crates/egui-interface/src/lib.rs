@@ -1,6 +1,6 @@
 use std::{collections::{HashMap, HashSet}, ops::{Deref, DerefMut}, sync::{mpsc::Sender, Arc, Weak}, time::Instant};
 
-use birb_vision::core::{backend::DeviceInfo, AccessMode, CameraDevice, EnumEntry, Event, Node, NodeId, NodeVariant, PropertyState, PropertyValue, PropertyVariant, Representation, Sample};
+use birb_vision::core::{backend::DeviceInfo, image::{DynamicImage, RgbImage}, AccessMode, CameraDevice, EnumEntry, Event, Node, NodeId, NodeVariant, PropertyState, PropertyValue, PropertyVariant, Representation, Sample};
 use egui::{load::SizedTexture, mutex::Mutex, Color32, ColorImage, DragValue, FontData, FontDefinitions, FontFamily, Grid, Image, ImageData, RichText, ScrollArea, Slider, TextBuffer, TextureFilter, TextureHandle, TextureOptions, Ui, Window};
 use material_icons::Icon;
 use regex::Regex;
@@ -138,8 +138,15 @@ impl CameraControl {
                                 let Ok(frame) = frame else {
                                     return;
                                 };
-                                let Sample::Image(img) = frame else {
-                                    todo!()
+                                let img: DynamicImage = match frame {
+                                    Sample::Image(img) => img,
+                                    Sample::FlatSample(img) => {
+                                        // TODO better, just a temporary shit
+                                        let buf = img.buffer.into_owned();
+                                        let rgb = RgbImage::from_vec(img.width, img.height, buf).unwrap();
+                                        DynamicImage::ImageRgb8(rgb)
+                                    },
+                                    _ => todo!(),
                                 };
                                 let img = img.to_rgb8();
                                 let img = ColorImage::from_rgb([img.width() as usize, img.height() as usize], &img.into_raw());
@@ -161,10 +168,11 @@ impl CameraControl {
                 state.on_state_mut(|state| {
                     let re = state.filter_re();
                     let mut selected_nodes = HashSet::new();
-                    let root_id = &properties.root;
-                    let (_, root) = properties.leafs.get(root_id).unwrap();
-                    root.filter(&properties, &mut selected_nodes, &re);
-                    // unnecessary? selected_nodes.insert(root_id.clone());
+                    if let Some(root_id) = &properties.root {
+                        let (_, root) = properties.leafs.get(root_id).unwrap();
+                        root.filter(&properties, &mut selected_nodes, &re);
+                        // unnecessary? selected_nodes.insert(root_id.clone());
+                    }
 
                     state.props = properties.into();
                     state.selected = selected_nodes;
@@ -320,10 +328,11 @@ impl CameraControl {
                                 let re = state.filter_re();
                                 if let Some(props) = &state.props {
                                     let mut selected = HashSet::new();
-                                    let root_id = &props.root;
-                                    let (_, root) = props.leafs.get(root_id).unwrap();
-                                    root.filter(&props, &mut selected, &re);
-                                    state.selected = selected;
+                                    if let Some(root_id) = &props.root {
+                                        let (_, root) = props.leafs.get(root_id).unwrap();
+                                        root.filter(&props, &mut selected, &re);
+                                        state.selected = selected;
+                                    }
                                 }
                             }
                             if !state.filter_error.is_empty() {
@@ -340,8 +349,9 @@ impl CameraControl {
                             let selected = state.selected.clone();
                             if let Some(props) = state.props.as_mut() {
                                 //println!("OK 1");
-                                let root = props.root.clone();
-                                props.show_property(ui, &selected, &root, &tx);
+                                if let Some(root) = props.root.clone() {
+                                    props.show_property(ui, &selected, &root, &tx);
+                                }
                             }
                         });
                     });
@@ -382,7 +392,7 @@ impl Drop for CameraControl {
 }
 
 struct Properties {
-    root: NodeId,
+    root: Option<NodeId>,
     leafs: HashMap<NodeId, (Node, Property)>,
 }
 

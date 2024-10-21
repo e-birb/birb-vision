@@ -1,6 +1,6 @@
 use std::{cell::RefCell, collections::HashMap, error::Error, ops::Deref, path::Path, sync::{Arc, Mutex}, time::{Duration, Instant}};
 
-use birb_vision_core::{anyhow::anyhow, backend::{Backend, DeviceInfo, DeviceInfoEntry}, decoders::yuyv422_to_rgb, image::{DynamicImage, RgbImage}, CameraDevice, DeviceResult, Event, GroupNode, Node, NodeId, NodeVariant, PropertyState, PropertyValue, Sample};
+use birb_vision_core::{anyhow::{self, anyhow}, backend::{Backend, DeviceInfo, DeviceInfoEntry}, decoders::yuyv422_to_rgb, image::{DynamicImage, RgbImage}, CameraDevice, DeviceResult, Event, GroupNode, Node, NodeId, NodeVariant, PropertyState, PropertyValue, Sample};
 use v4l::{io::traits::CaptureStream, video::Capture, Control, Device, FourCC};
 
 use birb_vision_core::DeviceError::*;
@@ -211,7 +211,7 @@ impl Backend for V4lContext {
         vec![]
     }
 
-    fn enumerate(&self, _transport_layers: &[String]) -> Result<Vec<DeviceInfo>, Box<dyn Error>> {
+    fn enumerate(&self, _transport_layers: &[String]) -> anyhow::Result<Vec<DeviceInfo>> {
         Ok(
             v4l::context::enum_devices()
                 .into_iter()
@@ -221,7 +221,7 @@ impl Backend for V4lContext {
             )
     }
 
-    fn create(&self, info: &DeviceInfo) -> Result<Option<Box<dyn CameraDevice>>, Box<dyn Error>> {
+    fn create(&self, info: &DeviceInfo) -> anyhow::Result<Option<Box<dyn CameraDevice>>> {
         for node in v4l::context::enum_devices() {
             if node.path().to_string_lossy() == info.other.get("path").unwrap().value.as_str() && node.name() == Some(info.display_name.to_string()) {
                 return Ok(Some(Box::new(V4lDevice::from_path(node.path())?)));

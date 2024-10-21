@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use anyhow::anyhow;
-use birb_vision_core::{backend::DeviceInfo, CameraDevice, DeviceError, DeviceResult, Event, FlatSample, PixelFormat, Sample, SampleType};
+use birb_vision_core::{backend::{Backend, DeviceInfo, DeviceInfoEntry}, CameraDevice, DeviceError, DeviceResult, Event, FlatSample, PixelFormat, Sample, SampleType};
 use icube_sdk_sys::SDK;
 
 use crate::{iCubeContext, iCubeDevice, CallbackEventType, IntoICubeResult};
@@ -10,9 +10,9 @@ use crate::{iCubeContext, iCubeDevice, CallbackEventType, IntoICubeResult};
 impl CameraDevice for iCubeDevice {
     fn get_device_info(&self) -> DeviceResult<DeviceInfo> {
         let mut info = DeviceInfo::new();
-        self.get_name()?;
-        info.display_name = "iCube".into(); // TODO get from SDK
-        todo!()
+        info.display_name = self.get_name()?.into(); // TODO get from SDK
+        info.other.insert("device_index".into(), DeviceInfoEntry::new("Device Index", self.device_index().to_string()));
+        Ok(info)
     }
 
     fn start_grabbing(&self) -> DeviceResult {
@@ -61,10 +61,47 @@ impl CameraDevice for iCubeDevice {
                 },
                 _ => todo!("unhandled iCube event type: {e:?}"),
             }
-
-            todo!()
         }));
 
         Ok(())
+    }
+}
+
+impl Backend for iCubeContext {
+    fn available_transport_layers(&self) -> Vec<String> {
+        vec![] // TODO maybe?
+    }
+
+    fn enumerate(&self, _transport_layers: &[String]) -> anyhow::Result<Vec<DeviceInfo>> {
+        self.init_device_list(|device_indices| {
+            let mut devices = vec![];
+            for device_index in device_indices {
+                let device = device_index.open()?;
+                devices.push(device.get_device_info()?);
+            }
+            Ok(devices)
+        })
+    }
+
+    fn create(&self, info: &DeviceInfo) -> anyhow::Result<Option<Box<dyn CameraDevice>>> {
+        self.init_device_list(|device_indices| {
+            for idx in device_indices {
+                let matches = if let Some(device_index) = info.other.get("device_index") {
+                    device_index.value == idx.sdk_index().to_string()
+                } else if info.display_name == idx.name().as_ref().map(|s| s.clone()).map_err(|e| anyhow!("Could not read iCube device name: {e}"))? {
+                    true
+                } else {
+                    false
+                };
+
+                if matches {
+                    let device = idx.open()?;
+                    let device = Box::new(device) as Box<dyn CameraDevice>;
+                    return Ok(Some(device));
+                }
+            }
+
+            Ok(None)
+        })
     }
 }

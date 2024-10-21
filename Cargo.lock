@@ -613,6 +613,7 @@ name = "birb-vision"
 version = "0.1.0"
 dependencies = [
  "birb-vision-core",
+ "birb-vision-icube",
  "birb-vision-mvs",
  "birb-vision-v4l",
 ]
