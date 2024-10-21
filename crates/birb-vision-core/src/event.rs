@@ -14,7 +14,7 @@ pub enum Event<'a> {
     /// A new sample is available
     ///
     /// See [`Sample`] for more information.
-    Frame(DeviceResult<Sample<'a>>),
+    Sample(DeviceResult<Sample<'a>>),
     Flushed, // TODO maybe remove
     // TODO consider not having any events that are not "common" since the user may expect them
     // but never emitted by the implementation. Another possibility would be to group them

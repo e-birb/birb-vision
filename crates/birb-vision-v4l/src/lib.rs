@@ -90,8 +90,8 @@ impl CameraDevice for V4lDevice {
         )
     }
 
-    fn root_property(&self) -> DeviceResult<NodeId> {
-        Ok(self.root_property.clone())
+    fn root_property(&self) -> DeviceResult<Option<NodeId>> {
+        Ok(self.root_property.clone().into())
     }
 
     fn read_property(&self, node: &Node) -> DeviceResult<PropertyState> {
@@ -164,7 +164,7 @@ impl CameraDevice for V4lDevice {
                     Err(UnsupportedFormat)
                 };
                 drop(stream);
-                let event = Event::Frame(image.map(Sample::Image));
+                let event = Event::Sample(image.map(Sample::Image));
                 callback.lock().unwrap()(event);
             }
         });

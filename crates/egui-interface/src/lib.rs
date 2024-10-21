@@ -134,7 +134,7 @@ impl CameraControl {
                     let state = state.clone();
                     Box::new(move |e| {
                         match e {
-                            Event::Frame(frame) => {
+                            Event::Sample(frame) => {
                                 let Ok(frame) = frame else {
                                     return;
                                 };

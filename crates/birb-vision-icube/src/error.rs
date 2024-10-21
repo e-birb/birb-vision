@@ -1,11 +1,11 @@
-
-use std::error::Error;
-
+use anyhow::anyhow;
+use birb_vision_core::DeviceError;
 use icube_sdk_sys::{v1, v2};
 
 #[allow(non_camel_case_types)]
 //#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[derive(Debug)]
+#[derive(thiserror::Error)]
 pub enum iCubeError {
     /// Generic error
     Error,
@@ -46,7 +46,9 @@ pub enum iCubeError {
     Unknown(u8),
 
     Unimplemented,
-    Other(Box<dyn Error>),
+
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
 }
 
 impl iCubeError {
@@ -160,7 +162,14 @@ impl std::fmt::Display for iCubeError {
     }
 }
 
-impl Error for iCubeError {}
+impl From<iCubeError> for DeviceError {
+    fn from(value: iCubeError) -> Self {
+        match value {
+            // TODO known cases mapping
+            _ => anyhow!("iCube: {value}").into()
+        }
+    }
+}
 
 pub(crate) trait IntoICubeResult {
     fn v1_result(self) -> Result<(), iCubeError>;
@@ -174,11 +183,5 @@ impl IntoICubeResult for i32 {
 
     fn v2_result(self) -> Result<(), iCubeError> {
         iCubeError::result_from_code_v2(self)
-    }
-}
-
-impl From<Box<dyn Error>> for iCubeError {
-    fn from(e: Box<dyn Error>) -> Self {
-        Self::Other(e)
     }
 }

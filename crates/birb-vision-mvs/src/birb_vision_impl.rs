@@ -27,12 +27,12 @@ impl CameraDevice for MVDevice {
         Ok(list)
     }
 
-    fn root_property(&self) -> DeviceResult<NodeId> {
-        Ok(ROOT_ID)
+    fn root_property(&self) -> DeviceResult<Option<NodeId>> {
+        Ok(ROOT_ID.into())
     }
 
-    fn user_root_property(&self) -> DeviceResult<NodeId> {
-        Ok(USER_ROOT_ID)
+    fn user_root_property(&self) -> DeviceResult<Option<NodeId>> {
+        Ok(USER_ROOT_ID.into())
     }
 
     // TODO use this to exclude 
@@ -133,7 +133,7 @@ impl CameraDevice for MVDevice {
 
     fn set_stream_callback(&self, f: Box<dyn Fn(Event) + Send + Sync>) -> DeviceResult {
         self.set_image_callback(Box::new(move |img| {
-            f(Event::Frame(Ok(Sample::Image(img))))
+            f(Event::Sample(Ok(Sample::Image(img))))
         }));
 
         // TODO

@@ -2,26 +2,34 @@ use clap::ValueEnum;
 use enum_as_inner::EnumAsInner;
 use serde::{Deserialize, Serialize};
 
-use crate::{backend::DeviceInfo, DeviceResult, Event, Node, NodeId, PropertyState, PropertyValue};
+use crate::{backend::DeviceInfo, DeviceError, DeviceResult, Event, Node, NodeId, PropertyState, PropertyValue};
 
 pub trait CameraDevice {
     fn get_device_info(&self) -> DeviceResult<DeviceInfo>;
 
     /// All controls
-    fn all_properties(&self) -> DeviceResult<Vec<Node>>;
+    fn all_properties(&self) -> DeviceResult<Vec<Node>> {
+        return Ok(vec![]);
+    }
 
-    fn root_property(&self) -> DeviceResult<NodeId>;
+    fn root_property(&self) -> DeviceResult<Option<NodeId>> {
+        Ok(None)
+    }
 
     /// Root of the interesting properties to be exposed to the user
-    fn user_root_property(&self) -> DeviceResult<NodeId> {
+    fn user_root_property(&self) -> DeviceResult<Option<NodeId>> {
         self.root_property()
     }
 
-    fn read_property(&self, node: &Node) -> DeviceResult<PropertyState>;
-    fn write_property(&self, node: &Node, value: PropertyValue) -> DeviceResult;
+    fn read_property(&self, _node: &Node) -> DeviceResult<PropertyState> {
+        Err(DeviceError::NotImplemented)
+    }
+    fn write_property(&self, _node: &Node, _value: PropertyValue) -> DeviceResult {
+        Err(DeviceError::NotImplemented)
+    }
 
-    fn start_grabbing(&self) -> DeviceResult;
-    fn stop_grabbing(&self) -> DeviceResult; // TODO a stream object
+    fn start_grabbing(&self) -> DeviceResult; // TODO a stream object?
+    fn stop_grabbing(&self) -> DeviceResult;
 
     /// Tell the camera to read a sample from the stream
     ///
@@ -35,7 +43,9 @@ pub trait CameraDevice {
     /// - This method is similar to [OpenCV's `VideoCapture::grab`](https://github.com/opencv/opencv/blob/ae4a11b0c0986809d2f938f68343c8da99286b29/modules/videoio/include/opencv2/videoio.hpp#L878), but it is not guaranteed to have effect.
     fn grab(&self) -> DeviceResult;
 
-    fn flush(&self) -> DeviceResult;
+    fn flush(&self) -> DeviceResult {
+        Err(DeviceError::NotImplemented)
+    }
 
     /// Similar to [futures::stream::Stream::poll_next] but with no Pin requirement
     // TODO Is this "no Pin requirement" good?

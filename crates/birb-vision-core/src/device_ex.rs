@@ -14,7 +14,7 @@ pub trait CameraDeviceEx: CameraDevice {
 
             self.set_stream_callback(Box::new(move |event| {
                 match event {
-                    Event::Frame(frame) => {
+                    Event::Sample(frame) => {
                         if let Some(tx) = tx.lock().unwrap().take() {
                             if let Err(e) = tx.send(frame.map(|s| s.into_owned())) {
                                 log::error!("Error sending frame: {:?}", e);

@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 mod pixel_format;
 pub use pixel_format::PixelFormat;
 
-/// A frame captured by a camera.
+/// A sample (possibly a frame) captured by a camera
 ///
 /// This enum is used to represent the different types of frames that can be captured by a camera.
 ///
@@ -32,16 +32,14 @@ pub enum Sample<'a> {
     /// An owned image
     Image(DynamicImage),
 
-    /// A flat image sample
+    /// A flat [`image`] sample
     ///
     /// # Notes
     /// - see 
     FlatImageSample(FlatSamples<Cow<'a, [u8]>>),
 
+    /// A flat sample (more generic than [`Sample::FlatImageSample`])
     FlatSample(FlatSample<Cow<'a, [u8]>>),
-
-    /// A **raw** "FourCC" sample
-    FourCCSample(FourCC, Cow<'a, [u8]>),
 
     // TODO point cloud, maybe depth map, ...
 }
@@ -49,8 +47,8 @@ pub enum Sample<'a> {
 impl<'a> Sample<'a> {
     /// Try reinterpreting the sample in a known format
     ///
-    /// This method tries to reinterpret the data in a known [`image`]
-    /// format ([`DynamicImage`] or [`FlatSamples`]) without copying the data,
+    /// This method **tries** to reinterpret the data in a known [`image`]
+    /// format ([`DynamicImage`] or [`FlatSamples`]) **without copying the data**,
     /// leaving the sample as is if this is not possible.
     pub fn try_reinterpret(self) -> Self {
         todo!()
@@ -100,12 +98,18 @@ impl From<&[u8; 4]> for FourCC {
 #[derive(Debug, Clone)]
 pub struct FlatSample<Buffer> {
     pub buffer: Buffer,
+
+    /// Offset of the first row/column
+    ///
+    /// See [`Self::line_offset`]
     pub offset: usize,
 
-    pub pf: PixelFormat,
+    pub sample_type: SampleType,
 
+    /// Width of the image
     pub width: u32,
 
+    /// Height of the image
     pub height: u32,
 
     /// Stride in bytes for each row or column (pitch)
@@ -120,4 +124,10 @@ impl<Buffer> FlatSample<Buffer> {
     pub fn line_offset(&self, line_index: u32) -> usize {
         self.offset + (line_index as usize) * self.stride as usize
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum SampleType {
+    FourCC(FourCC),
+    Plain(PixelFormat),
 }
