@@ -3,7 +3,7 @@ name = "birb-vision-media-foundation"
 version = "0.1.0"
 edition = "2021"
 
-[dependencies]
+[target.'cfg(windows)'.dependencies]
 birb-vision-core = { version = "0.1.0", path = "../birb-vision-core" }
 #image = "0.25.1"
 image = { workspace = true }
