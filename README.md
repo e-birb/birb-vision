@@ -1,6 +1,12 @@
 # birb-vision
  Birb Vision
 
+## Usage
+
+```sh
+cargo run -p egui-example --release 
+```
+
 ## Crates
 
 See #7
