@@ -161,7 +161,11 @@ impl iCubeDevice {
         //Ok(version[..version_len].iter().map(|&c| c as u8 as char).collect::<String>())
         unsafe {
             match self.handle.ctx.sdk() {
-                SDK::V1(_) => Err(iCubeError::Unimplemented),
+                SDK::V1(api) => {
+                    let mut version = [0i8; v2::NETCAM_VERSION_LENGTH as usize];
+                    (api.GetApiVersion)(version.as_mut_ptr(), v2::NETCAM_VERSION_LENGTH as _);
+                    Ok(arr_to_str(&version))
+                },
                 SDK::V2(api) => {
                     let mut version = [0i8; v2::NETCAM_VERSION_LENGTH as usize];
                     (api.GetVersion)(self.handle.index(), version.as_mut_ptr());
@@ -178,7 +182,11 @@ impl iCubeDevice {
         //Ok(version[..version_len].iter().map(|&c| c as u8 as char).collect::<String>())
         unsafe {
             match self.handle.ctx.sdk() {
-                SDK::V1(_) => Err(iCubeError::Unimplemented),
+                SDK::V1(api) => {
+                    let mut version = [0i8; v2::NETCAM_VERSION_LENGTH as usize];
+                    (api.GetFWVersion)(self.handle.index() as _, version.as_mut_ptr(), v2::NETCAM_VERSION_LENGTH as _);
+                    Ok(arr_to_str(&version))
+                },
                 SDK::V2(api) => {
                     let mut version = [0i8; v2::NETCAM_VERSION_LENGTH as usize];
                     (api.GetFWVersion)(self.handle.index(), version.as_mut_ptr());
