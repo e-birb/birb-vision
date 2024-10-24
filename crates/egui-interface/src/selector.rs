@@ -88,7 +88,7 @@ impl CameraManager {
                                 to_open = Some((backend_id.clone(), info.clone()));
                             }
                             ui.label(backend_id);
-                            Grid::new(&info).striped(true).show(ui, |ui| {
+                            Grid::new(&info).max_col_width(150.0).striped(true).show(ui, |ui| {
                                 let keys = info.other.keys().collect::<Vec<_>>();
                                 //keys.sort();
                                 for k in keys {
