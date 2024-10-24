@@ -1,7 +1,7 @@
 use std::{sync::Arc, thread::JoinHandle};
 
 use birb_vision::core::backend::{BackendRegistry, BackendSet, DeviceInfo};
-use egui::{CollapsingHeader, Grid, ScrollArea};
+use egui::{CollapsingHeader, Grid, Label, ScrollArea};
 use material_icons::Icon;
 use scope_guard::scope_guard;
 
@@ -60,7 +60,7 @@ impl CameraManager {
 
     pub fn show_selection(&mut self, ui: &mut egui::Ui) {
         ui.vertical(|ui| {
-            ui.set_width(200.0);
+            ui.set_width(300.0);
             ui.horizontal(|ui| {
                 if ui.button("Enumerate").clicked() {
                     self.start_enumerate(ui.ctx());
@@ -97,7 +97,8 @@ impl CameraManager {
                                         continue;
                                     }
                                     ui.label(&v.display_name);
-                                    ui.label(&v.value).on_hover_ui(|ui| {
+                                    ui.add(Label::new(&v.value).truncate()).on_hover_ui(|ui| {
+                                        ui.style_mut().interaction.selectable_labels = true;
                                         ui.label(k);
                                     });
                                     ui.end_row();
