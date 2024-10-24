@@ -2088,6 +2088,7 @@ dependencies = [
 [[package]]
 name = "icube-sdk-sys"
 version = "0.2.1"
+source = "git+https://github.com/LucaCiucci/icube-sdk-sys#452f7d326597691f7ba21122c98976bc78cff7b8"
 dependencies = [
  "libloading 0.8.5",
  "log",

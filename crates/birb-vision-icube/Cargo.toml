@@ -6,9 +6,7 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.90"
 birb-vision-core = { version = "0.1.0", path = "../birb-vision-core" }
-#icube-sdk-sys = "0.2.1"
-#icube-sdk-sys = { path = "../../../../../LucaCiucci/icube-sdk-sys" }
-icube-sdk-sys = { path = "C:/Users/lucac/Documents/GitHub/icube-sdk-sys" }
+icube-sdk-sys = { git = "https://github.com/LucaCiucci/icube-sdk-sys", version = "0.2.1" }
 log = "0.4.21"
 thiserror = "1.0.64"
 
