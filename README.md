@@ -7,6 +7,8 @@
 cargo run -p egui-example --release 
 ```
 
+![Egui Example](./docs/screen.png)
+
 ## Crates
 
 See #7
