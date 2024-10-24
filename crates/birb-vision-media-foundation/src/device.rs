@@ -4,7 +4,6 @@ use birb_vision_core::{anyhow::anyhow, backend::{DeviceInfo, DeviceInfoEntry}, d
 use image::{DynamicImage, RgbImage};
 use serde::{Deserialize, Serialize};
 use windows::{core::PWSTR, Win32::Media::MediaFoundation::{IMFAttributes, IMFMediaSource, IMFSourceReader, IMFSourceReaderCallback, IMFSourceReaderCallback_Impl, MFCreateAttributes, MFCreateSourceReaderFromMediaSource, MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK, MF_E_NOTACCEPTING, MF_READWRITE_DISABLE_CONVERTERS, MF_SOURCE_READERF_ALLEFFECTSREMOVED, MF_SOURCE_READERF_CURRENTMEDIATYPECHANGED, MF_SOURCE_READERF_ENDOFSTREAM, MF_SOURCE_READERF_ERROR, MF_SOURCE_READERF_NATIVEMEDIATYPECHANGED, MF_SOURCE_READERF_NEWSTREAM, MF_SOURCE_READERF_STREAMTICK, MF_SOURCE_READER_ASYNC_CALLBACK, MF_SOURCE_READER_FIRST_VIDEO_STREAM, MF_SOURCE_READER_FLAG}};
-use windows_core::Interface;
 
 use crate::*;
 
@@ -197,6 +196,7 @@ impl MFDevice {
     }
 
     pub fn start_stream(&self) -> MFResult<()> {
+        self.callback_inner.lock().unwrap().capture = true;
         unsafe {
             self.source_reader.SetStreamSelection(FIRST_VIDEO_STREAM, true)?
         };
@@ -209,8 +209,10 @@ impl MFDevice {
     }
 
     pub fn stop_stream(&self) -> MFResult<()> {
+        self.callback_inner.lock().unwrap().capture = false;
+        // TODO flush, wait for "flushed" with a timeout and set SetStreamSelection to false
         unsafe {
-            self.source_reader.SetStreamSelection(FIRST_VIDEO_STREAM, false)?
+            //self.source_reader.SetStreamSelection(FIRST_VIDEO_STREAM, false)?
         };
 
         Ok(())
@@ -314,7 +316,6 @@ impl CameraDevice for MFDevice {
     //}
 
     fn set_stream_callback(&self, f: Box<dyn Fn(Event) + Send + Sync>) -> DeviceResult {
-        println!("SETTING");
         let mut inner = self.callback_inner.lock().unwrap();
         let inner = &mut *inner;
 
@@ -396,6 +397,7 @@ struct ReaderCallbackInner {
     tx: Box<dyn Fn(Event)>,
     source_reader: Weak<IMFSourceReader>,
     flushing: bool,
+    capture: bool,
 
     //on_read_sample: Option<Box<dyn FnMut() -> windows_core::Result<()>>>,
     //on_flush: Option<Box<dyn FnMut() -> windows_core::Result<()>>>,
@@ -448,6 +450,7 @@ impl ReaderCallback {
                 tx: Box::new(|_| {}),
                 flushing: false,
                 source_reader: Weak::new(),
+                capture: false,
                 //on_read_sample: None,
                 //on_flush: None,
                 //on_event: None,
@@ -473,10 +476,13 @@ impl IMFSourceReaderCallback_Impl for ReaderCallback_Impl {
 
         let mut inner = self.inner.lock().unwrap();
         let source_reader = inner.source_reader.clone();
+        let capture = inner.capture;
         
         scopeguard::defer! {
-            if let Some(source_reader) = source_reader.upgrade() {
-                MFDevice::send_read_sample(&source_reader);
+            if capture {
+                if let Some(source_reader) = source_reader.upgrade() {
+                    MFDevice::send_read_sample(&source_reader);
+                }
             }
         }
 
