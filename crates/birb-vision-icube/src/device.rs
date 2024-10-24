@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, ops::{Deref, RangeInclusive}, sync::Mutex};
+use std::{ffi::c_ulong, marker::PhantomData, ops::{Deref, RangeInclusive}, sync::Mutex};
 
 use icube_sdk_sys::{v1, v2, SDK};
 
@@ -494,8 +494,8 @@ impl iCubeDevice {
         //ic_try!(ICubeSDK_SetCamParameter(self.handle.index(), id as u32 as _, value))
         unsafe {
             match self.handle.ctx.sdk() {
-                SDK::V1(api) => (api.SetCamParameter)(self.handle.index() as _, id as u32 as _, value).v1_result(),
-                SDK::V2(api) => (api.SetCamParameter)(self.handle.index(), id as u32 as _, value).v2_result(),
+                SDK::V1(api) => (api.SetCamParameter)(self.handle.index() as _, id as u32 as _, value as c_ulong).v1_result(),
+                SDK::V2(api) => (api.SetCamParameter)(self.handle.index(), id as u32 as _, value as c_ulong).v2_result(),
             }
         }
     }
@@ -514,7 +514,7 @@ impl iCubeDevice {
                 SDK::V2(api) => {
                     let mut value = 0;
                     (api.GetCamParameter)(self.handle.index(), id as u32 as _, &mut value).v2_result()?;
-                    Ok(value)
+                    Ok(value as u64)
                 },
             }
         }
