@@ -1,8 +1,7 @@
 use std::borrow::Cow;
 
 use anyhow::anyhow;
-use birb_vision_core::{backend::{Backend, DeviceInfo, DeviceInfoEntry}, AccessMode, CameraDevice, DeviceError, DeviceResult, Event, FlatSample, GroupNode, Node, NodeVariant, PixelFormat, PropertyVariant, Sample, SampleType, StringProperty};
-use common_property::VERSION;
+use birb_vision_core::{backend::{Backend, DeviceInfo, DeviceInfoEntry}, AccessMode, CameraDevice, DeviceError, DeviceResult, Event, FlatSample, GroupNode, Node, NodeVariant, PixelFormat, PropertyVariant, Sample, SampleType};
 use icube_sdk_sys::SDK;
 
 use crate::{iCubeContext, iCubeDevice, CallbackEventType, IntoICubeResult};

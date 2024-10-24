@@ -16,4 +16,4 @@ env_logger = "0.11.5"
 birb-vision = { path = "../../crates/birb-vision", features = ["mvs", "icube", "v4l"] }
 
 [target.'cfg(windows)'.dependencies]
-birb-vision = { path = "../../crates/birb-vision", features = ["mvs", "icube"] }
+birb-vision = { path = "../../crates/birb-vision", features = ["media-foundation", "mvs"] }

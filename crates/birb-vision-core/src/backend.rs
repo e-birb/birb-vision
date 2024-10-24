@@ -192,7 +192,9 @@ impl BackendRegistry {
 /// Contexts may not be [`Send`] or [`Sync`], for this reason a convenient
 /// 
 pub trait Backend: 'static {
-    fn available_transport_layers(&self) -> Vec<String>;
+    fn available_transport_layers(&self) -> Vec<String> {
+        vec![]
+    }
 
     fn default_transport_layers(&self) -> Vec<String> {
         self.available_transport_layers()

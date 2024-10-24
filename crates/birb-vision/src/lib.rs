@@ -30,6 +30,15 @@ pub fn all_backends() -> BackendRegistry {
             let ctx = birb_vision_icube::iCubeContext::new()?;
             Ok(ctx)
         })
+        .with_display_name("iCube (NET CAMERA)")
+    ).unwrap();
+
+    #[cfg(feature = "media-foundation")]
+    set.register(
+        BackendPackage::from_builder_fn(|| {
+            let ctx = birb_vision_media_foundation::MediaFoundationContext::new()?;
+            Ok(ctx)
+        })
         .with_display_name("Hikrobot (MVS SDK)")
     ).unwrap();
 

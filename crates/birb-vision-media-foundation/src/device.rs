@@ -1,9 +1,10 @@
-use std::{cell::RefCell, collections::VecDeque, error::Error, sync::{Arc, Mutex}, task::{Context, Poll, Waker}};
+use std::{cell::RefCell, collections::VecDeque, error::Error, rc::Rc, sync::{Arc, Mutex, Weak}, task::{Context, Poll, Waker}};
 
-use birb_vision_core::{decoders::{decode_mjpg, nv12_to_rgb_image, yuyv422_to_rgb}, CameraDevice, DeviceAccessMode, DeviceError, DeviceResult, Event, Frame};
+use birb_vision_core::{anyhow::anyhow, backend::{DeviceInfo, DeviceInfoEntry}, decoders::{decode_mjpg, nv12_to_rgb_image, yuyv422_to_rgb}, CameraDevice, DeviceAccessMode, DeviceError, DeviceResult, Event};
 use image::{DynamicImage, RgbImage};
 use serde::{Deserialize, Serialize};
 use windows::{core::PWSTR, Win32::Media::MediaFoundation::{IMFAttributes, IMFMediaSource, IMFSourceReader, IMFSourceReaderCallback, IMFSourceReaderCallback_Impl, MFCreateAttributes, MFCreateSourceReaderFromMediaSource, MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK, MF_E_NOTACCEPTING, MF_READWRITE_DISABLE_CONVERTERS, MF_SOURCE_READERF_ALLEFFECTSREMOVED, MF_SOURCE_READERF_CURRENTMEDIATYPECHANGED, MF_SOURCE_READERF_ENDOFSTREAM, MF_SOURCE_READERF_ERROR, MF_SOURCE_READERF_NATIVEMEDIATYPECHANGED, MF_SOURCE_READERF_NEWSTREAM, MF_SOURCE_READERF_STREAMTICK, MF_SOURCE_READER_ASYNC_CALLBACK, MF_SOURCE_READER_FIRST_VIDEO_STREAM, MF_SOURCE_READER_FLAG}};
+use windows_core::Interface;
 
 use crate::*;
 
@@ -93,11 +94,13 @@ impl MFDeviceInfo {
                 MFCreateSourceReaderFromMediaSource(&media_source, &source_reader_attributes)?
             };
 
+            let source_reader = Arc::new(source_reader);
+            callback_inner.lock().unwrap().source_reader = Arc::downgrade(&source_reader);
+
             let device = MFDevice {
                 _cx: cx,
                 info: self.clone(),
                 is_streaming: RefCell::new(false),
-                events: RefCell::new(VecDeque::new()),
                 _callback: callback,
                 callback_inner,
                 source_reader,
@@ -116,12 +119,11 @@ pub struct MFDevice {
     _cx: MediaFoundationContext,
     info: MFDeviceInfo,
     is_streaming: RefCell<bool>,
-    events: RefCell<VecDeque<Event>>,
 
     // Note: this SHALL be placed AFTER IMFSourceReader so that it is dropped AFTER IMFSourceReader
     _callback: Box<IMFSourceReaderCallback>,
     callback_inner: Arc<Mutex<ReaderCallbackInner>>,
-    source_reader: IMFSourceReader,
+    source_reader: Arc<IMFSourceReader>,
 }
 
 impl MFDevice {
@@ -198,6 +200,7 @@ impl MFDevice {
         unsafe {
             self.source_reader.SetStreamSelection(FIRST_VIDEO_STREAM, true)?
         };
+        Self::send_read_sample(&self.source_reader);
 
         // The first call to ReadSample will start the stream and the callback will be called
         // with a "MF_SOURCE_READERF_STREAMTICK" flag which we ignore
@@ -225,24 +228,12 @@ impl MFDevice {
 const FIRST_VIDEO_STREAM: u32 = MF_SOURCE_READER_FIRST_VIDEO_STREAM.0 as u32;
 
 impl CameraDevice for MFDevice {
-    fn is_device_accessible(&self, mode: DeviceAccessMode) -> bool {
-        true
-    }
+    fn get_device_info(&self) -> DeviceResult<DeviceInfo> {
+        let mut info = DeviceInfo::new();
+        info.display_name = self.info.name.clone();
+        info.other.insert("symlink".into(), DeviceInfoEntry::new("symlink", self.info.symlink.clone()));
 
-    fn is_open(&self) -> Option<DeviceAccessMode> {
-        todo!()
-    }
-
-    fn open(&self, mode: DeviceAccessMode) -> DeviceResult<()> {
-        // TODO
-        log::error!("Not implemented");
-        Ok(())
-    }
-
-    fn close(&self) -> DeviceResult<()> {
-        // TODO
-        log::error!("Not implemented");
-        Ok(())
+        Ok(info)
     }
 
     fn start_grabbing(&self) -> DeviceResult<()> {
@@ -323,6 +314,7 @@ impl CameraDevice for MFDevice {
     //}
 
     fn set_stream_callback(&self, f: Box<dyn Fn(Event) + Send + Sync>) -> DeviceResult {
+        println!("SETTING");
         let mut inner = self.callback_inner.lock().unwrap();
         let inner = &mut *inner;
 
@@ -336,7 +328,7 @@ impl CameraDevice for MFDevice {
     }
 
     fn grab(&self) -> DeviceResult<()> {
-        self.send_read_sample();
+        Self::send_read_sample(&self.source_reader);
         Ok(())
     }
 }
@@ -345,12 +337,12 @@ impl MFDevice {
     fn set_format_to_callback(&self, inner: &mut ReaderCallbackInner) -> DeviceResult<()> {
         let format = match self.get_current_format() {
             Ok(f) => f,
-            Err(e) => return Err(DeviceError::OtherString(format!("Failed to get current format: {e}").into())), // TODO better error handling
+            Err(e) => return Err(anyhow!("Failed to get current format: {e}").into()), // TODO better error handling
         };
         let subtype = match format.recognize_supported_media_subtype() {
             Some(s) => s,
             //None => return Err(DeviceError::Unsupported),
-            None => return Err(DeviceError::OtherString("No supported media subtype".into())), // TODO better error handling
+            None => return Err(anyhow!("No supported media subtype").into()), // TODO better error handling
         };
 
         inner.format = Some(format);
@@ -358,14 +350,10 @@ impl MFDevice {
         Ok(())
     }
 
-    fn push_event(&self, event: Event) {
-        self.events.borrow_mut().push_back(event);
-    }
-
-    fn send_read_sample(&self) {
+    fn send_read_sample(source_reader: &IMFSourceReader) {
         loop {
             match unsafe {
-                self.source_reader.ReadSample(
+                source_reader.ReadSample(
                     FIRST_VIDEO_STREAM,
                     0,
                     None,
@@ -387,7 +375,11 @@ impl MFDevice {
                         std::thread::yield_now();
                         continue;
                     } else {
-                        self.push_event(Event::Frame(Err(DeviceError::OtherString(format!("Failed to call read sample: {err}").into())))); // TODO better error handling
+                        // TODO better error handling
+                        //self.callback_inner.lock().unwrap().send_sample(Err(anyhow!("Failed to call read sample: {err}").into()));
+
+                        //self.callback_inner.lock().unwrap().send_sample(Err(MF_SOURCE_READER_FLAG(err.code().0 as i32))); // TODO correct?
+                        todo!()
                     }
                 }
             }
@@ -401,7 +393,8 @@ impl MFDevice {
 struct ReaderCallbackInner {
     format: Option<VideoFormat>,
     subtype: Option<VideoSubtype>,
-    tx: Box<dyn Fn(Event) + Send + Sync>,
+    tx: Box<dyn Fn(Event)>,
+    source_reader: Weak<IMFSourceReader>,
     flushing: bool,
 
     //on_read_sample: Option<Box<dyn FnMut() -> windows_core::Result<()>>>,
@@ -414,7 +407,7 @@ impl ReaderCallbackInner {
         (self.tx)(event);
     }
 
-    fn send_sample(&mut self, sample: Result<DeviceResult<Frame>, MF_SOURCE_READER_FLAG>) {
+    fn send_sample(&mut self, sample: Result<DeviceResult<birb_vision_core::Sample>, MF_SOURCE_READER_FLAG>) {
         //self.send_event_impl(Event::Frame(sample.unwrap())); // TODO handle error
 
         let sample = match sample {
@@ -433,7 +426,7 @@ impl ReaderCallbackInner {
             }
         };
 
-        self.send_event_impl(Event::Frame(sample));
+        self.send_event_impl(Event::Sample(sample));
     }
 
     fn send_flushed(&mut self) {
@@ -454,6 +447,7 @@ impl ReaderCallback {
                 subtype: None,
                 tx: Box::new(|_| {}),
                 flushing: false,
+                source_reader: Weak::new(),
                 //on_read_sample: None,
                 //on_flush: None,
                 //on_event: None,
@@ -471,13 +465,20 @@ impl IMFSourceReaderCallback_Impl for ReaderCallback_Impl {
         lltimestamp: i64,
         psample: Option<&windows::Win32::Media::MediaFoundation::IMFSample>,
     ) -> windows_core::Result<()> {
-        //println!("OnReadSample: {hrstatus}, {dwstreamindex}, {dwstreamflags}, {lltimestamp}, {psample:?}");
+        println!("OnReadSample: {hrstatus}, {dwstreamindex}, {dwstreamflags}, {lltimestamp}, {psample:?}");
 
         if dwstreamindex != 0 {
             todo!("dwstreamindex != 0");
         }
 
         let mut inner = self.inner.lock().unwrap();
+        let source_reader = inner.source_reader.clone();
+        
+        scopeguard::defer! {
+            if let Some(source_reader) = source_reader.upgrade() {
+                MFDevice::send_read_sample(&source_reader);
+            }
+        }
 
         if dwstreamflags != 0 {
             inner.send_sample(Err(MF_SOURCE_READER_FLAG(dwstreamflags as _)));
@@ -486,22 +487,22 @@ impl IMFSourceReaderCallback_Impl for ReaderCallback_Impl {
 
         if hrstatus.is_err() {
             let e = windows_core::Error::from_hresult(hrstatus);
-            inner.send_sample(Ok(Err(DeviceError::OtherString(format!("Failed to read sample: {e}").into())))); // TODO better error handling
+            inner.send_sample(Ok(Err(anyhow!("Failed to read sample: {e}").into()))); // TODO better error handling
             return Ok(());
         }
 
         let Some(imf_sample) = psample else {
-            inner.send_sample(Ok(Err(DeviceError::OtherString("No sample".into())))); // TODO better error handling
+            inner.send_sample(Ok(Err(anyhow!("No sample").into()))); // TODO better error handling
             return Ok(());
         };
 
         let Some(format) = inner.format.clone() else {
-            inner.send_sample(Ok(Err(DeviceError::OtherString("No format".into())))); // TODO better error handling
+            inner.send_sample(Ok(Err(anyhow!("No format").into()))); // TODO better error handling
             return Ok(());
         };
 
         let Some(subtype) = inner.subtype.clone() else {
-            inner.send_sample(Ok(Err(DeviceError::OtherString("No subtype".into())))); // TODO better error handling
+            inner.send_sample(Ok(Err(anyhow!("No subtype").into()))); // TODO better error handling
             return Ok(());
         };
 
@@ -560,7 +561,7 @@ impl IMFSourceReaderCallback_Impl for ReaderCallback_Impl {
             }
         };
 
-        inner.send_sample(Ok(r.map(Frame::Image).map_err(|e| DeviceError::OtherString(format!("Failed to decode frame: {e}").into())))); // TODO 
+        inner.send_sample(Ok(r.map(birb_vision_core::Sample::Image).map_err(|e| anyhow!("Failed to decode frame: {e}").into()))); // TODO 
 
         Ok(())
     }
