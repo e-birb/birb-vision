@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap, error::Error, ops::Deref, path::Path, sync::{Arc, Mutex}, time::{Duration, Instant}};
+use std::{cell::RefCell, collections::HashMap, ops::Deref, path::Path, sync::{Arc, Mutex}, time::{Duration, Instant}};
 
 use birb_vision_core::{anyhow::{self, anyhow}, backend::{Backend, DeviceInfo, DeviceInfoEntry}, decoders::yuyv422_to_rgb, image::{DynamicImage, RgbImage}, CameraDevice, DeviceResult, Event, GroupNode, Node, NodeId, NodeVariant, PropertyState, PropertyValue, Sample};
 use v4l::{io::traits::CaptureStream, video::Capture, Control, Device, FourCC};
