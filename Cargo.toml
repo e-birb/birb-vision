@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/bindings/mvs-sys", "crates/birb-vision",
+    "crates/bindings/mvs-sys", "crates/bindings/daheng-sys", "crates/birb-vision",
     "crates/birb-vision-core",
     #"crates/birb-vision-bundle",
     "crates/birb-vision-explorer",
