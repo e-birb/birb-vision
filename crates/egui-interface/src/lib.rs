@@ -143,7 +143,7 @@ impl CameraControl {
                                     Sample::FlatSample(img) => {
                                         // TODO better, just a temporary shit
                                         let buf = img.buffer.into_owned();
-                                        let rgb = RgbImage::from_vec(img.width, img.height, buf).unwrap();
+                                        let rgb = RgbImage::from_vec(img.layout.width, img.layout.height, buf).unwrap();
                                         DynamicImage::ImageRgb8(rgb)
                                     },
                                     _ => todo!(),

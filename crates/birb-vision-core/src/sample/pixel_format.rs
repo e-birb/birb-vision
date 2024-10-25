@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 
 macro_rules! def_pixel_format {
     (
@@ -27,6 +28,7 @@ macro_rules! def_pixel_format {
 
 def_pixel_format! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    #[derive(Serialize, Deserialize)]
     #[allow(non_camel_case_types)]
     PixelFormat {
         Mono1Packed:1,

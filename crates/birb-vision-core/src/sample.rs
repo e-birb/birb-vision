@@ -2,10 +2,13 @@ use std::{borrow::Cow, fmt::Debug};
 
 use enum_as_inner::EnumAsInner;
 use image::DynamicImage;
-use serde::{Deserialize, Serialize};
 
 mod pixel_format;
+mod fourcc;
+mod flat_sample;
 pub use pixel_format::PixelFormat;
+pub use fourcc::FourCC;
+pub use flat_sample::*;
 
 /// A sample (possibly a frame) captured by a camera
 ///
@@ -62,66 +65,8 @@ impl<'a> Debug for Sample<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Sample::Image(_) => write!(f, "Image"),
-            _ => todo!(),
+            Sample::FlatSample(_) => write!(f, "FlatSample"),
         }
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[derive(Serialize, Deserialize)]
-pub struct FourCC(pub [u8; 4]);
-
-impl FourCC {
-    pub fn new(bytes: [u8; 4]) -> Self {
-        Self(bytes.clone())
-    }
-}
-
-impl From<[u8; 4]> for FourCC {
-    fn from(bytes: [u8; 4]) -> Self {
-        Self(bytes)
-    }
-}
-
-impl From<&[u8; 4]> for FourCC {
-    fn from(bytes: &[u8; 4]) -> Self {
-        Self(bytes.clone())
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct FlatSample<Buffer> {
-    pub buffer: Buffer,
-
-    /// Offset of the first row/column
-    ///
-    /// See [`Self::line_offset`]
-    pub offset: usize,
-
-    pub sample_type: SampleType,
-
-    /// Width of the image
-    pub width: u32,
-
-    /// Height of the image
-    pub height: u32,
-
-    /// Stride in bytes for each row or column (pitch)
-    ///
-    /// If the stride is negative, the image is flipped.
-    pub stride: i32,
-
-    pub row_major: bool,
-}
-
-impl<Buffer> FlatSample<Buffer> {
-    pub fn line_offset(&self, line_index: u32) -> usize {
-        self.offset + (line_index as usize) * self.stride as usize
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum SampleType {
-    FourCC(FourCC),
-    Plain(PixelFormat),
-}

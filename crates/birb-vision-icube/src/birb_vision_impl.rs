@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use anyhow::anyhow;
-use birb_vision_core::{backend::{Backend, DeviceInfo, DeviceInfoEntry}, AccessMode, CameraDevice, DeviceError, DeviceResult, Event, FlatSample, GroupNode, Node, NodeVariant, PixelFormat, PropertyVariant, Sample, SampleType};
+use birb_vision_core::{backend::{Backend, DeviceInfo, DeviceInfoEntry}, AccessMode, CameraDevice, DeviceError, DeviceResult, Event, FlatSample, FlatSampleLayout, GroupNode, Node, NodeVariant, PixelFormat, PropertyVariant, Sample, SampleType};
 use icube_sdk_sys::SDK;
 
 use crate::{iCubeContext, iCubeDevice, CallbackEventType, IntoICubeResult};
@@ -164,12 +164,14 @@ impl CameraDevice for iCubeDevice {
                         .map_err(|e| DeviceError::from(e))
                         .map(|(width, height)| Sample::FlatSample(FlatSample {
                             buffer: Cow::Borrowed(data),
-                            offset: 0,
-                            sample_type: SampleType::Plain(PixelFormat::RGB8Packed),
-                            width: width as _,
-                            height: height as _,
-                            stride: width as i32 * 3,
-                            row_major: true,
+                            layout: FlatSampleLayout {
+                                offset: 0,
+                                sample_type: SampleType::Plain(PixelFormat::RGB8Packed),
+                                width: width as _,
+                                height: height as _,
+                                stride: width as i32 * 3,
+                                row_major: true,
+                            },
                         }));
                     f(Event::Sample(sample));
                 },
