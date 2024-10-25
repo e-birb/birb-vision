@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use birb_vision_nest::bindings;
+use birb_vision_nest::bindings::{self, Api};
 use clap::Parser;
 
 /// Hello
@@ -44,11 +44,14 @@ fn main() -> Result<(), anyhow::Error> {
     let Command::Check(args) = args.command;
 
 
-    let api = bindings::load(args.shared_library)?;
+    let api = bindings::load(args.shared_library).map_err(|e| anyhow::anyhow!("Failed to load API: {}", e))?;
     println!("Loaded API: {api} with version: {:?}", api.get_version());
 
     let layers = api.supported_transport_layers().map_err(|e| anyhow::anyhow!("Failed to get supported transport layers: {}", e))?;
     println!("Supported transport layers: {:?}", layers);
+
+    let Api::V0(api) = api;
+    unsafe { api.device_close(std::ptr::null_mut()) };
 
     log::debug!("Dropping the API...");
     drop(api);

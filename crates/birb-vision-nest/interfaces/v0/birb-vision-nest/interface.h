@@ -152,6 +152,7 @@ struct FlatSample {
     struct FlatSampleLayout layout;
 };
 
+typedef uint8_t LogLevel_t;
 enum LogLevel {
     Trace = 0,
     Debug = 1,
@@ -161,7 +162,7 @@ enum LogLevel {
 };
 
 // define our "logger" function
-typedef void(*Logger)(uint8_t level, const char* message);
+typedef void(*Logger)(LogLevel_t level, const char* message);
 
 // ================================================================
 //                        INITIALIZATION
@@ -170,10 +171,11 @@ typedef void(*Logger)(uint8_t level, const char* message);
 //! The `version` function shall not be changed in future versions of the interface as it is used to determine the version of the interface
 //! at runtime.
 
-#define BIRB_VISION_IMPLEMENT_VERSION_FUNCTION \
-    const char* birb_vision_nest_interface_version() { \
-        return BIRB_VISION_NEST_INTERFACE_VERSION; \
-    }
+#ifdef BIRB_VISION_INTERFACE_IMPLEMENTATION
+const char* birb_vision_nest_interface_version() {
+    return BIRB_VISION_NEST_INTERFACE_VERSION;
+}
+#endif
 
 /// Get the version of the interface.
 ///
@@ -182,6 +184,9 @@ const char* birb_vision_nest_interface_version();
 
 // TODO maybe this is too unsafe since the library could be loaded different times
 // say from different version of the higher level crates
+// A solution could be to make initialize return an handle that is actually an instance counter
+// but maybe this would complicate the API too much since all the functions would need to take the handle as first argument
+// for consistency. Maybe it is better to let the implementor handle this implicitly.
 //void initialize();
 //void shutdown();
 
@@ -230,7 +235,11 @@ const char* transport_layer_list_get(
 struct DeviceInfo;
 struct DeviceInfoList;
 
+/// Enumerate devices.
+///
+/// @param transport_layers A list of transport layers to use for discovery. The list must be terminated by a `NULL` pointer.
 struct DeviceInfoList* discover_devices(
+    Logger logger,
     const char** transport_layers
 );
 
@@ -289,16 +298,34 @@ void device_grab(
 
 typedef void (*FrameCallback)(struct FlatSample* frame, void* user_data);
 
-void set_stream_callback(
+void device_set_stream_callback(
     struct Device* device,
     FrameCallback callback,
     void* user_data
 );
 
-void on_stream_callback_dropped(
-    struct Device* device,
-    FrameCallback callback,
-    void* user_data
+// ================================================================
+//                       DEVICE CONTROL
+// ================================================================
+
+enum ControlType {
+    Unknown = 0,
+    Boolean,
+    Integer,
+    Float,
+    String,
+    Group,
+    Command,
+};
+
+struct ControlList;
+
+struct ControlList* device_controls(
+    const struct Device* device
+);
+
+void control_list_free(
+    struct ControlList* list
 );
 
 #ifdef __cplusplus

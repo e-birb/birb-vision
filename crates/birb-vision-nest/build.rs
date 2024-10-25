@@ -11,6 +11,7 @@ fn main() {
     bindgen::Builder::default()
         .header(HEADER)
         .dynamic_library_name("Api")
+        .dynamic_link_require_all(true)
         .generate_comments(true)
         .parse_callbacks(Box::new(Cb))
         .generate()
