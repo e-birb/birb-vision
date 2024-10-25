@@ -93,10 +93,10 @@ impl From<&[u8; 4]> for FourCC {
 pub struct FlatSample<Buffer> {
     pub buffer: Buffer,
 
-    /// Offset of the first row/column
+    /// Offset of the first row/column in bytes
     ///
     /// See [`Self::line_offset`]
-    pub offset: usize,
+    pub offset: u32,
 
     pub sample_type: SampleType,
 
@@ -111,12 +111,13 @@ pub struct FlatSample<Buffer> {
     /// If the stride is negative, the image is flipped.
     pub stride: i32,
 
+    /// Whether the sample is stored in row-major order.
     pub row_major: bool,
 }
 
 impl<Buffer> FlatSample<Buffer> {
     pub fn line_offset(&self, line_index: u32) -> usize {
-        self.offset + (line_index as usize) * self.stride as usize
+        self.offset as usize + (line_index as usize) * self.stride as usize
     }
 }
 
