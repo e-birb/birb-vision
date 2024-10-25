@@ -1,7 +1,7 @@
-use std::{borrow::Cow, cell::RefCell, collections::HashMap, ops::Deref, path::Path, sync::{Arc, Mutex}, time::{Duration, Instant}};
+use std::{borrow::Cow, cell::RefCell, collections::HashMap, ops::Deref, path::Path, sync::{Arc, Mutex}, time::Duration};
 
-use birb_vision_core::{anyhow::{self, anyhow}, backend::{Backend, DeviceInfo, DeviceInfoEntry}, decoders::yuyv422_to_rgb, image::{DynamicImage, RgbImage}, CameraDevice, DeviceResult, Event, FlatSample, FlatSampleLayout, FourCC, GroupNode, Node, NodeId, NodeVariant, PropertyState, PropertyValue, Sample, SampleType};
-use v4l::{io::traits::CaptureStream, video::Capture, Control, Device, FourCC as V4lFourCC};
+use birb_vision_core::{anyhow::{self, anyhow}, backend::{Backend, DeviceInfo, DeviceInfoEntry}, CameraDevice, DeviceResult, Event, FlatSample, FlatSampleLayout, FourCC, GroupNode, Node, NodeId, NodeVariant, PropertyState, PropertyValue, Sample, SampleType};
+use v4l::{io::traits::CaptureStream, video::Capture, Control, Device};
 
 use birb_vision_core::DeviceError::*;
 mod control_compat;
@@ -127,7 +127,7 @@ impl CameraDevice for V4lDevice {
         let mut s = v4l::io::mmap::Stream::with_buffers(&mut dev, v4l::buffer::Type::VideoCapture, 4)?;
         s.set_timeout(Duration::from_secs(2));
 
-        use birb_vision_core::image;
+        
 
         let stream = Arc::new(Mutex::new(s));
 

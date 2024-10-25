@@ -1,7 +1,7 @@
 use std::{borrow::Cow, fmt::Debug, sync::Arc, time::Instant};
 
 use enum_as_inner::EnumAsInner;
-use image::{buffer, DynamicImage, Luma, RgbImage};
+use image::{DynamicImage, Luma, RgbImage};
 
 mod pixel_format;
 mod fourcc;

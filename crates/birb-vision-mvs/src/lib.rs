@@ -2,13 +2,12 @@
 
 use std::{borrow::Cow, ffi::{c_uchar, c_void, CStr}, panic::{catch_unwind, UnwindSafe}, path::Path, pin::Pin, sync::Mutex, time::Duration};
 
-use birb_vision_core::{image::DynamicImage, FlatSample, FlatSampleLayout, PixelFormat, SampleType};
+use birb_vision_core::{FlatSample, FlatSampleLayout, PixelFormat, SampleType};
 use device::{AccessMode, DeviceInfo};
 pub use log;
 
 pub mod property;
 use mvs_sys::MV_FRAME_OUT_INFO_EX;
-use pixel::decode_mv_image;
 use property::*;
 pub mod device;
 pub mod error;
