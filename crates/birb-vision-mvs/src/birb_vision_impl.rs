@@ -115,8 +115,8 @@ impl CameraDevice for MVDevice {
     }
 
     fn set_stream_callback(&self, f: Box<dyn Fn(Event) + Send + Sync>) -> DeviceResult {
-        self.set_image_callback(Box::new(move |img| {
-            f(Event::Sample(Ok(Sample::Image(img))))
+        self.set_image_callback(Box::new(move |sample| {
+            f(Event::Sample(Ok(Sample::FlatSample(sample))))
         }));
 
         // TODO

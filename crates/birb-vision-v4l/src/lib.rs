@@ -1,7 +1,7 @@
-use std::{cell::RefCell, collections::HashMap, ops::Deref, path::Path, sync::{Arc, Mutex}, time::{Duration, Instant}};
+use std::{borrow::Cow, cell::RefCell, collections::HashMap, ops::Deref, path::Path, sync::{Arc, Mutex}, time::{Duration, Instant}};
 
-use birb_vision_core::{anyhow::{self, anyhow}, backend::{Backend, DeviceInfo, DeviceInfoEntry}, decoders::yuyv422_to_rgb, image::{DynamicImage, RgbImage}, CameraDevice, DeviceResult, Event, GroupNode, Node, NodeId, NodeVariant, PropertyState, PropertyValue, Sample};
-use v4l::{io::traits::CaptureStream, video::Capture, Control, Device, FourCC};
+use birb_vision_core::{anyhow::{self, anyhow}, backend::{Backend, DeviceInfo, DeviceInfoEntry}, decoders::yuyv422_to_rgb, image::{DynamicImage, RgbImage}, CameraDevice, DeviceResult, Event, FlatSample, FlatSampleLayout, FourCC, GroupNode, Node, NodeId, NodeVariant, PropertyState, PropertyValue, Sample, SampleType};
+use v4l::{io::traits::CaptureStream, video::Capture, Control, Device, FourCC as V4lFourCC};
 
 use birb_vision_core::DeviceError::*;
 mod control_compat;
@@ -35,7 +35,7 @@ impl V4lDevice {
         let dev = Device::with_path(path)?;
 
         let format = dev.format().unwrap();
-        //dev.set_format(&Format::new(format.width, format.height, FourCC::new(b"YUYV"))).unwrap();
+        //dev.set_format(&Format::new(format.width, format.height, V4lFourCC::new(b"YUYV"))).unwrap();
 
         let mut root = Node::new_with_id("birb-vision-v4l::Root");
         root.display_name = "V4L2".into();
@@ -143,28 +143,19 @@ impl CameraDevice for V4lDevice {
                 let format = format.lock().unwrap().clone();
 
                 // TODO use the stride!!!
-                let image: DeviceResult<DynamicImage> = if format.fourcc == FourCC::new(b"YUYV") {
-                    let start = Instant::now();
-                    let data = yuyv422_to_rgb(data, false).unwrap();
-                    println!("Converted in {:?}", start.elapsed());
-                    let img = DynamicImage::ImageRgb8(RgbImage::from_raw(format.width as u32, format.height as u32, data).unwrap());
-                    Ok(img)
-                } else if format.fourcc == FourCC::new(b"RGB3") {
-                    let img = DynamicImage::ImageRgb8(RgbImage::from_raw(format.width as u32, format.height as u32, data.to_vec()).unwrap());
-                    Ok(img)
-                } else if format.fourcc == FourCC::new(b"MJPG") {
-                    let start = Instant::now();
-                    //let img = birb_vision_core::decoders::decode_mjpg(data).unwrap();
-                    //let img = DynamicImage::ImageRgb8(img);
-                    let img = image::load_from_memory(&data).unwrap();
-                    println!("Converted mjpeg in {:?}", start.elapsed());
-                    Ok(img)
-                } else {
-                    log::error!("Unsupported format: {}", format.fourcc);
-                    Err(UnsupportedFormat)
+                let layout = FlatSampleLayout {
+                    offset: 0,
+                    sample_type: SampleType::FourCC(FourCC(format.fourcc.repr)),
+                    width: format.width,
+                    height: format.height,
+                    stride: format.stride as _,
+                    row_major: true,
                 };
-                drop(stream);
-                let event = Event::Sample(image.map(Sample::Image));
+                let sample = FlatSample {
+                    buffer: Cow::Borrowed(data),
+                    layout,
+                };
+                let event = Event::Sample(Ok(Sample::FlatSample(sample)));
                 callback.lock().unwrap()(event);
             }
         });

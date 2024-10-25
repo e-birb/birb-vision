@@ -134,19 +134,16 @@ impl CameraControl {
                     let state = state.clone();
                     Box::new(move |e| {
                         match e {
-                            Event::Sample(frame) => {
-                                let Ok(frame) = frame else {
+                            Event::Sample(sample) => {
+                                let Ok(sample) = sample else {
                                     return;
                                 };
-                                let img: DynamicImage = match frame {
-                                    Sample::Image(img) => img,
-                                    Sample::FlatSample(img) => {
-                                        // TODO better, just a temporary shit
-                                        let buf = img.buffer.into_owned();
-                                        let rgb = RgbImage::from_vec(img.layout.width, img.layout.height, buf).unwrap();
-                                        DynamicImage::ImageRgb8(rgb)
+                                let img: DynamicImage = match sample.try_decode() {
+                                    Ok(result) => match result {
+                                        Ok(img) => img,
+                                        Err(e) => todo!("could not decode sample: {e}"),
                                     },
-                                    _ => todo!(),
+                                    Err(sample) => todo!("could not convert sample {sample:?} to image"),
                                 };
                                 let img = img.to_rgb8();
                                 let img = ColorImage::from_rgb([img.width() as usize, img.height() as usize], &img.into_raw());

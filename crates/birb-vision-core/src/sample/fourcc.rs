@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 pub struct FourCC(pub [u8; 4]);
 
 impl FourCC {
-    pub fn new(bytes: [u8; 4]) -> Self {
+    pub fn new(bytes: &[u8; 4]) -> Self {
         Self(bytes.clone())
     }
 }

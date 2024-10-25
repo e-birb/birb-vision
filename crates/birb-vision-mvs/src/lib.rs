@@ -1,8 +1,8 @@
 #![doc = include_str!("../README.md")]
 
-use std::{ffi::{c_uchar, c_void, CStr}, panic::{catch_unwind, UnwindSafe}, path::Path, pin::Pin, sync::Mutex, time::Duration};
+use std::{borrow::Cow, ffi::{c_uchar, c_void, CStr}, panic::{catch_unwind, UnwindSafe}, path::Path, pin::Pin, sync::Mutex, time::Duration};
 
-use birb_vision_core::image::DynamicImage;
+use birb_vision_core::{image::DynamicImage, FlatSample, FlatSampleLayout, PixelFormat, SampleType};
 use device::{AccessMode, DeviceInfo};
 pub use log;
 
@@ -57,7 +57,7 @@ pub struct MVDevice {
 }
 
 struct Callbacks {
-    image_callback: Box<dyn Fn(DynamicImage) + Send + Sync>,
+    image_callback: Box<dyn for<'a> Fn(FlatSample<Cow<'a, [u8]>>) + Send + Sync>,
     event_callback: Box<dyn Fn(/*TODO*/) + Send + Sync>,
 }
 
@@ -352,7 +352,7 @@ impl MVDevice {
     //}
 
     // TODO move?
-    pub fn set_image_callback(&self, f: Box<dyn Fn(DynamicImage) + Send + Sync + 'static>) {
+    pub fn set_image_callback(&self, f: Box<dyn for<'a> Fn(FlatSample<Cow<'a, [u8]>>) + Send + Sync + 'static>) {
         self.callbacks.lock().unwrap().image_callback = f;
     }
 
@@ -386,9 +386,27 @@ extern "C" fn frame_callback(pData: *mut c_uchar, pFrameInfo: *mut MV_FRAME_OUT_
         let callbacks = unsafe { &*callbacks };
     
         assert!(!pData.is_null());
-        let data = unsafe { std::slice::from_raw_parts(pData as *const u8, info.nFrameLen as _) };
-        let image = decode_mv_image(w as _, h as _, data, info.enPixelType);
-        (callbacks.lock().unwrap().image_callback)(image);
+        // TODO remove let data = unsafe { std::slice::from_raw_parts(pData as *const u8, info.nFrameLen as _) };
+        // TODO remove let image = decode_mv_image(w as _, h as _, data, info.enPixelType);
+        // TODO remove (callbacks.lock().unwrap().image_callback)(image);
+
+        let buffer = Cow::Borrowed(unsafe { std::slice::from_raw_parts(pData, info.nFrameLen as _) });
+
+        let pixel_type = match info.enPixelType {
+            mvs_sys::MvGvspPixelType_PixelType_Gvsp_Mono8 => PixelFormat::Mono8Packed,
+            _ => todo!("Pixel format not handled: {:?}", info.enPixelType),
+        };
+
+        let layout = FlatSampleLayout {
+            offset: 0,
+            sample_type: SampleType::Plain(pixel_type),
+            width: w as _,
+            height: h as _,
+            row_major: true,
+            stride: 0,
+        };
+
+        (callbacks.lock().unwrap().image_callback)(FlatSample { buffer, layout });
     });
 }
 
