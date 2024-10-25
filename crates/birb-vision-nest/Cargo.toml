@@ -4,8 +4,15 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+anyhow = "1.0.91"
 clap = { version = "4.5.20", features = ["derive"] }
+clap_logger = "0.3.3"
+cli-styles = { git = "https://github.com/e-birb/cli-styles", version = "0.1.0" }
+env_logger = "0.11.5"
 libloading = "0.8.5"
+log = "0.4.22"
+scopeguard = "1.2.0"
+thiserror = "1.0.65"
 
 [build-dependencies]
 bindgen = "0.70.1"

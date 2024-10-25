@@ -10,7 +10,7 @@ fn main() {
 
     bindgen::Builder::default()
         .header(HEADER)
-        .dynamic_library_name("NestLibrary")
+        .dynamic_library_name("Api")
         .generate_comments(true)
         .parse_callbacks(Box::new(Cb))
         .generate()

@@ -7,14 +7,7 @@
 extern "C" {
 #endif
 
-#define BIRB_VISION_NEST_INTERFACE_VERSION_MAJOR ((uint32_t)0)
-#define BIRB_VISION_NEST_INTERFACE_VERSION_MINOR ((uint32_t)1)
-#define BIRB_VISION_NEST_INTERFACE_VERSION_PATCH ((uint32_t)0)
-#define BIRB_VISION_NEST_INTERFACE_VERSION ((uint64_t)( \
-    ((uint64_t)BIRB_VISION_NEST_INTERFACE_VERSION_MAJOR << 32) | \
-    ((uint64_t)BIRB_VISION_NEST_INTERFACE_VERSION_MINOR << 16) | \
-    ((uint64_t)BIRB_VISION_NEST_INTERFACE_VERSION_PATCH) \
-))
+#define BIRB_VISION_NEST_INTERFACE_VERSION "0.1.0"
 
 // ================================================================
 //                         DOCUMENTATION
@@ -159,6 +152,17 @@ struct FlatSample {
     struct FlatSampleLayout layout;
 };
 
+enum LogLevel {
+    Trace = 0,
+    Debug = 1,
+    Info = 2,
+    Warn = 3,
+    Error = 4,
+};
+
+// define our "logger" function
+typedef void(*Logger)(uint8_t level, const char* message);
+
 // ================================================================
 //                        INITIALIZATION
 // ================================================================
@@ -166,10 +170,15 @@ struct FlatSample {
 //! The `version` function shall not be changed in future versions of the interface as it is used to determine the version of the interface
 //! at runtime.
 
+#define BIRB_VISION_IMPLEMENT_VERSION_FUNCTION \
+    const char* birb_vision_nest_interface_version() { \
+        return BIRB_VISION_NEST_INTERFACE_VERSION; \
+    }
+
 /// Get the version of the interface.
 ///
 /// This function shall return `BIRB_VISION_NEST_INTERFACE_VERSION` without any side effects.
-uint64_t version();
+const char* birb_vision_nest_interface_version();
 
 // TODO maybe this is too unsafe since the library could be loaded different times
 // say from different version of the higher level crates
@@ -191,7 +200,7 @@ struct TransportLayerList;
 /// To free the list, use `transport_layer_list_free`.
 ///
 /// @return A list of supported transport layers or `NULL`. The list must be freed using `transport_layer_list_free`.
-struct TransportLayerList* supported_transport_layers();
+struct TransportLayerList* supported_transport_layers(Logger logger);
 
 /// Free a list of transport layers.
 /// The list must be freed exactly once.
