@@ -1,5 +1,6 @@
 use std::{ffi::c_ulong, marker::PhantomData, ops::{Deref, RangeInclusive}, sync::Mutex};
 
+use anyhow::anyhow;
 use icube_sdk_sys::{v1, v2, SDK};
 
 use crate::{arr_to_str, iCubeContext, iCubeError, IntoICubeResult};
@@ -166,10 +167,11 @@ impl iCubeDevice {
                     (api.GetApiVersion)(version.as_mut_ptr(), v2::NETCAM_VERSION_LENGTH as _);
                     Ok(arr_to_str(&version))
                 },
-                SDK::V2(api) => {
-                    let mut version = [0i8; v2::NETCAM_VERSION_LENGTH as usize];
-                    (api.GetVersion)(self.handle.index(), version.as_mut_ptr());
-                    Ok(arr_to_str(&version))
+                SDK::V2(_api) => {
+                    //let mut version = [0i8; v2::NETCAM_VERSION_LENGTH as usize];
+                    //(api.GetVersion)(self.handle.index(), version.as_mut_ptr());
+                    //Ok(arr_to_str(&version))
+                    Err(anyhow!("function `GetVersion` is broken in this version of iCube SDK, see https://github.com/LucaCiucci/icube-sdk-sys/issues/1"))?
                 },
             }
         }
