@@ -7,6 +7,8 @@
 extern "C" {
 #endif
 
+#define BIRB_VISION_NEST_INTERFACE_VERSION "0.1.0"
+
 // ================================================================
 //                         DOCUMENTATION
 // ================================================================
@@ -15,17 +17,20 @@ extern "C" {
 
 # Introduction
 
+This header defines the interface to be implemented by the (external) backends
+of the Birb Vision Nest library.
+
 # Implementation Guide
+
+The implementor shall export all the functions defined in this header and
+satisfy the requirements of each function as defined in the respective
+documentation.
 
 */
 
 // ================================================================
 //                          TYPE DEFS
 // ================================================================
-
-/// If a function is annotated with `OPTIONAL`, it means that the function is not
-/// required to be implemented by the backend.
-#define OPTIONAL
 
 typedef uint32_t PixelType;
 
@@ -107,27 +112,83 @@ static const PixelType PIXEL_TYPE_MJPEG          = 0x00000001 | PIXEL_TYPE_JPEG_
 //              ...
 // ================================
 
-struct FrameInfo {
-    uint32_t width;
-    uint32_t height;
-    bool row_major;
+struct FlatSampleLayout {
+    /// Pixel type of the sample.
     PixelType pixel_type;
-    uint32_t data_size;
+    /// Offset of the first row/column
+    uint32_t offset;
+
+    /// Width of the sample in pixels.
+    uint32_t width;
+
+    /// Height of the sample in pixels.
+    uint32_t height;
+
+    /// Stride of the sample in bytes.
+    ///
+    /// If the stride is negative, the image is flipped.
+    int32_t stride;
+
+    /// Whether the sample is stored in row-major order.
+    bool row_major;
 };
 
-struct Frame {
-    struct FrameInfo info;
-    void* data;
+/// A flat representation of a sample.
+struct FlatSample {
+    /// Pointer to the sample data.
+    ///
+    /// The data is owned by the caller and must not be freed.
+    uint8_t* data;
+
+    /// Size of the sample data in bytes.
+    uint64_t data_size;
+
+    /// FourCC code of the sample.
+    ///
+    /// If not set, the `pixel_type` in `layout` should be used to determine the format.
+    char FourCC[4];
+
+    /// Layout of the sample data.
+    struct FlatSampleLayout layout;
 };
+
+typedef uint8_t LogLevel_t;
+enum LogLevel {
+    Trace = 0,
+    Debug = 1,
+    Info = 2,
+    Warn = 3,
+    Error = 4,
+};
+
+// define our "logger" function
+typedef void(*Logger)(LogLevel_t level, const char* message);
 
 // ================================================================
 //                        INITIALIZATION
 // ================================================================
 
-void initialize();
-void shutdown();
+//! The `version` function shall not be changed in future versions of the interface as it is used to determine the version of the interface
+//! at runtime.
 
-const char* backend_name();
+#ifdef BIRB_VISION_INTERFACE_IMPLEMENTATION
+const char* birb_vision_nest_interface_version() {
+    return BIRB_VISION_NEST_INTERFACE_VERSION;
+}
+#endif
+
+/// Get the version of the interface.
+///
+/// This function shall return `BIRB_VISION_NEST_INTERFACE_VERSION` without any side effects.
+const char* birb_vision_nest_interface_version();
+
+// TODO maybe this is too unsafe since the library could be loaded different times
+// say from different version of the higher level crates
+// A solution could be to make initialize return an handle that is actually an instance counter
+// but maybe this would complicate the API too much since all the functions would need to take the handle as first argument
+// for consistency. Maybe it is better to let the implementor handle this implicitly.
+//void initialize();
+//void shutdown();
 
 // ================================================================
 //                        DEVICE DISCOVERY
@@ -139,12 +200,29 @@ const char* backend_name();
 
 struct TransportLayerList;
 
-struct TransportLayerList* supported_transport_layers();
+/// Get a list of supported transport layers.
+///
+/// To free the list, use `transport_layer_list_free`.
+///
+/// @return A list of supported transport layers or `NULL`. The list must be freed using `transport_layer_list_free`.
+struct TransportLayerList* supported_transport_layers(Logger logger);
 
+/// Free a list of transport layers.
+/// The list must be freed exactly once.
+///
+/// @param list The list to free.
 void transport_layer_list_free(
     struct TransportLayerList* list
 );
 
+/// Get an item from the list of transport layers.
+///
+/// If the index is out of bounds, the function will return `NULL`. This can be used to determine the length of the list.
+/// The returned string is owned by the list and must not be freed.
+///
+/// @param list The list of transport layers.
+/// @param index The index of the item to get.
+/// @return A string representing the transport layer or `NULL`.
 const char* transport_layer_list_get(
     const struct TransportLayerList* list,
     int32_t index
@@ -157,7 +235,11 @@ const char* transport_layer_list_get(
 struct DeviceInfo;
 struct DeviceInfoList;
 
+/// Enumerate devices.
+///
+/// @param transport_layers A list of transport layers to use for discovery. The list must be terminated by a `NULL` pointer.
 struct DeviceInfoList* discover_devices(
+    Logger logger,
     const char** transport_layers
 );
 
@@ -214,19 +296,36 @@ void device_grab(
     struct Device* device
 );
 
-typedef void (*FrameCallback)(struct Frame* frame, void* user_data);
+typedef void (*FrameCallback)(struct FlatSample* frame, void* user_data);
 
-void set_stream_callback(
+void device_set_stream_callback(
     struct Device* device,
     FrameCallback callback,
     void* user_data
 );
 
-OPTIONAL
-void on_stream_callback_dropped(
-    struct Device* device,
-    FrameCallback callback,
-    void* user_data
+// ================================================================
+//                       DEVICE CONTROL
+// ================================================================
+
+enum ControlType {
+    Unknown = 0,
+    Boolean,
+    Integer,
+    Float,
+    String,
+    Group,
+    Command,
+};
+
+struct ControlList;
+
+struct ControlList* device_controls(
+    const struct Device* device
+);
+
+void control_list_free(
+    struct ControlList* list
 );
 
 #ifdef __cplusplus
