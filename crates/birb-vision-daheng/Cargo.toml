@@ -1,0 +1,10 @@
+[package]
+name = "birb-vision-daheng"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.91"
+daheng-sys = { version = "0.1.0", path = "../bindings/daheng-sys" }
+log = "0.4.22"
+thiserror = "1.0.65"

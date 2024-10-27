@@ -19,7 +19,7 @@ use crate::decoders::yuyv422_to_rgb;
 #[derive(Clone)]
 #[derive(EnumAsInner)]
 pub enum Sample<'a> {
-    LockedBuffer(Arc<dyn LockedBuffer>),
+    LockedBuffer(FlatSample<Arc<dyn LockedBuffer>>),
     FlatSample(FlatSample<Cow<'a, [u8]>>),
     // TODO point cloud, maybe depth map, ...
 }
@@ -30,10 +30,13 @@ impl<'a> Sample<'a> {
     }
 
     /// Tries to decode the sample into a DynamicImage
-    pub fn try_decode(self) -> Result<Result<DynamicImage, anyhow::Error>, Sample<'static>> {
+    ///
+    /// # Returns
+    /// - Err(Sample) if the sample is not decodable
+    pub fn try_decode(self) -> Result<Result<DynamicImage, anyhow::Error>, Self> {
         let lb: Arc<dyn LockedBuffer>;
 
-        let flat_sample = match self {
+        let flat_sample = match &self {
             Sample::LockedBuffer(locked_buffer) => {
                 lb = locked_buffer;
                 lb.sample()
@@ -44,10 +47,7 @@ impl<'a> Sample<'a> {
         let layout = &flat_sample.layout;
 
         if layout.sample_type == SampleType::FourCC(FourCC::new(b"YUYV")) {
-            let buffer = flat_sample.buffer;
-            let start = Instant::now();
-            let data = yuyv422_to_rgb(&buffer, false).unwrap();
-            println!("Converted in {:?}", start.elapsed());
+            let data = yuyv422_to_rgb(&flat_sample.buffer, false).unwrap();
             let img = DynamicImage::ImageRgb8(RgbImage::from_raw(layout.width as u32, layout.height as u32, data).unwrap());
             return Ok(Ok(img));
         }
@@ -60,11 +60,9 @@ impl<'a> Sample<'a> {
 
         if layout.sample_type == SampleType::FourCC(FourCC::new(b"MJPG")) {
             let buffer = flat_sample.buffer;
-            let start = Instant::now();
             //let img = birb_vision_core::decoders::decode_mjpg(data).unwrap();
             //let img = DynamicImage::ImageRgb8(img);
             let img = image::load_from_memory(&buffer).unwrap();
-            println!("Converted mjpeg in {:?}", start.elapsed());
             return Ok(Ok(img));
         }
 
@@ -89,8 +87,6 @@ impl<'a> Sample<'a> {
                 return Ok(Ok(dynamic_image));
             }
         }
-
-        let buffer = flat_sample.buffer.into_owned();
 
         Err(Sample::FlatSample(FlatSample {
             buffer: Cow::Owned(buffer),

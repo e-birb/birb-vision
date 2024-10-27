@@ -647,6 +647,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "birb-vision-daheng"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "daheng-sys",
+ "log",
+ "thiserror",
+]
+
+[[package]]
 name = "birb-vision-egui-interface"
 version = "0.1.0"
 dependencies = [
