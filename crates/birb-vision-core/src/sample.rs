@@ -15,12 +15,26 @@ pub use locked_buffer::LockedBuffer;
 
 use crate::decoders::yuyv422_to_rgb;
 
+#[derive(Clone)]
+pub enum ImageSampleBuffer<'a> {
+    LockedBuffer(Arc<dyn LockedBuffer>),
+    Cow(Cow<'a, [u8]>),
+}
+
+impl<'a> Debug for ImageSampleBuffer<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::LockedBuffer(_) => write!(f, "LockedBuffer"),
+            Self::Cow(_) => write!(f, "Cow"),
+        }
+    }
+}
+
 /// A sample (possibly a frame) captured by a camera
 #[derive(Clone)]
 #[derive(EnumAsInner)]
 pub enum Sample<'a> {
-    LockedBuffer(FlatSample<Arc<dyn LockedBuffer>>),
-    FlatSample(FlatSample<Cow<'a, [u8]>>),
+    ImageSample(FlatSample<ImageSampleBuffer<'a>>),
     // TODO point cloud, maybe depth map, ...
 }
 
@@ -34,72 +48,33 @@ impl<'a> Sample<'a> {
     /// # Returns
     /// - Err(Sample) if the sample is not decodable
     pub fn try_decode(self) -> Result<Result<DynamicImage, anyhow::Error>, Self> {
-        let lb: Arc<dyn LockedBuffer>;
+        let Sample::ImageSample(flat_sample) = self;
 
-        let flat_sample = match &self {
-            Sample::LockedBuffer(locked_buffer) => {
-                lb = locked_buffer;
-                lb.sample()
+        match flat_sample.buffer {
+            ImageSampleBuffer::LockedBuffer(buffer) => {
+                let lb = buffer.clone();
+                FlatSample::try_decode_buffer(Cow::Borrowed(buffer.data()), &flat_sample.layout)
+                    .map_err(move |_| Sample::ImageSample(FlatSample {
+                        buffer: ImageSampleBuffer::LockedBuffer(lb),
+                        layout: flat_sample.layout
+                    }))
             },
-            Sample::FlatSample(flat_sample) => flat_sample,
-        };
-
-        let layout = &flat_sample.layout;
-
-        if layout.sample_type == SampleType::FourCC(FourCC::new(b"YUYV")) {
-            let data = yuyv422_to_rgb(&flat_sample.buffer, false).unwrap();
-            let img = DynamicImage::ImageRgb8(RgbImage::from_raw(layout.width as u32, layout.height as u32, data).unwrap());
-            return Ok(Ok(img));
+            ImageSampleBuffer::Cow(buffer) => {
+                FlatSample::try_decode_buffer(buffer, &flat_sample.layout)
+                    .map_err(|buffer| Sample::ImageSample(FlatSample {
+                        buffer: ImageSampleBuffer::Cow(buffer),
+                        layout: flat_sample.layout
+                    }))
+            },
         }
-
-        if layout.sample_type == SampleType::FourCC(FourCC::new(b"RGB3")) {
-            let buffer = flat_sample.buffer.into_owned();
-            let img = DynamicImage::ImageRgb8(RgbImage::from_raw(layout.width as u32, layout.height as u32, buffer).unwrap());
-            return Ok(Ok(img));
-        }
-
-        if layout.sample_type == SampleType::FourCC(FourCC::new(b"MJPG")) {
-            let buffer = flat_sample.buffer;
-            //let img = birb_vision_core::decoders::decode_mjpg(data).unwrap();
-            //let img = DynamicImage::ImageRgb8(img);
-            let img = image::load_from_memory(&buffer).unwrap();
-            return Ok(Ok(img));
-        }
-
-        if layout.sample_type == SampleType::Plain(PixelFormat::Mono8Packed) {
-            // TODO this is just a quick hack to get the image to display but it's not correct
-            warn_once!("Quick hack to display Mono8Packed image");
-            if layout.row_major && layout.height > 0 && layout.width > 0 && layout.offset == 0 {
-                let buffer = flat_sample.buffer.into_owned();
-                let image = image::ImageBuffer::<Luma<u8>, Vec<u8>>::from_raw(layout.width, layout.height, buffer).unwrap();
-                let dynamic_image = DynamicImage::ImageLuma8(image);
-                return Ok(Ok(dynamic_image));
-            }
-        }
-
-        if layout.sample_type == SampleType::Plain(PixelFormat::RGB8Packed) {
-            // TODO this is just a quick hack to get the image to display but it's not correct
-            warn_once!("Quick hack to display RGB8Packed image");
-            if layout.row_major && layout.height > 0 && layout.width > 0 && layout.offset == 0 {
-                let buffer = flat_sample.buffer.into_owned();
-                let image = image::ImageBuffer::<image::Rgb<u8>, Vec<u8>>::from_raw(layout.width, layout.height, buffer).unwrap();
-                let dynamic_image = DynamicImage::ImageRgb8(image);
-                return Ok(Ok(dynamic_image));
-            }
-        }
-
-        Err(Sample::FlatSample(FlatSample {
-            buffer: Cow::Owned(buffer),
-            layout: layout.clone(),
-        }))
     }
 }
 
 impl<'a> Debug for Sample<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Sample::LockedBuffer(_) => write!(f, "LockedBuffer"),
-            Sample::FlatSample(_) => write!(f, "FlatSample"),
+            //Sample::LockedBuffer(_) => write!(f, "LockedBuffer"),
+            Sample::ImageSample(_) => write!(f, "FlatSample"),
         }
     }
 }

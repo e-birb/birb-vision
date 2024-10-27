@@ -1,6 +1,6 @@
 use std::{borrow::Cow, cell::RefCell, collections::HashMap, ops::Deref, path::Path, sync::{Arc, Mutex}, time::Duration};
 
-use birb_vision_core::{anyhow::{self, anyhow}, backend::{Backend, DeviceInfo, DeviceInfoEntry}, CameraDevice, DeviceResult, Event, FlatSample, FlatSampleLayout, FourCC, GroupNode, Node, NodeId, NodeVariant, PropertyState, PropertyValue, Sample, SampleType};
+use birb_vision_core::{anyhow::{self, anyhow}, backend::{Backend, DeviceInfo, DeviceInfoEntry}, CameraDevice, DeviceResult, Event, FlatSample, FlatSampleLayout, FourCC, GroupNode, Node, NodeId, NodeVariant, PropertyState, PropertyValue, Sample, ImageSampleBuffer, SampleType};
 use v4l::{io::traits::CaptureStream, video::Capture, Control, Device};
 
 use birb_vision_core::DeviceError::*;
@@ -152,10 +152,10 @@ impl CameraDevice for V4lDevice {
                     row_major: true,
                 };
                 let sample = FlatSample {
-                    buffer: Cow::Borrowed(data),
+                    buffer: ImageSampleBuffer::Cow(Cow::Borrowed(data)),
                     layout,
                 };
-                let event = Event::Sample(Ok(Sample::FlatSample(sample)));
+                let event = Event::Sample(Ok(Sample::ImageSample(sample)));
                 callback.lock().unwrap()(event);
             }
         });

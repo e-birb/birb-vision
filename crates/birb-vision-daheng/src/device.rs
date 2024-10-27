@@ -1,5 +1,6 @@
 use std::{ffi::{c_void, CStr, CString}, fmt::Debug};
 
+use birb_vision_core::CameraDevice;
 use daheng_sys::{v1, v2};
 
 use crate::{ctx::try_common, Ctx, DahengError, GxError};
@@ -51,6 +52,12 @@ impl Drop for Device {
         }
     }
 }
+
+//impl CameraDevice for Device {
+//    fn get_device_info(&self) -> birb_vision_core::DeviceResult<birb_vision_core::backend::DeviceInfo> {
+//        
+//    }
+//}
 
 pub enum DeviceInfo {
     V1(v1::GX_DEVICE_BASE_INFO),

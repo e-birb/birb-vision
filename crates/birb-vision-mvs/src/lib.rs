@@ -2,7 +2,7 @@
 
 use std::{borrow::Cow, ffi::{c_uchar, c_void, CStr}, panic::{catch_unwind, UnwindSafe}, path::Path, pin::Pin, sync::Mutex, time::Duration};
 
-use birb_vision_core::{FlatSample, FlatSampleLayout, PixelFormat, SampleType};
+use birb_vision_core::{FlatSample, FlatSampleLayout, PixelFormat, ImageSampleBuffer, SampleType};
 use device::{AccessMode, DeviceInfo};
 pub use log;
 
@@ -56,7 +56,7 @@ pub struct MVDevice {
 }
 
 struct Callbacks {
-    image_callback: Box<dyn for<'a> Fn(FlatSample<Cow<'a, [u8]>>) + Send + Sync>,
+    image_callback: Box<dyn for<'a> Fn(FlatSample<ImageSampleBuffer<'a>>) + Send + Sync>,
     event_callback: Box<dyn Fn(/*TODO*/) + Send + Sync>,
 }
 
@@ -351,7 +351,7 @@ impl MVDevice {
     //}
 
     // TODO move?
-    pub fn set_image_callback(&self, f: Box<dyn for<'a> Fn(FlatSample<Cow<'a, [u8]>>) + Send + Sync + 'static>) {
+    pub fn set_image_callback(&self, f: Box<dyn for<'a> Fn(FlatSample<ImageSampleBuffer<'a>>) + Send + Sync + 'static>) {
         self.callbacks.lock().unwrap().image_callback = f;
     }
 
@@ -405,7 +405,7 @@ extern "C" fn frame_callback(pData: *mut c_uchar, pFrameInfo: *mut MV_FRAME_OUT_
             stride: 0,
         };
 
-        (callbacks.lock().unwrap().image_callback)(FlatSample { buffer, layout });
+        (callbacks.lock().unwrap().image_callback)(FlatSample { buffer: ImageSampleBuffer::Cow(buffer), layout });
     });
 }
 

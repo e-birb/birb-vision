@@ -651,6 +651,7 @@ name = "birb-vision-daheng"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "birb-vision-core",
  "daheng-sys",
  "log",
  "thiserror",

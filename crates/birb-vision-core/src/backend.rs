@@ -203,23 +203,23 @@ pub trait Backend: 'static {
     /// Enumerate all devices.
     fn enumerate(&self, transport_layers: &[String]) -> anyhow::Result<Vec<DeviceInfo>>;
 
-    /// Find a device by its information.
-    ///
-    /// If found, an updated version of the device information is returned.  
-    /// This is similar to [`DeviceInfo::new`] except it does not actually create a device.
-    ///
-    /// # Notes
-    /// The default implementation actually calls [`Backend::create`] and returns the device information,
-    /// but implementations should provide a more efficient way to find a device.
-    fn find(&self, info: &DeviceInfo) -> anyhow::Result<Vec<DeviceInfo>> {
-        let device = self.create(info)?;
-        if let Some(device) = device {
-            let info = device.get_device_info()?;
-            Ok(vec![info])
-        } else {
-            Ok(vec![])
-        }
-    }
+    ///// Find a device by its information.
+    /////
+    ///// If found, an updated version of the device information is returned.  
+    ///// This is similar to [`DeviceInfo::new`] except it does not actually create a device.
+    /////
+    ///// # Notes
+    ///// The default implementation actually calls [`Backend::create`] and returns the device information,
+    ///// but implementations should provide a more efficient way to find a device.
+    //fn find(&self, info: &DeviceInfo) -> anyhow::Result<Vec<DeviceInfo>> {
+    //    let device = self.create(info)?;
+    //    if let Some(device) = device {
+    //        let info = device.get_device_info()?;
+    //        Ok(vec![info])
+    //    } else {
+    //        Ok(vec![])
+    //    }
+    //}
 
     /// Try to create a device.
     ///
