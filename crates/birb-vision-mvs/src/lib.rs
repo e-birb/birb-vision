@@ -1,6 +1,6 @@
 #![doc = include_str!("../README.md")]
 
-use std::{borrow::Cow, ffi::{c_uchar, c_void, CStr}, panic::{catch_unwind, UnwindSafe}, path::Path, pin::Pin, sync::Mutex, time::Duration};
+use std::{borrow::Cow, ffi::{c_uchar, c_void, CStr}, path::Path, pin::Pin, sync::Mutex, time::Duration};
 
 use birb_vision_core::{utils::try_no_panic, FlatSample, FlatSampleLayout, ImageSampleBuffer, PixelFormat, SampleType};
 use device::{AccessMode, DeviceInfo};
