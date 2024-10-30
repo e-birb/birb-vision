@@ -1,6 +1,6 @@
 use std::{borrow::Cow, cell::RefCell, collections::HashMap, ops::Deref, path::Path, sync::{Arc, Mutex}, time::Duration};
 
-use birb_vision_core::{anyhow::{self, anyhow}, backend::{Backend, DeviceInfo, DeviceInfoEntry}, CameraDevice, DeviceResult, Event, FlatSample, FlatSampleLayout, FourCC, GroupNode, Node, NodeId, NodeVariant, PropertyState, PropertyValue, Sample, ImageSampleBuffer, SampleType};
+use birb_vision_core::{anyhow::{self, anyhow}, backend::{Backend, DeviceInfo, DeviceInfoEntry}, CameraDevice, DeviceResult, StreamEvent, FlatSample, FlatSampleLayout, FourCC, GroupNode, Node, NodeId, NodeVariant, PropertyState, PropertyValue, Sample, ImageSampleBuffer, SampleType};
 use v4l::{io::traits::CaptureStream, video::Capture, Control, Device};
 
 use birb_vision_core::DeviceError::*;
@@ -11,7 +11,7 @@ pub struct V4lDevice {
     dev: Mutex<Device>,
     current_format: Arc<Mutex<v4l::Format>>,
 
-    callback: Arc<Mutex<Box<dyn Fn(Event) + Send + Sync>>>,
+    callback: Arc<Mutex<Box<dyn Fn(StreamEvent) + Send + Sync>>>,
     thread: RefCell<Option<std::thread::JoinHandle<()>>>,
     stream: RefCell<Option<Arc<Mutex<v4l::io::mmap::Stream<'static>>>>>,
 
@@ -155,7 +155,7 @@ impl CameraDevice for V4lDevice {
                     buffer: ImageSampleBuffer::Cow(Cow::Borrowed(data)),
                     layout,
                 };
-                let event = Event::Sample(Ok(Sample::ImageSample(sample)));
+                let event = StreamEvent::Sample(Ok(Sample::ImageSample(sample)));
                 callback.lock().unwrap()(event);
             }
         });
@@ -183,7 +183,7 @@ impl CameraDevice for V4lDevice {
         Ok(())
     }
 
-    fn set_stream_callback(&self, f: Box<dyn Fn(Event) + Send + Sync>) -> DeviceResult {
+    fn set_stream_callback(&self, f: Box<dyn Fn(StreamEvent) + Send + Sync>) -> DeviceResult {
         *self.callback.lock().unwrap() = f;
         Ok(())
     }

@@ -2,7 +2,7 @@ use std::{future::Future, sync::Mutex};
 
 use futures::channel::oneshot;
 
-use crate::{CameraDevice, DeviceResult, Event, Sample};
+use crate::{CameraDevice, DeviceResult, StreamEvent, Sample};
 
 impl<T: CameraDevice + ?Sized> CameraDeviceEx for T {}
 
@@ -14,7 +14,7 @@ pub trait CameraDeviceEx: CameraDevice {
 
             self.set_stream_callback(Box::new(move |event| {
                 match event {
-                    Event::Sample(frame) => {
+                    StreamEvent::Sample(frame) => {
                         if let Some(tx) = tx.lock().unwrap().take() {
                             if let Err(e) = tx.send(frame.map(|s| s.into_owned())) {
                                 log::error!("Error sending frame: {:?}", e);

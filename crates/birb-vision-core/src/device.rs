@@ -2,7 +2,7 @@ use clap::ValueEnum;
 use enum_as_inner::EnumAsInner;
 use serde::{Deserialize, Serialize};
 
-use crate::{backend::DeviceInfo, DeviceError, DeviceResult, Event, Node, NodeId, PropertyState, PropertyValue};
+use crate::{backend::DeviceInfo, DeviceError, DeviceResult, StreamEvent, Node, NodeId, PropertyState, PropertyValue};
 
 pub trait CameraDevice {
     fn get_device_info(&self) -> DeviceResult<DeviceInfo>;
@@ -51,7 +51,7 @@ pub trait CameraDevice {
     // TODO Is this "no Pin requirement" good?
     //fn poll_events(&self, ctx: &mut std::task::Context) -> Poll<DeviceResult<Event>>;
 
-    fn set_stream_callback(&self, f: Box<dyn for<'a> Fn(Event<'a>) + Send + Sync>) -> DeviceResult;
+    fn set_stream_callback(&self, f: Box<dyn for<'a> Fn(StreamEvent<'a>) + Send + Sync>) -> DeviceResult;
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

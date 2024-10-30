@@ -98,7 +98,7 @@ impl CameraDevice for Device {
         Ok(())
     }
 
-    fn set_stream_callback(&self, f: Box<dyn for<'a> Fn(birb_vision_core::Event<'a>) + Send + Sync>) -> birb_vision_core::DeviceResult {
+    fn set_stream_callback(&self, f: Box<dyn for<'a> Fn(birb_vision_core::StreamEvent<'a>) + Send + Sync>) -> birb_vision_core::DeviceResult {
         self.callbacks.lock().unwrap().stream_callback = Some(f);
         Ok(())
     }

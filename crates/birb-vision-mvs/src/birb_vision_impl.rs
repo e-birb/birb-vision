@@ -5,7 +5,7 @@ use std::borrow::Cow;
 use birb_vision_core::anyhow::anyhow;
 use birb_vision_core::{NodeVariant, PropertyState, PropertyValue, PropertyVariant};
 
-use birb_vision_core::{CameraDevice, DeviceResult, EnumValue, Event, Sample, Node, NodeId, NumericValue};
+use birb_vision_core::{CameraDevice, DeviceResult, EnumValue, StreamEvent, Sample, Node, NodeId, NumericValue};
 use crate::ctx::convert_info;
 use crate::genicam::{ROOT_ID, USER_ROOT_ID};
 use crate::{genicam::parse_root, mvs_try, prelude::*};
@@ -114,9 +114,9 @@ impl CameraDevice for MVDevice {
         mvs_try!(self.cx => MV_CC_TriggerSoftwareExecute(self.handle)).map_err(|e| e.into())
     }
 
-    fn set_stream_callback(&self, f: Box<dyn Fn(Event) + Send + Sync>) -> DeviceResult {
+    fn set_stream_callback(&self, f: Box<dyn Fn(StreamEvent) + Send + Sync>) -> DeviceResult {
         self.set_image_callback(Box::new(move |sample| {
-            f(Event::Sample(Ok(Sample::ImageSample(sample))))
+            f(StreamEvent::Sample(Ok(Sample::ImageSample(sample))))
         }));
 
         // TODO

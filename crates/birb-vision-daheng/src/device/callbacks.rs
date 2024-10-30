@@ -1,7 +1,7 @@
 use std::{ffi::c_void, sync::Mutex};
 
 use anyhow::anyhow;
-use birb_vision_core::{utils::try_no_panic, DeviceResult, FlatSample, FlatSampleLayout, ImageSampleBuffer, PixelFormat, Sample, SampleType};
+use birb_vision_core::{utils::try_no_panic, DeviceResult, StreamEvent, FlatSample, FlatSampleLayout, ImageSampleBuffer, PixelFormat, Sample, SampleType};
 use daheng_sys::{v1, v2, SDK};
 
 use crate::{DahengError, GxError};
@@ -10,7 +10,7 @@ use super::Device;
 
 
 pub(crate) struct DeviceCallbacks {
-    pub stream_callback: Option<Box<dyn for<'a> Fn(birb_vision_core::Event<'a>) + Send + Sync>>,
+    pub stream_callback: Option<Box<dyn for<'a> Fn(birb_vision_core::StreamEvent<'a>) + Send + Sync>>,
 }
 
 type DeviceCallbacksPtr = *const Mutex<DeviceCallbacks>;
@@ -73,7 +73,7 @@ unsafe extern "C" fn capture_callback_v1(
 
         let callbacks = callbacks_ptr.lock().unwrap();
         if let Some(f) = callbacks.stream_callback.as_ref() {
-            f(birb_vision_core::Event::Sample(sample));
+            f(birb_vision_core::StreamEvent::Sample(sample));
         }
     });
 }
@@ -87,34 +87,37 @@ unsafe extern "C" fn capture_callback_v2(
         let frame_data = &*pFrameData;
         assert!(!frame_data.pUserParam.is_null());
         let callbacks_ptr = &*(frame_data.pUserParam as DeviceCallbacksPtr);
-
-        let sample_type = convert_sample_type_v2(frame_data.nPixelFormat as u32).unwrap();
-        let layout = FlatSampleLayout {
-            offset: 0,
-            row_major: true,
-            sample_type,
-            width: frame_data.nWidth as u32,
-            height: frame_data.nHeight as u32,
-            stride: 0,
+        let callbacks = callbacks_ptr.lock().unwrap(); // TODO instead of keeping it locked, maybe clone the callback and drop the lock (so that we are protected from possible unexpected callbacks nesting -> deadlocks)
+        let Some(callback) = callbacks.stream_callback.as_ref() else {
+            return
         };
 
-        let sample: DeviceResult<Sample> = match frame_data.status {
-            v2::GX_FRAME_STATUS_LIST_GX_FRAME_STATUS_SUCCESS => {
-                let buffer = frame_data.pImgBuf as *const u8;
-                let buffer = std::slice::from_raw_parts(buffer, frame_data.nImgSize as usize); // TODO check if size > 0, otherwise return empty slice | or use an unchecked version
-                Ok(Sample::ImageSample(FlatSample {
-                    buffer: ImageSampleBuffer::Cow(buffer.into()),
-                    layout,
-                }))
-            },
-            v2::GX_FRAME_STATUS_LIST_GX_FRAME_STATUS_INCOMPLETE => Err(anyhow!("Incomplete frame").into()),
-            status => Err(anyhow!("Unknown frame status: {status:#x}").into()),
-        };
+        let sample = (|| -> DeviceResult<Sample> {
+            let sample_type = convert_sample_type_v2(frame_data.nPixelFormat as u32)?;
+            let layout = FlatSampleLayout {
+                offset: 0,
+                row_major: true,
+                sample_type,
+                width: frame_data.nWidth as u32,
+                height: frame_data.nHeight as u32,
+                stride: 0,
+            };
 
-        let callbacks = callbacks_ptr.lock().unwrap();
-        if let Some(f) = callbacks.stream_callback.as_ref() {
-            f(birb_vision_core::Event::Sample(sample));
-        }
+            match frame_data.status {
+                v2::GX_FRAME_STATUS_LIST_GX_FRAME_STATUS_SUCCESS => {
+                    let buffer = frame_data.pImgBuf as *const u8;
+                    let buffer = std::slice::from_raw_parts(buffer, frame_data.nImgSize as usize); // TODO check if size > 0, otherwise return empty slice | or use an unchecked version
+                    Ok(Sample::ImageSample(FlatSample {
+                        buffer: ImageSampleBuffer::Cow(buffer.into()),
+                        layout,
+                    }))
+                },
+                v2::GX_FRAME_STATUS_LIST_GX_FRAME_STATUS_INCOMPLETE => Err(anyhow!("Incomplete frame").into()),
+                status => Err(anyhow!("Unknown frame status: {status:#x}").into()),
+            }
+        })();
+
+        callback(StreamEvent::Sample(sample));
     });
 }
 

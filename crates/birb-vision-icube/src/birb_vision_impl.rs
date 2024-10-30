@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use anyhow::anyhow;
-use birb_vision_core::{backend::{Backend, DeviceInfo, DeviceInfoEntry}, AccessMode, CameraDevice, DeviceError, DeviceResult, Event, FlatSample, FlatSampleLayout, GroupNode, ImageSampleBuffer, Node, NodeVariant, PixelFormat, PropertyVariant, Sample, SampleType};
+use birb_vision_core::{backend::{Backend, DeviceInfo, DeviceInfoEntry}, AccessMode, CameraDevice, DeviceError, DeviceResult, StreamEvent, FlatSample, FlatSampleLayout, GroupNode, ImageSampleBuffer, Node, NodeVariant, PixelFormat, PropertyVariant, Sample, SampleType};
 use icube_sdk_sys::SDK;
 
 use crate::{iCubeContext, iCubeDevice, CallbackEventType, IntoICubeResult};
@@ -141,7 +141,7 @@ impl CameraDevice for iCubeDevice {
         todo!()
     }
 
-    fn set_stream_callback(&self, f: Box<dyn for<'a> Fn(Event<'a>) + Send + Sync>) -> DeviceResult {
+    fn set_stream_callback(&self, f: Box<dyn for<'a> Fn(StreamEvent<'a>) + Send + Sync>) -> DeviceResult {
         let device_index = self.device_index();
         self.set_callback(Box::new(move |e: CallbackEventType<'_>| {
             let mut width = 0;
@@ -173,7 +173,7 @@ impl CameraDevice for iCubeDevice {
                                 row_major: true,
                             },
                         }));
-                    f(Event::Sample(sample));
+                    f(StreamEvent::Sample(sample));
                 },
                 _ => todo!("unhandled iCube event type: {e:?}"),
             }

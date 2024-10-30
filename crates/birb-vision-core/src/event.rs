@@ -10,7 +10,7 @@ use crate::{DeviceResult, Sample};
 #[derive(Debug)]
 #[derive(EnumAsInner)]
 // TODO #[derive(Serialize, Deserialize)]
-pub enum Event<'a> {
+pub enum StreamEvent<'a> {
     /// A new sample is available
     ///
     /// See [`Sample`] for more information.
@@ -21,8 +21,8 @@ pub enum Event<'a> {
     // in another enum for non-common/ensured events.
 }
 
-impl<'a> Event<'a> {
-    pub fn into_owned(self) -> Event<'static> {
+impl<'a> StreamEvent<'a> {
+    pub fn into_owned(self) -> StreamEvent<'static> {
         todo!()
     }
 }

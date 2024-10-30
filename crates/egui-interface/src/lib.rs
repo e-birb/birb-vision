@@ -1,6 +1,6 @@
 use std::{collections::{HashMap, HashSet}, ops::{Deref, DerefMut}, sync::{mpsc::Sender, Arc, Weak}, time::Instant};
 
-use birb_vision::core::{backend::DeviceInfo, image::DynamicImage, AccessMode, CameraDevice, EnumEntry, Event, Node, NodeId, NodeVariant, PropertyState, PropertyValue, PropertyVariant, Representation};
+use birb_vision::core::{backend::DeviceInfo, image::DynamicImage, AccessMode, CameraDevice, EnumEntry, StreamEvent, Node, NodeId, NodeVariant, PropertyState, PropertyValue, PropertyVariant, Representation};
 use egui::{load::SizedTexture, mutex::Mutex, Color32, ColorImage, DragValue, FontData, FontDefinitions, FontFamily, Grid, Image, ImageData, RichText, ScrollArea, Slider, TextBuffer, TextureFilter, TextureHandle, TextureOptions, Ui, Window};
 use material_icons::Icon;
 use regex::Regex;
@@ -134,7 +134,7 @@ impl CameraControl {
                     let state = state.clone();
                     Box::new(move |e| {
                         match e {
-                            Event::Sample(sample) => {
+                            StreamEvent::Sample(sample) => {
                                 let Ok(sample) = sample else {
                                     return;
                                 };
