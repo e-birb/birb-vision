@@ -191,10 +191,28 @@ impl Display for GxError {
 
 impl Error for GxError {}
 
+impl From<GxError> for birb_vision_core::DeviceError {
+    fn from(e: GxError) -> Self {
+        match e.kind {
+            // TODO ...
+            _ => anyhow::Error::new(e).into(),
+        }
+    }
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum DahengError {
     #[error("{0}")]
     GxError(#[from] GxError),
     #[error("{0}")]
     Other(#[from] anyhow::Error),
+}
+
+impl From<DahengError> for birb_vision_core::DeviceError {
+    fn from(e: DahengError) -> Self {
+        match e {
+            DahengError::GxError(e) => e.into(),
+            DahengError::Other(e) => e.into(),
+        }
+    }
 }

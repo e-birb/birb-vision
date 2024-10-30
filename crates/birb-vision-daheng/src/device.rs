@@ -1,36 +1,46 @@
-use std::{ffi::{c_void, CStr, CString}, fmt::Debug};
+use std::{ffi::c_void, sync::Mutex};
 
-use birb_vision_core::CameraDevice;
-use daheng_sys::{v1, v2};
+use birb_vision_core::{backend::DeviceInfoEntry, CameraDevice, DeviceError};
+use callbacks::DeviceCallbacks;
+use daheng_sys::{v1, v2, SDK};
 
 use crate::{ctx::try_common, Ctx, DahengError, GxError};
 
+mod callbacks;
+mod info;
+
+pub use info::DeviceInfo;
 
 pub struct Device {
     cx: Ctx,
+    info: DeviceInfo,
     handle: *mut c_void,
+    callbacks: Box<Mutex<DeviceCallbacks>>, // TODO maybe pin it?
 }
 
 impl Device {
-    pub fn open(info: &DeviceInfo) -> Result<Self, DahengError> {
+    pub fn open(info: DeviceInfo) -> Result<Self, DahengError> {
         let mut handle = std::ptr::null_mut();
+
+        // note: creating callbacks is a potential point of failure so we build
+        // it before opening the device so that after opening the device
+        // unwinding will close the device
+        let callbacks = DeviceCallbacks::new();
 
         let cx = Ctx::new()?;
 
         GxError::result(cx.sdk(), match cx.sdk() {
             daheng_sys::SDK::V1(api) => unsafe {
-                let content: CString = CString::new(info.serial_number()).unwrap();
                 let mut open_param = v1::GX_OPEN_PARAM {
-                    pszContent: content.as_ptr() as *mut i8,
+                    pszContent: info.serial_number().as_ptr() as *mut i8,
                     openMode: v1::GX_OPEN_MODE_GX_OPEN_SN as i32,
                     accessMode: v1::GX_ACCESS_MODE_GX_ACCESS_EXCLUSIVE as i32,
                 };
                 api.GXOpenDevice(&mut open_param, &mut handle)
             },
             daheng_sys::SDK::V2(api) => unsafe {
-                let content: CString = CString::new(info.serial_number()).unwrap();
                 let mut open_param = v2::GX_OPEN_PARAM {
-                    pszContent: content.as_ptr() as *mut i8,
+                    pszContent: info.serial_number().as_ptr() as *mut i8,
                     openMode: v1::GX_OPEN_MODE_GX_OPEN_SN as i32,
                     accessMode: v1::GX_ACCESS_MODE_GX_ACCESS_EXCLUSIVE as i32,
                 };
@@ -38,10 +48,16 @@ impl Device {
             },
         })?;
 
-        Ok(Self {
+        let device = Self {
             cx,
+            info: info.clone(),
             handle,
-        })
+            callbacks,
+        };
+
+        DeviceCallbacks::setup(&device)?;
+
+        Ok(device)
     }
 }
 
@@ -53,71 +69,42 @@ impl Drop for Device {
     }
 }
 
-//impl CameraDevice for Device {
-//    fn get_device_info(&self) -> birb_vision_core::DeviceResult<birb_vision_core::backend::DeviceInfo> {
-//        
-//    }
-//}
-
-pub enum DeviceInfo {
-    V1(v1::GX_DEVICE_BASE_INFO),
-    V2(v2::GX_DEVICE_BASE_INFO),
-}
-
-impl DeviceInfo {
-    pub fn vendor_name(&self) -> String {
-        // TODO handle errors and maybe do not use to_string_lossy?
-        match self {
-            DeviceInfo::V1(info) => CStr::from_bytes_until_nul(&info.szVendorName.map(|v| v as u8)).unwrap().to_string_lossy().to_string(),
-            DeviceInfo::V2(info) => CStr::from_bytes_until_nul(&info.szVendorName.map(|v| v as u8)).unwrap().to_string_lossy().to_string(),
-        }
-    }
-    pub fn model_name(&self) -> String {
-        match self {
-            DeviceInfo::V1(info) => CStr::from_bytes_until_nul(&info.szModelName.map(|v| v as u8)).unwrap().to_string_lossy().to_string(),
-            DeviceInfo::V2(info) => CStr::from_bytes_until_nul(&info.szModelName.map(|v| v as u8)).unwrap().to_string_lossy().to_string(),
-        }
-    }
-    pub fn serial_number(&self) -> String {
-        match self {
-            DeviceInfo::V1(info) => CStr::from_bytes_until_nul(&info.szSN.map(|v| v as u8)).unwrap().to_string_lossy().to_string(),
-            DeviceInfo::V2(info) => CStr::from_bytes_until_nul(&info.szSN.map(|v| v as u8)).unwrap().to_string_lossy().to_string(),
-        }
-    }
-    pub fn display_name(&self) -> String {
-        match self {
-            DeviceInfo::V1(info) => CStr::from_bytes_until_nul(&info.szDisplayName.map(|v| v as u8)).unwrap().to_string_lossy().to_string(),
-            DeviceInfo::V2(info) => CStr::from_bytes_until_nul(&info.szDisplayName.map(|v| v as u8)).unwrap().to_string_lossy().to_string(),
-        }
-    }
-    pub fn device_id(&self) -> String {
-        match self {
-            DeviceInfo::V1(info) => CStr::from_bytes_until_nul(&info.szDeviceID.map(|v| v as u8)).unwrap().to_string_lossy().to_string(),
-            DeviceInfo::V2(info) => CStr::from_bytes_until_nul(&info.szDeviceID.map(|v| v as u8)).unwrap().to_string_lossy().to_string(),
-        }
-    }
-    pub fn user_id(&self) -> String {
-        match self {
-            DeviceInfo::V1(info) => CStr::from_bytes_until_nul(&info.szUserID.map(|v| v as u8)).unwrap().to_string_lossy().to_string(),
-            DeviceInfo::V2(info) => CStr::from_bytes_until_nul(&info.szUserID.map(|v| v as u8)).unwrap().to_string_lossy().to_string(),
-        }
+impl CameraDevice for Device {
+    fn get_device_info(&self) -> birb_vision_core::DeviceResult<birb_vision_core::backend::DeviceInfo> {
+        let mut info = birb_vision_core::backend::DeviceInfo::new();
+        info.display_name = self.info.display_name().to_string_lossy().into_owned();
+        info.other.insert("vendor_name".into(), DeviceInfoEntry::new("Vendor Name", self.info.vendor_name().to_string_lossy()));
+        info.other.insert("model_name".into(), DeviceInfoEntry::new("Model Name", self.info.model_name().to_string_lossy()));
+        info.other.insert("serial_number".into(), DeviceInfoEntry::new("Serial Number", self.info.serial_number().to_string_lossy()));
+        info.other.insert("device_id".into(), DeviceInfoEntry::new("Device ID", self.info.device_id().to_string_lossy()));
+        info.other.insert("user_id".into(), DeviceInfoEntry::new("User ID", self.info.vendor_name().to_string_lossy()));
+        // TODO ...
+        Ok(info)
     }
 
-    // TODO supported_access_status,
-    // TODO device_class
-}
+    fn start_grabbing(&self) -> birb_vision_core::DeviceResult {
+        GxError::result(self.cx.sdk(), match self.cx.sdk() {
+            SDK::V1(v1) => unsafe { v1.GXStreamOn(self.handle) },
+            SDK::V2(v2) => unsafe { v2.GXSendCommand(self.handle, v2::GX_FEATURE_ID_GX_COMMAND_ACQUISITION_START as i32) },
+        })?;
+        Ok(())
+    }
 
-impl Debug for DeviceInfo {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("DeviceInfo")
-            .field("vendor_name", &self.vendor_name())
-            .field("model_name", &self.model_name())
-            .field("serial_number", &self.serial_number())
-            .field("display_name", &self.display_name())
-            .field("device_id", &self.device_id())
-            .field("user_id", &self.user_id())
-            // TODO supported_access_status,
-            // TODO device_class
-            .finish()
+    fn stop_grabbing(&self) -> birb_vision_core::DeviceResult {
+        GxError::result(self.cx.sdk(), match self.cx.sdk() {
+            SDK::V1(v1) => unsafe { v1.GXStreamOff(self.handle) },
+            SDK::V2(v2) => unsafe { v2.GXSendCommand(self.handle, v2::GX_FEATURE_ID_GX_COMMAND_ACQUISITION_STOP as i32) },
+        })?;
+        Ok(())
+    }
+
+    fn set_stream_callback(&self, f: Box<dyn for<'a> Fn(birb_vision_core::Event<'a>) + Send + Sync>) -> birb_vision_core::DeviceResult {
+        self.callbacks.lock().unwrap().stream_callback = Some(f);
+        Ok(())
+    }
+
+    fn grab(&self) -> birb_vision_core::DeviceResult {
+        // TODO
+        Err(DeviceError::NotImplemented)
     }
 }

@@ -4,6 +4,7 @@ pub mod channels;
 mod device;
 mod device_ex;
 mod error;
+pub mod utils;
 
 pub use device::*;
 pub use device_ex::*;

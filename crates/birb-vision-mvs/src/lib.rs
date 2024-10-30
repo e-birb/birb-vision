@@ -2,7 +2,7 @@
 
 use std::{borrow::Cow, ffi::{c_uchar, c_void, CStr}, panic::{catch_unwind, UnwindSafe}, path::Path, pin::Pin, sync::Mutex, time::Duration};
 
-use birb_vision_core::{FlatSample, FlatSampleLayout, PixelFormat, ImageSampleBuffer, SampleType};
+use birb_vision_core::{utils::try_no_panic, FlatSample, FlatSampleLayout, ImageSampleBuffer, PixelFormat, SampleType};
 use device::{AccessMode, DeviceInfo};
 pub use log;
 
@@ -424,27 +424,4 @@ extern "C" fn evtent_callback(pEventInfo: *mut mvs_sys::MV_EVENT_OUT_INFO, pUser
 
         (callbacks.lock().unwrap().event_callback)();
     });
-}
-
-// TODO maybe this is not possible to prove: #[no_panic::no_panic]
-fn try_no_panic(f: impl FnOnce() + UnwindSafe) {
-    let r = catch_unwind(f);
-
-    if let Err(e) = r {
-        let error: &str = if let Some(e) = e.downcast_ref::<String>() {
-            e
-        } else if let Some(e) = e.downcast_ref::<&str> () {
-            e
-        } else {
-            // This should never happen as panics can only be strings
-            "unknown error"
-        };
-
-        if let Err(_) = catch_unwind(move || {
-            log::error!("MVS callback panicked, callbacks shall never panic as exception cannot propagate in this context: {}", error);
-            //drop(e);
-        }) {
-            eprintln!("MVS callback panicked, callbacks shall never panic as exception cannot propagate in this context. -- Also failed to log or dropping the error! APP STATE MIGHT BE INVALID!");
-        }
-    }
 }
