@@ -14,11 +14,11 @@ pub use anyhow;
 pub use thiserror;
 
 mod sample;
-mod device_properties;
+mod device_property;
 //mod pixel_format;
 
 pub use sample::*;
-pub use device_properties::*;
+pub use device_property::*;
 //pub use pixel_format::*;
 
 pub use futures;
