@@ -48,7 +48,7 @@ pub struct Node {
     pub is_locked_ref: Option<NodeId>,
 
     pub address: Option<u64>,
-    pub address_ref: Option<NodeId>, // TODO unify with a variant, maybe ValueOrRef or something similar to also replace Child
+    pub address_ref: Option<NodeId>,
 
     pub port_ref: Option<NodeId>,
 
@@ -176,7 +176,7 @@ pub struct GroupNode {
 #[derive(Debug, Clone)]
 pub struct BoolProperty {
     pub value: Option<bool>,
-    pub value_ref: Option<NodeId>, // TODO unify with a variant, maybe ValueOrRef or something similar to also replace Child
+    pub value_ref: Option<NodeId>,
     pub default: Option<bool>,
 }
 
@@ -228,7 +228,7 @@ impl<T> Default for NumericProperty<T> {
 #[derive(Serialize, Deserialize)]
 pub struct EnumProperty {
     pub value: Option<i64>,
-    pub value_ref: Option<NodeId>, // TODO unify with a variant, maybe ValueOrRef or something similar to also replace Child
+    pub value_ref: Option<NodeId>,
     pub entries: Cow<'static, [EnumEntry]>,
 }
 
