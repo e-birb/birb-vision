@@ -1,4 +1,4 @@
-use std::{borrow::Cow, fmt::Debug, ops::RangeInclusive};
+use std::{borrow::Cow, fmt::Debug, ops::{Deref, DerefMut, RangeInclusive}};
 
 use enum_as_inner::EnumAsInner;
 use serde::{Deserialize, Serialize};
@@ -8,7 +8,8 @@ mod id;
 pub use id::*;
 
 #[derive(Debug, Clone)]
-pub struct Node {
+#[derive(Serialize, Deserialize)]
+pub struct NodeInfo {
     /// A Friendly name for the property
     pub display_name: String,
 
@@ -22,6 +23,25 @@ pub struct Node {
     pub description: Option<String>,
 
     pub visibility: Option<Visibility>,
+}
+
+impl NodeInfo {
+    pub fn new_with_id(id: impl Into<NodeId>) -> Self {
+        let id = id.into();
+        let name = format!("{:?}", id);
+        NodeInfo {
+            display_name: name.clone(),
+            id,
+            tooltip: None,
+            description: None,
+            visibility: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Node {
+    pub info: NodeInfo,
 
     pub access_mode: AccessMode,
 
@@ -38,16 +58,23 @@ pub struct Node {
     pub variant: NodeVariant,
 }
 
+impl Deref for Node {
+    type Target = NodeInfo;
+    fn deref(&self) -> &Self::Target {
+        &self.info
+    }
+}
+
+impl DerefMut for Node {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.info
+    }
+}
+
 impl Node {
     pub fn new_with_id(id: impl Into<NodeId>) -> Self {
-        let id = id.into();
-        let name = format!("{:?}", id);
         Node {
-            display_name: name.clone(),
-            id,
-            tooltip: None,
-            description: None,
-            visibility: None,
+            info: NodeInfo::new_with_id(id),
             access_mode: AccessMode::ReadWrite,
             is_locked_ref: None,
             address: None,
@@ -61,7 +88,8 @@ impl Node {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Serialize, Deserialize)]
 pub enum Visibility {
     Beginner,
     Expert,
