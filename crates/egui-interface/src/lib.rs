@@ -165,7 +165,7 @@ impl CameraControl {
                 state.on_state_mut(|state| {
                     let re = state.filter_re();
                     let mut selected_nodes = HashSet::new();
-                    if let Some(root_id) = &properties.root {
+                    for root_id in &properties.roots {
                         let (_, root) = properties.leafs.get(root_id).unwrap();
                         root.filter(&properties, &mut selected_nodes, &re);
                         // unnecessary? selected_nodes.insert(root_id.clone());
@@ -325,11 +325,11 @@ impl CameraControl {
                                 let re = state.filter_re();
                                 if let Some(props) = &state.props {
                                     let mut selected = HashSet::new();
-                                    if let Some(root_id) = &props.root {
+                                    for root_id in &props.roots {
                                         let (_, root) = props.leafs.get(root_id).unwrap();
                                         root.filter(&props, &mut selected, &re);
-                                        state.selected = selected;
                                     }
+                                    state.selected = selected;
                                 }
                             }
                             if !state.filter_error.is_empty() {
@@ -346,8 +346,8 @@ impl CameraControl {
                             let selected = state.selected.clone();
                             if let Some(props) = state.props.as_mut() {
                                 //println!("OK 1");
-                                if let Some(root) = props.root.clone() {
-                                    props.show_property(ui, &selected, &root, &tx);
+                                for root_id in props.roots.clone() {
+                                    props.show_property(ui, &selected, &root_id, &tx);
                                 }
                             }
                         });
@@ -389,7 +389,7 @@ impl Drop for CameraControl {
 }
 
 struct Properties {
-    root: Option<NodeId>,
+    roots: Vec<NodeId>,
     leafs: HashMap<NodeId, (Node, Property)>,
 }
 
@@ -402,7 +402,7 @@ impl Properties {
             leafs.insert(node.id.clone(), (node,property)); // TODO check result
         }
         Self {
-            root: camera.user_root_property().unwrap(),
+            roots: camera.user_root_properties().unwrap(),
             leafs,
         }
     }

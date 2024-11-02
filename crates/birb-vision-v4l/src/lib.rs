@@ -21,7 +21,6 @@ pub struct V4lDevice {
     _marker: *mut (),
 
     properties: HashMap<NodeId, Node>,
-    root_property: NodeId,
 }
 
 impl V4lDevice {
@@ -55,11 +54,6 @@ impl V4lDevice {
             }
         }
 
-        root.as_group_mut().unwrap().children = root_children.clone().into();
-
-        let root_id = root.id.clone();
-        properties.insert(root_id.clone(), root);
-
         Ok(Self {
             info: Arc::new(info),
             dev: Mutex::new(dev),
@@ -69,7 +63,6 @@ impl V4lDevice {
             stream: RefCell::new(None),
             _marker: std::ptr::null_mut(),
             properties,
-            root_property: root_id,
         })
     }
 }
@@ -86,10 +79,6 @@ impl CameraDevice for V4lDevice {
             .map(|(_, v)| v.clone())
             .collect()
         )
-    }
-
-    fn root_property(&self) -> DeviceResult<Option<NodeId>> {
-        Ok(self.root_property.clone().into())
     }
 
     fn read_property(&self, node: &Node) -> DeviceResult<PropertyState> {

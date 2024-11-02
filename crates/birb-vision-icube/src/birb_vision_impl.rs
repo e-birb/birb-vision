@@ -22,8 +22,6 @@ mod common_property {
     }
 
     decl! {
-        ROOT = "Root";
-
         NAME = "Name";
         VERSION = "Version";
         FIRMWARE_VERSION = "Firmware Version";
@@ -87,17 +85,7 @@ impl CameraDevice for iCubeDevice {
             "FPGA Version",
         ).into());
 
-        // root node
-        properties.push(GroupNode {
-            info: NodeInfo::new_with_id(ROOT),
-            children: properties.iter().map(|n| n.id.clone()).collect(),
-        }.into());
-
         Ok(properties)
-    }
-
-    fn root_property(&self) -> DeviceResult<Option<birb_vision_core::NodeId>> {
-        Ok(Some(common_property::ROOT))
     }
 
     fn read_property(&self, node: &Node) -> DeviceResult<birb_vision_core::PropertyState> {

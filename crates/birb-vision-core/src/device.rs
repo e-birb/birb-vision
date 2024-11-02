@@ -18,13 +18,19 @@ pub trait CameraDevice {
         return Ok(vec![]);
     }
 
-    fn root_property(&self) -> DeviceResult<Option<NodeId>> { // TODO maybe "root_properties"?
-        Ok(None)
+    fn root_properties(&self) -> DeviceResult<Vec<NodeId>> {
+        Ok(
+            self
+                .all_properties()?
+                .into_iter()
+                .map(|p| p.id.clone())
+                .collect()
+        )
     }
 
     /// Root of the interesting properties to be exposed to the user
-    fn user_root_property(&self) -> DeviceResult<Option<NodeId>> { // TODO maybe "user_root_properties"?
-        self.root_property()
+    fn user_root_properties(&self) -> DeviceResult<Vec<NodeId>> {
+        self.root_properties()
     }
 
     fn read_property(&self, _node: &Node) -> DeviceResult<PropertyState> {

@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use birb_vision_core::{AccessMode, BoolProperty, CommandProperty, EnumEntry, EnumProperty, GroupNode, Node, NodeId, NumericProperty, Property, Representation, StringProperty, ValueOrRef, Visibility};
 use roxmltree::Node as XmlNode;
 
-pub const ROOT_ID: NodeId = NodeId::String(Cow::Borrowed("Camera actual Root"));
+pub const ROOT_ID: NodeId = NodeId::String(Cow::Borrowed("Camera actual Root")); // TODO unnecessary?
 pub const USER_ROOT_ID: NodeId = NodeId::String(Cow::Borrowed("Root"));
 
 fn parse_child_or_property(xml_node: XmlNode, current: &mut Node, list: &mut Vec<Node>) -> Option<NodeId> {

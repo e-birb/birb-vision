@@ -27,12 +27,17 @@ impl CameraDevice for MVDevice {
         Ok(list)
     }
 
-    fn root_property(&self) -> DeviceResult<Option<NodeId>> {
-        Ok(ROOT_ID.into())
-    }
-
-    fn user_root_property(&self) -> DeviceResult<Option<NodeId>> {
-        Ok(USER_ROOT_ID.into())
+    fn user_root_properties(&self) -> DeviceResult<Vec<NodeId>> {
+        for node in self.all_properties()? {
+            if node.id == USER_ROOT_ID {
+                if let Node::Group(root) = node {
+                    return Ok(root.children.clone().into());
+                } else {
+                    return Err(anyhow!("Root node is not a group").into());
+                }
+            }
+        }
+        Err(anyhow!("Root node not found").into())
     }
 
     // TODO use this to exclude 
