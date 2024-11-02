@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::NodeId;
 
-use super::{AccessMode, ControlInfo};
+use super::ControlInfo;
 
 
 #[derive(Debug, Clone)]
