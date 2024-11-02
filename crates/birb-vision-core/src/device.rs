@@ -2,7 +2,7 @@ use clap::ValueEnum;
 use enum_as_inner::EnumAsInner;
 use serde::{Deserialize, Serialize};
 
-use crate::{backend::DeviceInfo, DeviceError, DeviceResult, StreamEvent, Node, NodeId, PropertyState, PropertyValue};
+use crate::{context::DeviceInfo, DeviceError, DeviceResult, StreamEvent, Node, NodeId, PropertyState, PropertyValue};
 
 pub trait CameraDevice {
     fn get_device_info(&self) -> DeviceResult<DeviceInfo> {

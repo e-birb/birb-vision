@@ -51,11 +51,11 @@ impl Debug for BackendPackage {
 }
 
 impl BackendPackage {
-    pub fn from_builder_fn<T: Backend>(builder: impl Fn() -> Result<T, Box<dyn Error>> + Send + Sync + 'static) -> Self {
+    pub fn from_builder_fn<T: VisionContext>(builder: impl Fn() -> Result<T, Box<dyn Error>> + Send + Sync + 'static) -> Self {
         let identifier = std::any::type_name::<T>().to_string();
 
         let builder = Box::new(move || -> BackendProviderResult {
-            builder().map(|backend| Box::new(backend) as Box<dyn Backend>)
+            builder().map(|backend| Box::new(backend) as Box<dyn VisionContext>)
         });
 
         Self {
@@ -87,7 +87,7 @@ impl BackendPackage {
     }
 }
 
-type BackendProviderResult = Result<Box<dyn Backend>, Box<dyn Error>>;
+type BackendProviderResult = Result<Box<dyn VisionContext>, Box<dyn Error>>;
 
 /// A set of [`Backend`] providers.
 ///
@@ -97,7 +97,7 @@ type BackendProviderResult = Result<Box<dyn Backend>, Box<dyn Error>>;
 /// which only defines "how" to create a backend.
 pub struct BackendSet {
     registry: BackendRegistry,
-    backends: Mutex<HashMap<String, Rc<dyn Backend>>>,
+    backends: Mutex<HashMap<String, Rc<dyn VisionContext>>>,
 }
 
 impl BackendSet {
@@ -120,12 +120,12 @@ impl BackendSet {
     ///
     /// This function returns `None` if the backend does not exist and an error if
     /// the backend provider failed to create the backend.
-    pub fn get_backend(&self, type_name: impl AsRef<str>) -> Option<Result<Rc<dyn Backend>, Box<dyn Error>>> {
+    pub fn get_backend(&self, type_name: impl AsRef<str>) -> Option<Result<Rc<dyn VisionContext>, Box<dyn Error>>> {
         let mut backends = self.backends.lock().unwrap();
         if let Some(backend) = backends.get(type_name.as_ref()) {
             return Some(Ok(backend.clone()));
         } else {
-            let backend: Rc<dyn Backend> = match self.registry.get_backend(type_name.as_ref())? {
+            let backend: Rc<dyn VisionContext> = match self.registry.get_backend(type_name.as_ref())? {
                 Ok(backend) => backend.into(),
                 Err(e) => return Some(Err(e)),
             };
@@ -191,7 +191,7 @@ impl BackendRegistry {
 ///
 /// Contexts may not be [`Send`] or [`Sync`], for this reason a convenient
 /// 
-pub trait Backend: 'static {
+pub trait VisionContext: 'static {
     fn available_transport_layers(&self) -> Vec<String> {
         vec![]
     }

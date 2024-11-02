@@ -1,6 +1,6 @@
 use std::{borrow::Cow, cell::RefCell, collections::HashMap, ops::Deref, path::Path, sync::{Arc, Mutex}, time::Duration};
 
-use birb_vision_core::{anyhow::{self, anyhow}, backend::{Backend, DeviceInfo, DeviceInfoEntry}, CameraDevice, DeviceResult, StreamEvent, FlatSample, FlatSampleLayout, FourCC, GroupNode, Node, NodeId, PropertyState, PropertyValue, Sample, ImageSampleBuffer, SampleType};
+use birb_vision_core::{anyhow::{self, anyhow}, context::{VisionContext, DeviceInfo, DeviceInfoEntry}, CameraDevice, DeviceResult, StreamEvent, FlatSample, FlatSampleLayout, FourCC, GroupNode, Node, NodeId, PropertyState, PropertyValue, Sample, ImageSampleBuffer, SampleType};
 use v4l::{io::traits::CaptureStream, video::Capture, Control, Device};
 
 use birb_vision_core::DeviceError::*;
@@ -188,7 +188,7 @@ impl V4lContext {
     }
 }
 
-impl Backend for V4lContext {
+impl VisionContext for V4lContext {
     fn available_transport_layers(&self) -> Vec<String> {
         vec![]
     }

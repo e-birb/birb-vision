@@ -1,7 +1,7 @@
-use birb_vision_core::backend::BackendPackage;
+use birb_vision_core::context::BackendPackage;
 pub use birb_vision_core as core;
 
-use core::backend::BackendRegistry;
+use core::context::BackendRegistry;
 
 pub fn all_backends() -> BackendRegistry {
     let set = BackendRegistry::new();

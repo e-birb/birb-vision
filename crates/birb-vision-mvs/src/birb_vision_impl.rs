@@ -10,7 +10,7 @@ use crate::genicam::{ROOT_ID, USER_ROOT_ID};
 use crate::{genicam::parse_root, mvs_try, prelude::*};
 
 impl CameraDevice for MVDevice {
-    fn get_device_info(&self) -> DeviceResult<birb_vision_core::backend::DeviceInfo> {
+    fn get_device_info(&self) -> DeviceResult<birb_vision_core::context::DeviceInfo> {
         Ok(convert_info(self.get_info()?))
     }
 

@@ -1,6 +1,6 @@
 use std::{sync::Arc, thread::JoinHandle};
 
-use birb_vision::core::backend::{BackendRegistry, BackendSet, DeviceInfo};
+use birb_vision::core::context::{BackendRegistry, BackendSet, DeviceInfo};
 use egui::{CollapsingHeader, Grid, Label, ScrollArea};
 use material_icons::Icon;
 use scope_guard::scope_guard;

@@ -1,6 +1,6 @@
 use std::{ffi::c_void, sync::Mutex};
 
-use birb_vision_core::{backend::DeviceInfoEntry, CameraDevice, DeviceError};
+use birb_vision_core::{context::DeviceInfoEntry, CameraDevice, DeviceError};
 use callbacks::DeviceCallbacks;
 use daheng_sys::{v1, v2, SDK};
 
@@ -70,8 +70,8 @@ impl Drop for Device {
 }
 
 impl CameraDevice for Device {
-    fn get_device_info(&self) -> birb_vision_core::DeviceResult<birb_vision_core::backend::DeviceInfo> {
-        let mut info = birb_vision_core::backend::DeviceInfo::new();
+    fn get_device_info(&self) -> birb_vision_core::DeviceResult<birb_vision_core::context::DeviceInfo> {
+        let mut info = birb_vision_core::context::DeviceInfo::new();
         info.display_name = self.info.display_name().to_string_lossy().into_owned();
         info.other.insert("vendor_name".into(), DeviceInfoEntry::new("Vendor Name", self.info.vendor_name().to_string_lossy()));
         info.other.insert("model_name".into(), DeviceInfoEntry::new("Model Name", self.info.model_name().to_string_lossy()));

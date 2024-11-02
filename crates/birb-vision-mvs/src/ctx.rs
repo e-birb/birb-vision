@@ -1,4 +1,4 @@
-use birb_vision_core::{anyhow, anyhow::anyhow, backend::{Backend, DeviceInfoEntry}};
+use birb_vision_core::{anyhow, anyhow::anyhow, context::{VisionContext, DeviceInfoEntry}};
 use mvs_sys::ext::libloading;
 
 use std::{
@@ -440,7 +440,7 @@ impl Display for MVSContextCreationError {
 impl Error for MVSContextCreationError {}
 
 
-impl Backend for MVContext {
+impl VisionContext for MVContext {
     fn available_transport_layers(&self) -> Vec<String> {
         TransportLayerType::ALL.iter().filter_map(|ty| ty.name()).collect()
     }
@@ -449,7 +449,7 @@ impl Backend for MVContext {
         TransportLayerType::DEFAULT_TRANSPORT_LAYERS.iter().filter_map(|ty| ty.name()).collect()
     }
 
-    fn enumerate(&self, transport_layers: &[String]) -> anyhow::Result<Vec<birb_vision_core::backend::DeviceInfo>> {
+    fn enumerate(&self, transport_layers: &[String]) -> anyhow::Result<Vec<birb_vision_core::context::DeviceInfo>> {
         let transport_layers = transport_layers.iter().filter_map(|name| TransportLayerType::from_name(name));
 
         let devices = self
@@ -461,7 +461,7 @@ impl Backend for MVContext {
         Ok(devices)
     }
 
-    fn create(&self, info: &birb_vision_core::backend::DeviceInfo) -> anyhow::Result<Option<Box<dyn birb_vision_core::CameraDevice>>> {
+    fn create(&self, info: &birb_vision_core::context::DeviceInfo) -> anyhow::Result<Option<Box<dyn birb_vision_core::CameraDevice>>> {
         let Some(layer) = info.other.get("transport-layer") else {
             return Err(anyhow!("No transport layer specified").into())
         };
@@ -483,7 +483,7 @@ impl Backend for MVContext {
     }
 }
 
-use birb_vision_core::backend::DeviceInfo as BirbInfo;
+use birb_vision_core::context::DeviceInfo as BirbInfo;
 
 pub(crate) fn convert_info(mv_info: DeviceInfo) -> BirbInfo {
     //let dev = info.into_device(false).ok()?;
