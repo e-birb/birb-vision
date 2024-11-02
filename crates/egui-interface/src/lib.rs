@@ -1,6 +1,6 @@
 use std::{collections::{HashMap, HashSet}, ops::{Deref, DerefMut}, sync::{mpsc::Sender, Arc, Weak}, time::Instant};
 
-use birb_vision::core::{backend::DeviceInfo, image::DynamicImage, AccessMode, CameraDevice, EnumEntry, StreamEvent, Node, NodeId, NodeVariant, PropertyState, PropertyValue, PropertyVariant, Representation};
+use birb_vision::core::{backend::DeviceInfo, image::DynamicImage, AccessMode, CameraDevice, EnumEntry, Node, NodeId, Property as BirbProperty, PropertyState, PropertyValue, Representation, StreamEvent, ValueOrRef};
 use egui::{load::SizedTexture, mutex::Mutex, Color32, ColorImage, DragValue, FontData, FontDefinitions, FontFamily, Grid, Image, ImageData, RichText, ScrollArea, Slider, TextBuffer, TextureFilter, TextureHandle, TextureOptions, Ui, Window};
 use material_icons::Icon;
 use regex::Regex;
@@ -408,12 +408,12 @@ impl Properties {
     }
 
     fn handle_node(node: &Node, camera: &dyn CameraDevice) -> Property {
-        match &node.variant {
-            NodeVariant::Group(g) => {
+        match &node {
+            Node::Group(g) => {
                 let mut group = Group {
                     basic: BasicProperty {
                         display_name: node.display_name.as_str().to_string(),
-                        access_mode: node.access_mode,
+                        access_mode: AccessMode::ReadWrite,
                     },
                     children: Vec::new(),
                 };
@@ -422,66 +422,66 @@ impl Properties {
                 }
                 Property::Group(group)
             },
-            NodeVariant::Property(property) => {
+            Node::Property(property) => {
                 match property {
-                    PropertyVariant::Bool(b) => {
+                    BirbProperty::Bool(b) => {
                         let prop = BoolProp {
                             basic: BasicProperty {
                                 display_name: node.display_name.as_str().to_string(),
-                                access_mode: node.access_mode,
+                                access_mode: property.access_mode,
                             },
-                            value: b.value.unwrap_or(false),
-                            requested: b.value.unwrap_or(false),
+                            value: b.value.as_ref().map(|v| v.as_value().cloned()).flatten().unwrap_or(false), // TODO handle reference
+                            requested: b.value.as_ref().map(|v| v.as_value().cloned()).flatten().unwrap_or(false), // TODO handle reference
                         };
                         Property::Bool(prop)
                     },
-                    PropertyVariant::Integer(i) => {
+                    BirbProperty::Integer(i) => {
                         let prop = IntProp {
                             basic: BasicProperty {
                                 display_name: node.display_name.as_str().to_string(),
-                                access_mode: node.access_mode,
+                                access_mode: i.access_mode,
                             },
                             value: i.value.unwrap_or(0),
                             requested: i.value.unwrap_or(0),
                             representation: i.representation.unwrap_or(Representation::PureNumber),
-                            min: i.min.unwrap_or(0),
-                            max: i.max.unwrap_or(0),
+                            min: i.min.as_ref().map(|v| v.as_value().cloned()).flatten().unwrap_or(0), // TODO handle reference
+                            max: i.max.as_ref().map(|v| v.as_value().cloned()).flatten().unwrap_or(0), // TODO handle reference
                             unit: i.unit.as_ref().map(|s| s.to_string()),
                         };
                         Property::Integer(prop)
                     },
-                    PropertyVariant::Float(f) => {
+                    BirbProperty::Float(f) => {
                         let prop = FloatProp {
                             basic: BasicProperty {
                                 display_name: node.display_name.as_str().to_string(),
-                                access_mode: node.access_mode,
+                                access_mode: f.access_mode,
                             },
                             value: f.value.unwrap_or(0.0),
                             requested: f.value.unwrap_or(0.0),
                             representation: f.representation.unwrap_or(Representation::PureNumber),
-                            min: f.min.unwrap_or(0.0),
-                            max: f.max.unwrap_or(0.0),
+                            min: f.min.as_ref().map(|v| v.as_value().cloned()).flatten().unwrap_or(0.0), // TODO handle reference
+                            max: f.max.as_ref().map(|v| v.as_value().cloned()).flatten().unwrap_or(0.0), // TODO handle reference
                             unit: f.unit.as_ref().map(|s| s.to_string()),
                         };
                         Property::Float(prop)
                     },
-                    PropertyVariant::Enum(e) => {
+                    BirbProperty::Enum(e) => {
                         let prop = EnumProp {
                             basic: BasicProperty {
                                 display_name: node.display_name.as_str().to_string(),
-                                access_mode: node.access_mode,
+                                access_mode: e.access_mode,
                             },
-                            value: e.value.unwrap_or(0),
-                            requested: e.value.unwrap_or(0),
+                            value: e.value.as_ref().map(|v| v.as_value().cloned()).flatten().unwrap_or(0), // TODO handle reference
+                            requested: e.value.as_ref().map(|v| v.as_value().cloned()).flatten().unwrap_or(0), // TODO handle reference
                             entries: e.entries.clone().into_owned(),
                         };
                         Property::Enum(prop)
                     },
-                    PropertyVariant::String(s) => {
+                    BirbProperty::String(s) => {
                         let prop = StringProp {
                             basic: BasicProperty {
                                 display_name: node.display_name.as_str().to_string(),
-                                access_mode: node.access_mode,
+                                access_mode: s.access_mode,
                             },
                             value: "TODO".to_string(),
                             requested: "TODO".to_string(),
@@ -489,11 +489,11 @@ impl Properties {
                         };
                         Property::String(prop)
                     },
-                    PropertyVariant::Command => {
+                    BirbProperty::Command(c) => {
                         let prop = CommandProp {
                             basic: BasicProperty {
                                 display_name: node.display_name.as_str().to_string(),
-                                access_mode: node.access_mode,
+                                access_mode: c.access_mode,
                             },
                             requested: false,
                         };

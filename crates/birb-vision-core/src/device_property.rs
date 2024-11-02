@@ -1,11 +1,42 @@
-use std::{borrow::Cow, fmt::Debug, ops::{Deref, DerefMut, RangeInclusive}};
+use std::{borrow::Cow, fmt::Debug, ops::{Deref, DerefMut}};
 
 use enum_as_inner::EnumAsInner;
 use serde::{Deserialize, Serialize};
 
 mod id;
+mod property;
 
 pub use id::*;
+pub use property::*;
+
+#[derive(Debug, Clone)]
+#[derive(EnumAsInner)]
+pub enum Node {
+    Group(GroupNode),
+    Property(Property),
+    // TODO maybe is a property? Port, // TODO 
+    // TODO other meta nodes? like a "description" node?
+}
+
+impl Deref for Node {
+    type Target = NodeInfo;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Node::Group(group) => &group.info,
+            Node::Property(prop) => prop.deref(),
+        }
+    }
+}
+
+impl DerefMut for Node {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        match self {
+            Node::Group(group) => &mut group.info,
+            Node::Property(prop) => prop.deref_mut(),
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 #[derive(Serialize, Deserialize)]
@@ -39,55 +70,6 @@ impl NodeInfo {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct Node {
-    pub info: NodeInfo,
-
-    pub access_mode: AccessMode,
-
-    pub is_locked_ref: Option<NodeId>,
-
-    pub address: Option<u64>,
-    pub address_ref: Option<NodeId>,
-
-    pub port_ref: Option<NodeId>,
-
-    pub streamable: bool,
-
-    /// The variant of the node
-    pub variant: NodeVariant,
-}
-
-impl Deref for Node {
-    type Target = NodeInfo;
-    fn deref(&self) -> &Self::Target {
-        &self.info
-    }
-}
-
-impl DerefMut for Node {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.info
-    }
-}
-
-impl Node {
-    pub fn new_with_id(id: impl Into<NodeId>) -> Self {
-        Node {
-            info: NodeInfo::new_with_id(id),
-            access_mode: AccessMode::ReadWrite,
-            is_locked_ref: None,
-            address: None,
-            address_ref: None,
-            port_ref: None,
-            streamable: false,
-            variant: NodeVariant::Group(GroupNode {
-                children: Cow::Borrowed(&[]),
-            }),
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[derive(Serialize, Deserialize)]
 pub enum Visibility {
@@ -97,231 +79,61 @@ pub enum Visibility {
     Invisible,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum AccessMode {
-    ReadOnly,
-    WriteOnly,
-    ReadWrite,
-}
-
-impl AccessMode {
-    pub fn readable(&self) -> bool {
-        match self {
-            AccessMode::ReadOnly | AccessMode::ReadWrite => true,
-            AccessMode::WriteOnly => false,
-        }
-    }
-    pub fn writable(&self) -> bool {
-        match self {
-            AccessMode::WriteOnly | AccessMode::ReadWrite => true,
-            AccessMode::ReadOnly => false,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-#[derive(EnumAsInner)]
-pub enum NodeVariant {
-    Group(GroupNode),
-    Property(PropertyVariant),
-    Port, // TODO ID
-}
-
-impl From<GroupNode> for NodeVariant {
-    fn from(group: GroupNode) -> Self {
-        NodeVariant::Group(group)
-    }
-}
-
-impl From<BoolProperty> for NodeVariant {
-    fn from(prop: BoolProperty) -> Self {
-        NodeVariant::Property(PropertyVariant::Bool(prop))
-    }
-}
-
-impl From<PropertyVariant> for NodeVariant {
-    fn from(prop: PropertyVariant) -> Self {
-        NodeVariant::Property(prop)
-    }
-}
-
-#[derive(Debug, Clone)]
-#[derive(EnumAsInner)]
-pub enum PropertyVariant {
-    Bool(BoolProperty),
-    Integer(NumericProperty<i64>),
-    Float(NumericProperty<f64>),
-    Enum(EnumProperty),
-    String(StringProperty),
-    Command, // TODO command might have data!
-}
-
-impl From<EnumProperty> for NodeVariant {
-    fn from(prop: EnumProperty) -> Self {
-        NodeVariant::Property(PropertyVariant::Enum(prop))
-    }
-}
-
-impl From<StringProperty> for NodeVariant {
-    fn from(prop: StringProperty) -> Self {
-        NodeVariant::Property(PropertyVariant::String(prop))
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct GroupNode {
+    pub info: NodeInfo,
     pub children: Cow<'static, [NodeId]>,
 }
 
-#[derive(Debug, Clone)]
-pub struct BoolProperty {
-    pub value: Option<bool>,
-    pub value_ref: Option<NodeId>,
-    pub default: Option<bool>,
+impl Deref for GroupNode {
+    type Target = NodeInfo;
+
+    fn deref(&self) -> &Self::Target {
+        &self.info
+    }
 }
 
-impl Default for BoolProperty {
-    fn default() -> Self {
-        BoolProperty {
-            value: None,
-            value_ref: None,
-            default: None,
+impl DerefMut for GroupNode {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.info
+    }
+}
+
+impl GroupNode {
+    pub fn new(id: impl Into<NodeId>) -> Self {
+        Self {
+            info: NodeInfo::new_with_id(id),
+            children: Cow::Borrowed(&[]),
         }
     }
 }
 
-#[derive(Debug, Clone)]
-#[derive(Serialize, Deserialize)]
-pub struct NumericProperty<T> {
-    pub value: Option<T>,
-    pub min: Option<T>,
-    pub min_ref: Option<NodeId>,
-    pub max: Option<T>,
-    pub max_ref: Option<NodeId>,
-    pub increment: Option<T>,
-    pub increment_ref: Option<NodeId>,
-    pub default: Option<T>,
-    pub unit: Option<Cow<'static, str>>,
-    pub slope: Slope,
-    pub representation: Option<Representation>,
-}
-
-impl<T> Default for NumericProperty<T> {
-    fn default() -> Self {
-        NumericProperty {
-            value: None,
-            min: None,
-            min_ref: None,
-            max: None,
-            max_ref: None,
-            increment: None,
-            increment_ref: None,
-            default: None,
-            unit: None,
-            slope: Slope::Increasing,
-            representation: None,
-        }
+impl From<GroupNode> for Node {
+    fn from(group: GroupNode) -> Self {
+        Node::Group(group)
     }
 }
 
-#[derive(Debug, Clone)]
-#[derive(Serialize, Deserialize)]
-pub struct EnumProperty {
-    pub value: Option<i64>,
-    pub value_ref: Option<NodeId>,
-    pub entries: Cow<'static, [EnumEntry]>,
-}
-
-impl Default for EnumProperty {
-    fn default() -> Self {
-        EnumProperty {
-            value: None,
-            value_ref: None,
-            entries: Cow::Borrowed(&[]),
-        }
+impl From<BoolProperty> for Node {
+    fn from(prop: BoolProperty) -> Self {
+        Node::Property(Property::Bool(prop))
     }
 }
 
-#[derive(Debug, Clone)]
-#[derive(Serialize, Deserialize)]
-pub struct NumericValue<T> {
-    pub current: T,
-    pub range: RangeInclusive<T>, // TODO support not range
-}
-
-#[derive(Debug, Clone)]
-#[derive(Serialize, Deserialize)]
-pub struct EnumValue<'a> {
-    pub current: i64,
-    pub support: Cow<'a, [i64]>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[derive(Serialize, Deserialize)]
-pub enum Slope {
-    Increasing,
-    Decreasing,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[derive(Serialize, Deserialize)]
-pub enum Representation {
-    Boolean,
-    PureNumber,
-    Hex,
-    Linear,
-    Logarithmic,
-}
-
-#[derive(Debug, Clone)]
-pub enum NumericSupport<T: Clone + 'static> {
-    Range(RangeInclusive<T>),
-    Set(Cow<'static, [T]>)
-}
-
-#[derive(Debug, Clone)]
-#[derive(Serialize, Deserialize)]
-pub struct EnumEntry {
-    pub discriminant: i64,
-    pub name: Cow<'static, str>,
-    pub help: Option<Cow<'static, str>>,
-}
-
-#[derive(Debug, Clone)]
-#[derive(Serialize, Deserialize)]
-pub struct StringProperty {
-    pub max_length: u32,
-    pub default: Option<String>,
-}
-
-impl Default for StringProperty {
-    fn default() -> Self {
-        StringProperty {
-            max_length: u32::MAX,
-            default: None,
-        }
+impl From<Property> for Node {
+    fn from(prop: Property) -> Self {
+        Node::Property(prop)
     }
 }
 
-#[derive(Debug, Clone)]
-#[derive(EnumAsInner)]
-#[derive(Serialize, Deserialize)]
-pub enum PropertyState {
-    Bool(bool),
-    Int(NumericValue<i64>),
-    Float(NumericValue<f64>),
-    Enum(EnumValue<'static>), // TODO ...
-    String(String),
+impl From<EnumProperty> for Node {
+    fn from(prop: EnumProperty) -> Self {
+        Node::Property(Property::Enum(prop))
+    }
 }
 
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
-#[derive(EnumAsInner)]
-#[derive(Serialize, Deserialize)]
-pub enum PropertyValue {
-    Bool(bool),
-    Integer(i64),
-    Float(f64),
-    Enum(i64),
-    String(String),
-    Command,
+impl From<StringProperty> for Node {
+    fn from(prop: StringProperty) -> Self {
+        Node::Property(Property::String(prop))
+    }
 }

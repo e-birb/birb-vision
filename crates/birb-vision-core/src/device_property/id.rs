@@ -4,7 +4,7 @@ use enum_as_inner::EnumAsInner;
 use serde::{Deserialize, Serialize};
 
 
-
+/// A unique identifier for a node in the device property tree.
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[derive(Serialize, Deserialize)]
 #[derive(EnumAsInner)]
@@ -12,6 +12,7 @@ pub enum NodeId {
     String(Cow<'static, str>),
     I32(i32), // TODO maybe 64 or more? Or maybe all in types + Arc<dyn Any + Hash + ...>
 }
+
 impl NodeId {
     pub fn as_str(&self) -> Option<&str> {
         self.as_string().map(|s| s.as_ref())

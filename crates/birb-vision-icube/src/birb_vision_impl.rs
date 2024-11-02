@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use anyhow::anyhow;
-use birb_vision_core::{backend::{Backend, DeviceInfo, DeviceInfoEntry}, AccessMode, CameraDevice, DeviceError, DeviceResult, StreamEvent, FlatSample, FlatSampleLayout, GroupNode, ImageSampleBuffer, Node, NodeVariant, PixelFormat, PropertyVariant, Sample, SampleType};
+use birb_vision_core::{backend::{Backend, DeviceInfo, DeviceInfoEntry}, CameraDevice, DeviceError, DeviceResult, FlatSample, FlatSampleLayout, GroupNode, ImageSampleBuffer, Node, NodeInfo, PixelFormat, Sample, SampleType, StreamEvent, StringProperty};
 use icube_sdk_sys::SDK;
 
 use crate::{iCubeContext, iCubeDevice, CallbackEventType, IntoICubeResult};
@@ -51,53 +51,47 @@ impl CameraDevice for iCubeDevice {
     }
 
     fn all_properties(&self) -> DeviceResult<Vec<birb_vision_core::Node>> {
-        let mut properties = Vec::new();
+        let mut properties: Vec<Node> = Vec::<Node>::new();
 
         use common_property::*;
 
         // name
-        let mut node = Node::new_with_id(NAME);
-        node.display_name = "Name".into();
-        node.variant = NodeVariant::Property(PropertyVariant::String(Default::default()));
-        node.access_mode = AccessMode::ReadOnly;
-        properties.push(node);
+        properties.push(StringProperty::new_const(
+            NAME,
+            "Name",
+        ).into());
 
         // version
-        let mut node = Node::new_with_id(VERSION);
-        node.display_name = "SDK Version".into();
-        node.variant = NodeVariant::Property(PropertyVariant::String(Default::default()));
-        node.access_mode = AccessMode::ReadOnly;
-        properties.push(node);
+        properties.push(StringProperty::new_const(
+            VERSION,
+            "SDK Version",
+        ).into());
 
         // firmware version
-        let mut node = Node::new_with_id(FIRMWARE_VERSION);
-        node.display_name = "Firmware Version".into();
-        node.variant = NodeVariant::Property(PropertyVariant::String(Default::default()));
-        node.access_mode = AccessMode::ReadOnly;
-        properties.push(node);
+        properties.push(StringProperty::new_const(
+            FIRMWARE_VERSION,
+            "Firmware Version",
+        ).into());
 
         // serial number
         if let SDK::V2(_) = self.handle.ctx.sdk() {
-            let mut node = Node::new_with_id(SERIAL_NUMBER);
-            node.display_name = "Serial Number".into();
-            node.variant = NodeVariant::Property(PropertyVariant::String(Default::default()));
-            node.access_mode = AccessMode::ReadOnly;
-            properties.push(node);
+            properties.push(StringProperty::new_const(
+                SERIAL_NUMBER,
+                "Serial Number",
+            ).into());
         }
 
         // FPGA version
-        let mut node = Node::new_with_id(FPGA_VERSION);
-        node.display_name = "FPGA Version".into();
-        node.variant = NodeVariant::Property(PropertyVariant::String(Default::default()));
-        node.access_mode = AccessMode::ReadOnly;
+        properties.push(StringProperty::new_const(
+            FPGA_VERSION,
+            "FPGA Version",
+        ).into());
 
         // root node
-        let mut node = Node::new_with_id(ROOT);
-        node.display_name = "Root".into();
-        node.variant = NodeVariant::Group(GroupNode {
+        properties.push(GroupNode {
+            info: NodeInfo::new_with_id(ROOT),
             children: properties.iter().map(|n| n.id.clone()).collect(),
-        });
-        properties.push(node);
+        }.into());
 
         Ok(properties)
     }

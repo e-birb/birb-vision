@@ -1,6 +1,6 @@
 use std::{borrow::Cow, cell::RefCell, collections::HashMap, ops::Deref, path::Path, sync::{Arc, Mutex}, time::Duration};
 
-use birb_vision_core::{anyhow::{self, anyhow}, backend::{Backend, DeviceInfo, DeviceInfoEntry}, CameraDevice, DeviceResult, StreamEvent, FlatSample, FlatSampleLayout, FourCC, GroupNode, Node, NodeId, NodeVariant, PropertyState, PropertyValue, Sample, ImageSampleBuffer, SampleType};
+use birb_vision_core::{anyhow::{self, anyhow}, backend::{Backend, DeviceInfo, DeviceInfoEntry}, CameraDevice, DeviceResult, StreamEvent, FlatSample, FlatSampleLayout, FourCC, GroupNode, Node, NodeId, PropertyState, PropertyValue, Sample, ImageSampleBuffer, SampleType};
 use v4l::{io::traits::CaptureStream, video::Capture, Control, Device};
 
 use birb_vision_core::DeviceError::*;
@@ -37,7 +37,7 @@ impl V4lDevice {
         let format = dev.format().unwrap();
         //dev.set_format(&Format::new(format.width, format.height, V4lFourCC::new(b"YUYV"))).unwrap();
 
-        let mut root = Node::new_with_id("birb-vision-v4l::Root");
+        let mut root: Node = GroupNode::new("birb-vision-v4l::Root").into();
         root.display_name = "V4L2".into();
         let mut root_children = Vec::new();
 
@@ -55,9 +55,7 @@ impl V4lDevice {
             }
         }
 
-        root.variant = NodeVariant::Group(GroupNode {
-            children: root_children.into(),
-        });
+        root.as_group_mut().unwrap().children = root_children.clone().into();
 
         let root_id = root.id.clone();
         properties.insert(root_id.clone(), root);

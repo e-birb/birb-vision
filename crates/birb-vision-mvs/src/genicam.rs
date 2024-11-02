@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use birb_vision_core::{AccessMode, BoolProperty, EnumEntry, EnumProperty, GroupNode, Node, NodeId, NodeVariant, NumericProperty, PropertyVariant, Representation, StringProperty, Visibility};
+use birb_vision_core::{AccessMode, BoolProperty, CommandProperty, EnumEntry, EnumProperty, GroupNode, Node, NodeId, NumericProperty, Property, Representation, StringProperty, ValueOrRef, Visibility};
 use roxmltree::Node as XmlNode;
 
 pub const ROOT_ID: NodeId = NodeId::String(Cow::Borrowed("Camera actual Root"));
@@ -74,7 +74,11 @@ fn parse_child_or_property(xml_node: XmlNode, current: &mut Node, list: &mut Vec
                 },
             };
             // TODO maybe imposed access mode should have priority
-            current.access_mode = value;
+            if let Node::Property(current) = current {
+                current.access_mode = value;
+            } else {
+                log::warn!("Non property node ({:?}) cannot have access mode", current.id);
+            }
             None
         },
         "pIsImplemented" => {
@@ -82,23 +86,43 @@ fn parse_child_or_property(xml_node: XmlNode, current: &mut Node, list: &mut Vec
             None
         },
         "pIsLocked" => {
-            current.is_locked_ref = Some(xml_node.text().unwrap().to_string().into());
+            if let Node::Property(current) = current {
+                current.is_locked_ref = Some(xml_node.text().unwrap().to_string().into());
+            } else {
+                log::warn!("Non property node ({:?}) cannot have is_locked_ref", current.id);
+            }
             None
         },
         "Address" => {
-            current.address = Some(0); // TODO parse
+            if let Node::Property(current) = current {
+                current.address = Some(ValueOrRef::Value(0)); // TODO parse
+            } else {
+                log::warn!("Non property node ({:?}) cannot have address", current.id);
+            }
             None
         },
         "pAddress" => {
-            current.address_ref = Some(xml_node.text().unwrap().to_string().into());
+            if let Node::Property(current) = current {
+                current.address = Some(ValueOrRef::Ref(xml_node.text().unwrap().to_string().into()));
+            } else {
+                log::warn!("Non property node ({:?}) cannot have address", current.id);
+            }
             None
         },
         "pPort" => {
-            current.port_ref = Some(xml_node.text().unwrap().to_string().into());
+            if let Node::Property(current) = current {
+                current.port_ref = Some(xml_node.text().unwrap().to_string().into());
+            } else {
+                log::warn!("Non property node ({:?}) cannot have port_ref", current.id);
+            }
             None
         },
         "Streamable" => {
-            current.streamable = true;
+            if let Node::Property(current) = current {
+                current.streamable = true;
+            } else {
+                log::warn!("Non property node ({:?}) cannot have streamable", current.id);
+            }
             None
         },
         "pIsAvailable" => {
@@ -126,7 +150,7 @@ fn parse_child_or_property(xml_node: XmlNode, current: &mut Node, list: &mut Vec
 }
 
 pub fn parse_root(xml_root: XmlNode, root_id: NodeId, list: &mut Vec<Node>) -> Node {
-    let mut node = Node::new_with_id(root_id);
+    let mut node: Node = GroupNode::new(root_id).into();
 
     let mut children = Vec::new();
     for child in xml_root.children() {
@@ -135,9 +159,7 @@ pub fn parse_root(xml_root: XmlNode, root_id: NodeId, list: &mut Vec<Node>) -> N
         }
     }
 
-    node.variant = GroupNode {
-        children: children.into(),
-    }.into();
+    node.as_group_mut().unwrap().children = children.into();
 
     node
 }
@@ -145,7 +167,7 @@ pub fn parse_root(xml_root: XmlNode, root_id: NodeId, list: &mut Vec<Node>) -> N
 fn parse_group(xml_node: XmlNode, list: &mut Vec<Node>) -> Node {
     let name = xml_node.attribute("Name").map(|n| n.to_string()).unwrap_or_else(|| "comment=".to_string() + &xml_node.attribute("Comment").unwrap()).to_string();
     println!("Group NAME: {}", name);
-    let mut node = Node::new_with_id(name);
+    let mut node: Node = GroupNode::new(name).into();
 
     let mut children = Vec::new();
     for child in xml_node.children() {
@@ -154,16 +176,14 @@ fn parse_group(xml_node: XmlNode, list: &mut Vec<Node>) -> Node {
         }
     }
 
-    node.variant = GroupNode {
-        children: children.into(),
-    }.into();
+    node.as_group_mut().unwrap().children = children.into();
 
     node
 }
 
 fn parse_port(xml_node: XmlNode, list: &mut Vec<Node>) -> Node {
     let name = xml_node.attribute("Name").unwrap().to_string();
-    let mut node = Node::new_with_id(name);
+    let mut node: Node = GroupNode::new(name).into();
 
     for child in xml_node.children() {
         match child.tag_name().name() {
@@ -199,18 +219,17 @@ fn parse_int_value(xml_node: XmlNode) -> i64 {
 pub fn parse_integer(xml_node: XmlNode, list: &mut Vec<Node>) -> Node {
     let name = xml_node.attribute("Name").unwrap().to_string();
     let is_exposure = name == "ExposureTime";
-    let mut node = Node::new_with_id(name);
-    let mut prop = NumericProperty::default();
+    let mut node: Node = Property::Integer(NumericProperty::new(name)).into();
 
     for child in xml_node.children() {
         match child.tag_name().name() {
             "" => {},
             "Unit" => {
-                prop.unit = Some(child.text().unwrap().to_string().into());
+                node.as_property_mut().unwrap().as_integer_mut().unwrap().unit = Some(child.text().unwrap().to_string().into());
                 continue;
             },
             "Value" => {
-                prop.value = Some(parse_int_value(child));
+                node.as_property_mut().unwrap().as_integer_mut().unwrap().value = Some(parse_int_value(child));
                 continue;
             }
             "pValue" => {
@@ -228,31 +247,31 @@ pub fn parse_integer(xml_node: XmlNode, list: &mut Vec<Node>) -> Node {
                         todo!("Unknown representation: {:?}", other);
                     },
                 };
-                prop.representation = Some(repr);
+                node.as_property_mut().unwrap().as_integer_mut().unwrap().representation = Some(repr);
                 continue;
             },
             "Min" => {
-                prop.min = Some(parse_int_value(child));
+                node.as_property_mut().unwrap().as_integer_mut().unwrap().min = Some(ValueOrRef::Value(parse_int_value(child)));
                 continue;
             },
             "pMin" => {
-                prop.min_ref = Some(child.text().unwrap().to_string().into());
+                node.as_property_mut().unwrap().as_integer_mut().unwrap().min = Some(ValueOrRef::Ref(child.text().unwrap().to_string().into()));
                 continue;
             },
             "Max" => {
-                prop.max = Some(parse_int_value(child));
+                node.as_property_mut().unwrap().as_integer_mut().unwrap().max = Some(ValueOrRef::Value(parse_int_value(child)));
                 continue;
             },
             "pMax" => {
-                prop.max_ref = Some(child.text().unwrap().to_string().into());
+                node.as_property_mut().unwrap().as_integer_mut().unwrap().max = Some(ValueOrRef::Ref(child.text().unwrap().to_string().into()));
                 continue;
             },
             "Inc" => {
-                prop.increment = Some(parse_int_value(child));
+                node.as_property_mut().unwrap().as_integer_mut().unwrap().increment = Some(ValueOrRef::Value(parse_int_value(child)));
                 continue;
             },
             "pInc" => {
-                prop.increment_ref = Some(child.text().unwrap().to_string().into());
+                node.as_property_mut().unwrap().as_integer_mut().unwrap().increment = Some(ValueOrRef::Ref(child.text().unwrap().to_string().into()));
                 continue;
             },
             _ => {},
@@ -263,25 +282,23 @@ pub fn parse_integer(xml_node: XmlNode, list: &mut Vec<Node>) -> Node {
         }
     }
 
-    node.variant = NodeVariant::Property(PropertyVariant::Integer(prop));
     node
 }
 
 pub fn parse_float(xml_node: XmlNode, list: &mut Vec<Node>) -> Node {
     let name = xml_node.attribute("Name").unwrap().to_string();
     let is_exposure = name == "ExposureTime";
-    let mut node = Node::new_with_id(name);
-    let mut prop = NumericProperty::<f64>::default();
+    let mut node: Node = Property::Float(NumericProperty::new(name)).into();
 
     for child in xml_node.children() {
         match child.tag_name().name() {
             "" => {},
             "Unit" => {
-                prop.unit = Some(child.text().unwrap().to_string().into());
+                node.as_property_mut().unwrap().as_float_mut().unwrap().unit = Some(child.text().unwrap().to_string().into());
                 continue;
             },
             "Value" => {
-                prop.value = Some(child.text().unwrap().parse().unwrap());
+                node.as_property_mut().unwrap().as_float_mut().unwrap().value = Some(child.text().unwrap().parse().unwrap());
                 continue;
             }
             "pValue" => {
@@ -299,31 +316,31 @@ pub fn parse_float(xml_node: XmlNode, list: &mut Vec<Node>) -> Node {
                         todo!("Unknown representation: {:?}", other);
                     },
                 };
-                prop.representation = Some(repr);
+                node.as_property_mut().unwrap().as_float_mut().unwrap().representation = Some(repr);
                 continue;
             },
             "Min" => {
-                prop.min = Some(child.text().unwrap().parse().unwrap());
+                node.as_property_mut().unwrap().as_float_mut().unwrap().min = Some(ValueOrRef::Value(child.text().unwrap().parse().unwrap()));
                 continue;
             },
             "pMin" => {
-                prop.min_ref = Some(child.text().unwrap().to_string().into());
+                node.as_property_mut().unwrap().as_float_mut().unwrap().min = Some(ValueOrRef::Ref(child.text().unwrap().to_string().into()));
                 continue;
             },
             "Max" => {
-                prop.max = Some(child.text().unwrap().parse().unwrap());
+                node.as_property_mut().unwrap().as_float_mut().unwrap().max = Some(ValueOrRef::Value(child.text().unwrap().parse().unwrap()));
                 continue;
             },
             "pMax" => {
-                prop.max_ref = Some(child.text().unwrap().to_string().into());
+                node.as_property_mut().unwrap().as_float_mut().unwrap().max = Some(ValueOrRef::Ref(child.text().unwrap().to_string().into()));
                 continue;
             },
             "Inc" => {
-                prop.increment = Some(child.text().unwrap().parse().unwrap());
+                node.as_property_mut().unwrap().as_float_mut().unwrap().increment = Some(ValueOrRef::Value(child.text().unwrap().parse().unwrap()));
                 continue;
             },
             "pInc" => {
-                prop.increment_ref = Some(child.text().unwrap().to_string().into());
+                node.as_property_mut().unwrap().as_float_mut().unwrap().increment = Some(ValueOrRef::Ref(child.text().unwrap().to_string().into()));
                 continue;
             },
             _ => {},
@@ -334,29 +351,23 @@ pub fn parse_float(xml_node: XmlNode, list: &mut Vec<Node>) -> Node {
         }
     }
 
-    node.variant = NodeVariant::Property(PropertyVariant::Float(prop));
     node
 }
 
 pub fn parse_enum(xml_node: XmlNode, list: &mut Vec<Node>) -> Node {
     let name = xml_node.attribute("Name").unwrap().to_string();
-    let mut node = Node::new_with_id(name);
-    let mut variant = EnumProperty {
-        value: None,
-        value_ref: None,
-        entries: vec![].into(),
-    };
+    let mut node: Node = Property::Enum(EnumProperty::new(name)).into();
 
     let mut entries = Vec::new();
     for child in xml_node.children() {
         match child.tag_name().name() {
             "" => {},
             "Value" => {
-                variant.value = Some(parse_int_value(child));
+                node.as_property_mut().unwrap().as_enum_mut().unwrap().value = Some(ValueOrRef::Value(parse_int_value(child)));
                 continue;
             },
             "pValue" => {
-                variant.value_ref = Some(child.text().unwrap().to_string().into());
+                node.as_property_mut().unwrap().as_enum_mut().unwrap().value = Some(ValueOrRef::Ref(child.text().unwrap().to_string().into()));
                 continue;
             },
             "EnumEntry" => {
@@ -379,20 +390,18 @@ pub fn parse_enum(xml_node: XmlNode, list: &mut Vec<Node>) -> Node {
         }
     }
 
-    variant.entries = entries.into();
-    node.variant = variant.into();
+    node.as_property_mut().unwrap().as_enum_mut().unwrap().entries = entries.into();
     node
 }
 
 fn parse_string(xml_node: XmlNode, list: &mut Vec<Node>) -> Node {
     let name = xml_node.attribute("Name").unwrap().to_string();
-    let mut node = Node::new_with_id(name);
-    let mut prop = StringProperty::default();
+    let mut node: Node = Property::String(StringProperty::new(name)).into();
 
     for child in xml_node.children() {
         match child.tag_name().name() {
             "Length" => {
-                prop.max_length = parse_int_value(child) as _;
+                node.as_property_mut().unwrap().as_string_mut().unwrap().max_length = parse_int_value(child) as _;
                 continue;
             },
             _ => {},
@@ -403,25 +412,23 @@ fn parse_string(xml_node: XmlNode, list: &mut Vec<Node>) -> Node {
         }
     }
 
-    node.variant = NodeVariant::Property(PropertyVariant::String(prop));
     node
 }
 
 fn parse_bool(xml_node: XmlNode, list: &mut Vec<Node>) -> Node {
     let name = xml_node.attribute("Name").unwrap().to_string();
-    let mut node = Node::new_with_id(name);
-    let mut prop = BoolProperty::default();
+    let mut node: Node = Property::Bool(BoolProperty::new(name)).into();
 
     for child in xml_node.children() {
         match child.tag_name().name() {
             "" => {},
             "Value" => {
                 panic!("TODO: parse bool value {:?}", child.text().unwrap());
-                prop.value = Some(false); // TODO parse
+                node.as_property_mut().unwrap().as_bool_mut().unwrap().value = Some(ValueOrRef::Value(false)); // TODO parse
                 continue;
             }
             "pValue" => {
-                prop.value_ref = Some(child.text().unwrap().to_string().into());
+                node.as_property_mut().unwrap().as_bool_mut().unwrap().value = Some(ValueOrRef::Ref(child.text().unwrap().to_string().into()));
                 continue;
             },
             "OnValue" => {
@@ -440,13 +447,12 @@ fn parse_bool(xml_node: XmlNode, list: &mut Vec<Node>) -> Node {
         }
     }
 
-    node.variant = NodeVariant::Property(PropertyVariant::Bool(prop));
     node
 }
 
 fn parse_command(xml_node: XmlNode, list: &mut Vec<Node>) -> Node {
     let name = xml_node.attribute("Name").unwrap().to_string();
-    let mut node = Node::new_with_id(name);
+    let mut node: Node = Property::Command(CommandProperty::new(name)).into();
 
     for child in xml_node.children() {
         match child.tag_name().name() {
@@ -474,6 +480,5 @@ fn parse_command(xml_node: XmlNode, list: &mut Vec<Node>) -> Node {
         }
     }
 
-    node.variant = NodeVariant::Property(PropertyVariant::Command);
     node
 }

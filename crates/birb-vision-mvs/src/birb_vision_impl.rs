@@ -3,9 +3,9 @@
 use std::borrow::Cow;
 
 use birb_vision_core::anyhow::anyhow;
-use birb_vision_core::{NodeVariant, PropertyState, PropertyValue, PropertyVariant};
+use birb_vision_core::{PropertyState, PropertyValue, Property};
 
-use birb_vision_core::{CameraDevice, DeviceResult, EnumValue, StreamEvent, Sample, Node, NodeId, NumericValue};
+use birb_vision_core::{CameraDevice, DeviceResult, EnumState, StreamEvent, Sample, Node, NodeId, NumericState};
 use crate::ctx::convert_info;
 use crate::genicam::{ROOT_ID, USER_ROOT_ID};
 use crate::{genicam::parse_root, mvs_try, prelude::*};
@@ -52,34 +52,33 @@ impl CameraDevice for MVDevice {
 
     fn read_property(&self, node: &Node) -> DeviceResult<PropertyState> {
         let id = node.id.as_str().unwrap();
-        let r = match &node.variant {
-            NodeVariant::Property(variant) => match variant {
-                PropertyVariant::Bool(_) => PropertyState::Bool(self.get_bool_value(id)?),
-                PropertyVariant::Integer(_) => self
+        let r = match &node {
+            Node::Property(variant) => match variant {
+                Property::Bool(_) => PropertyState::Bool(self.get_bool_value(id)?),
+                Property::Integer(_) => self
                     .get_int_value(id)
-                    .map(|v| PropertyState::Int(NumericValue::<i64> {
+                    .map(|v| PropertyState::Int(NumericState::<i64> {
                         current: v.current() as _,
                         range: v.min() as _ ..= v.max() as _,
                     }))?,
-                PropertyVariant::Float(_) => self
+                Property::Float(_) => self
                     .get_float_value(id)
-                    .map(|v| PropertyState::Float(NumericValue::<f64> {
+                    .map(|v| PropertyState::Float(NumericState::<f64> {
                         current: v.current() as _,
                         range: v.min() as _ ..= v.max() as _,
                     }))?,
-                PropertyVariant::Enum(_) => self
+                Property::Enum(_) => self
                     .get_enum_value(id)
-                    .map(|v| PropertyState::Enum(EnumValue {
+                    .map(|v| PropertyState::Enum(EnumState {
                         current: v.current_value() as _,
                         support: Cow::Owned(v.support().iter().map(|v| *v as i64).collect::<Vec<_>>()),
                     }))?,
-                PropertyVariant::String(_) => self
+                Property::String(_) => self
                     .get_string_value(id)
                     .map(|s| PropertyState::String(s.current_value().to_string()))?,
-                PropertyVariant::Command => Err(anyhow!("Cannot read a command property"))?,
+                Property::Command(_) => Err(anyhow!("Cannot read a command property"))?,
             },
-            NodeVariant::Group(_) => Err(anyhow!("Cannot read a group property"))?,
-            NodeVariant::Port => todo!(),
+            Node::Group(_) => Err(anyhow!("Cannot read a group property"))?,
         };
         Ok(r)
     }

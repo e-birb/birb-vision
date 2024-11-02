@@ -1,32 +1,31 @@
-use birb_vision_core::{anyhow::anyhow, BoolProperty, DeviceResult, EnumEntry, EnumProperty, EnumValue, Node, NodeVariant, NumericProperty, NumericValue, PropertyState, PropertyValue, PropertyVariant, Representation, StringProperty};
+use birb_vision_core::{anyhow::anyhow, BoolProperty, CommandProperty, DeviceResult, EnumEntry, EnumProperty, EnumState, Node, NumericProperty, NumericState, Property, PropertyState, PropertyValue, Representation, StringProperty, ValueOrRef};
 use v4l::control::{MenuItem, Type, Value};
 
 
 pub fn parse(control: v4l::control::Description) -> Option<Node> {
-    let mut node: Node = Node::new_with_id(control.id as i32);
-    node.display_name = control.name.clone().into();
-    let variant: Option<NodeVariant> = match control.typ {
+    let id = control.id as i32;
+    let node: Option<Node> = match control.typ {
         Type::Integer | Type::Integer64 => {
-            let mut variant = NumericProperty::<i64>::default();
-            variant.min = control.minimum.into();
-            variant.max = control.maximum.into();
+            let mut variant = NumericProperty::<i64>::new(id);
+            variant.min = Some(ValueOrRef::Value(control.minimum));
+            variant.max = Some(ValueOrRef::Value(control.maximum));
             variant.default = control.default.into();
-            variant.increment = (control.step as i64).into();
+            variant.increment = Some(ValueOrRef::Value(control.step as i64));
             variant.representation = Some(if control.name.to_lowercase().starts_with("exposure") {
                 // TODO maybe Representation::Logarithmic? It might depend on the camera... test different cameras
                 Representation::Linear
             } else {
                 Representation::Linear
             });
-            Some(PropertyVariant::Integer(variant).into())
+            Some(Property::Integer(variant).into())
         },
         Type::Boolean => {
-            let mut variant = BoolProperty::default();
+            let mut variant = BoolProperty::new(id);
             variant.default = Some(control.default != 0);
-            Some(PropertyVariant::Bool(variant).into())
+            Some(Property::Bool(variant).into())
         },
         Type::Menu => {
-            let mut variant = EnumProperty::default();
+            let mut variant = EnumProperty::new(id);
             variant.entries = control
                 .items
                 .as_ref().unwrap()
@@ -43,18 +42,18 @@ pub fn parse(control: v4l::control::Description) -> Option<Node> {
                 })
                 .collect::<Vec<_>>()
                 .into();
-            Some(PropertyVariant::Enum(variant).into())
+            Some(Property::Enum(variant).into())
         },
         Type::Button => {
-            Some(PropertyVariant::Command.into())
+            Some(Property::Command(CommandProperty::new(id)).into())
         },
         Type::CtrlClass => {
             // TODO
             None
         },
         Type::String => {
-            let variant = StringProperty::default();
-            Some(PropertyVariant::String(variant).into())
+            let variant = StringProperty::new(id);
+            Some(Property::String(variant).into())
         },
         Type::Bitmask => {
             // TODO
@@ -73,42 +72,40 @@ pub fn parse(control: v4l::control::Description) -> Option<Node> {
             None
         },
     };
-    variant.map(|variant| {
-        node.variant = variant;
-        node
-    })
+    let mut node = node?;
+    node.display_name = control.name.clone().into();
+    Some(node)
 }
 
 pub fn node_value_to_property_state(node: &Node, value: v4l::control::Value) -> DeviceResult<PropertyState> {
-    match &node.variant {
-        NodeVariant::Group(_) => Err(anyhow!("Cannot read a group node"))?,
-        NodeVariant::Property(property) => match property {
-            PropertyVariant::Bool(_) => match value {
+    match &node {
+        Node::Group(_) => Err(anyhow!("Cannot read a group node"))?,
+        Node::Property(property) => match property {
+            Property::Bool(_) => match value {
                 Value::Boolean(current) => Ok(PropertyState::Bool(current)),
                 _ => Err(anyhow!("Expected boolean value but the current control value was {value:?}"))?,
             },
-            PropertyVariant::Integer(property) => match value {
-                Value::Integer(current) => Ok(PropertyState::Int(NumericValue {
+            Property::Integer(property) => match value {
+                Value::Integer(current) => Ok(PropertyState::Int(NumericState {
                     current,
-                    range: (property.min.unwrap_or(0))..=(property.max.unwrap_or(0)),
+                    range: (*property.min.clone().unwrap_or(ValueOrRef::Value(0)).as_value().unwrap()..=*property.max.clone().unwrap_or(ValueOrRef::Value(0)).as_value().unwrap()),
                 })),
                 _ => Err(anyhow!("Expected integer value but the current control value was {value:?}"))?,
             },
-            PropertyVariant::Float(_) => unimplemented!("v4l does not support float properties"),
-            PropertyVariant::Enum(property) => match value {
-                Value::Integer(current) => Ok(PropertyState::Enum(EnumValue {
+            Property::Float(_) => unimplemented!("v4l does not support float properties"),
+            Property::Enum(property) => match value {
+                Value::Integer(current) => Ok(PropertyState::Enum(EnumState {
                     current,
                     support: property.entries.iter().map(|e| e.discriminant).collect::<Vec<_>>().into(),
                 })),
                 _ => Err(anyhow!("Expected integer value but the current control value was {value:?}"))?,
             },
-            PropertyVariant::String(_) => match value {
+            Property::String(_) => match value {
                 Value::String(current) => Ok(PropertyState::String(current)),
                 _ => Err(anyhow!("Expected string value but the current control value was {value:?}"))?,
             },
-            PropertyVariant::Command => Err(anyhow!("Cannot read a command property"))?,
+            Property::Command(_) => Err(anyhow!("Cannot read a command property"))?,
         },
-        NodeVariant::Port => todo!(),
     }
 }
 
