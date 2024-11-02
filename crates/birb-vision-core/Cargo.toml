@@ -14,5 +14,5 @@ log = "0.4.22"
 log-once = "0.4.1"
 mozjpeg = "0.10.7"
 serde = { version = "1", features = ["derive"] }
-thiserror = "1.0.63"
+thiserror = "1.0.65"
 #mozjpeg-sys = "2.2.0"
