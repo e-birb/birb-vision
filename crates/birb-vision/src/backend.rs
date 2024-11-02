@@ -45,11 +45,11 @@ impl BackendRegistry {
 }
 
 pub struct BackendPackage {
-    identifier: String,
-    display_name: String,
-    logo: Option<LogoImageFile>,
-    description: Option<String>,
-    builder: Box<dyn Fn() -> ContextProviderResult + Send + Sync + 'static>,
+    pub identifier: String,
+    pub display_name: String,
+    pub logo: Option<LogoImageFile>,
+    pub description: Option<String>,
+    pub builder: Box<dyn Fn() -> ContextProviderResult + Send + Sync + 'static>,
 }
 
 impl Debug for BackendPackage {

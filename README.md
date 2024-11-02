@@ -1,7 +1,7 @@
 # birb-vision
  A comprehensive Rust library designed for machine vision applications.
 
-`birb-vision` provides a unified interface to interact with various camera systems, including MVS, iCube, and more. The library aims to simplify the process of camera enumeration, control, and image acquisition, making it easier for developers to build robust vision-based applications.
+`birb-vision` provides a unified interface to interact with various camera systems such as webcams and industrial cameras (including MVS, iCube, Daheng and more). The library aims to simplify the process of camera enumeration, control, and image acquisition, making it easier for developers to build robust vision-based applications.
 
 ## Usage
 

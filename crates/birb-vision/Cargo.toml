@@ -9,6 +9,7 @@ birb-vision-mvs = { version = "0.1.0", path = "../birb-vision-mvs", optional = t
 birb-vision-v4l = { version = "0.1.0", path = "../birb-vision-v4l", optional = true }
 birb-vision-icube = { version = "0.1.0", path = "../birb-vision-icube", optional = true }
 birb-vision-media-foundation = { version = "0.1.0", path = "../birb-vision-media-foundation", optional = true }
+colored = "2.1.0"
 
 [features]
 #default = ["mvs", "v4l"]
