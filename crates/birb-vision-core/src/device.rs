@@ -5,19 +5,25 @@ use serde::{Deserialize, Serialize};
 use crate::{backend::DeviceInfo, DeviceError, DeviceResult, StreamEvent, Node, NodeId, PropertyState, PropertyValue};
 
 pub trait CameraDevice {
-    fn get_device_info(&self) -> DeviceResult<DeviceInfo>;
+    fn get_device_info(&self) -> DeviceResult<DeviceInfo> {
+        Err(DeviceError::NotImplemented)
+    }
+
+    fn access_mode(&self) -> DeviceResult<DeviceAccessMode> {
+        Err(DeviceError::NotImplemented)
+    }
 
     /// All controls
     fn all_properties(&self) -> DeviceResult<Vec<Node>> {
         return Ok(vec![]);
     }
 
-    fn root_property(&self) -> DeviceResult<Option<NodeId>> {
+    fn root_property(&self) -> DeviceResult<Option<NodeId>> { // TODO maybe "root_properties"?
         Ok(None)
     }
 
     /// Root of the interesting properties to be exposed to the user
-    fn user_root_property(&self) -> DeviceResult<Option<NodeId>> {
+    fn user_root_property(&self) -> DeviceResult<Option<NodeId>> { // TODO maybe "user_root_properties"?
         self.root_property()
     }
 
