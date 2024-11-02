@@ -1,8 +1,11 @@
 # birb-vision
- Birb Vision
+ A comprehensive Rust library designed for machine vision applications.
+
+`birb-vision` provides a unified interface to interact with various camera systems, including MVS, iCube, and more. The library aims to simplify the process of camera enumeration, control, and image acquisition, making it easier for developers to build robust vision-based applications.
 
 ## Usage
 
+To run the gui example you can use the following command:
 ```sh
 cargo run -p egui-example --release 
 ```
