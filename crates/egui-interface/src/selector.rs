@@ -1,7 +1,7 @@
-use std::{sync::Arc, thread::JoinHandle};
+use std::{rc::Rc, sync::Arc, thread::JoinHandle};
 
-use birb_vision::core::context::{BackendRegistry, BackendSet, DeviceInfo};
-use egui::{CollapsingHeader, Grid, Label, ScrollArea};
+use birb_vision::{core::{anyhow, context::{DeviceInfo, VisionContext}}, BackendRegistry};
+use egui::{ahash::HashMap, mutex::Mutex, CollapsingHeader, Grid, Label, ScrollArea};
 use material_icons::Icon;
 use scope_guard::scope_guard;
 
@@ -179,5 +179,54 @@ impl CameraManager {
         });
         // TODO use self.preview.init(...);
         self.camera_control = preview;
+    }
+}
+
+/// A set of [`Backend`] providers.
+///
+/// This structure provides a way to manage multiple backends.  
+/// A [`BackendSet`] is not [`Send`] or [`Sync`] implementations might not be thread-safe.
+/// If you want to share the backend set between threads you should use [`BackendProviderSet`]
+/// which only defines "how" to create a backend.
+pub struct BackendSet {
+    registry: BackendRegistry,
+    backends: Mutex<HashMap<String, Rc<dyn VisionContext>>>,
+}
+
+impl BackendSet {
+    pub fn new() -> Self {
+        Self::new_with_registry(BackendRegistry::new())
+    }
+
+    pub fn new_with_registry(registry: BackendRegistry) -> Self {
+        Self {
+            registry,
+            backends: Mutex::new(HashMap::default()),
+        }
+    }
+
+    pub fn providers(&self) -> &BackendRegistry {
+        &self.registry
+    }
+
+    /// Get or create a backend for the given type name.
+    ///
+    /// This function returns `None` if the backend does not exist and an error if
+    /// the backend provider failed to create the backend.
+    pub fn get_backend(&self, type_name: impl AsRef<str>) -> Option<Result<Rc<dyn VisionContext>, anyhow::Error>> {
+        let mut backends = self.backends.lock();
+        if let Some(backend) = backends.get(type_name.as_ref()) {
+            return Some(Ok(backend.clone()));
+        } else {
+            let backend: Rc<dyn VisionContext> = match self.registry.get_backend(type_name.as_ref())? {
+                Ok(backend) => backend.into(),
+                Err(e) => return Some(Err(e)),
+            };
+            let ok = backends
+                .insert(type_name.as_ref().to_string(), backend.clone())
+                .is_none();
+            debug_assert!(ok, "Backend for type {:?} already exists but this should not happen because it was previously tested", type_name.as_ref());
+            Some(Ok(backend))
+        }
     }
 }

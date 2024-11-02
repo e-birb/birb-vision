@@ -1,10 +1,11 @@
-use birb_vision_core::context::BackendPackage;
 pub use birb_vision_core as core;
 
-use core::context::BackendRegistry;
+mod backend;
+
+pub use backend::*;
 
 pub fn all_backends() -> BackendRegistry {
-    let set = BackendRegistry::new();
+    let mut set = BackendRegistry::new();
 
     #[cfg(feature = "mvs")]
     set.register(
