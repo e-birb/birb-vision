@@ -264,7 +264,7 @@ impl Debug for Framerate {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum VideoSubtype {
-    Uncompressed(PixelFormat),
+    Uncompressed(HandledPixelFormat),
     CompressedFrame(CompressedFrame),
 }
 
@@ -272,10 +272,10 @@ impl VideoSubtype {
     #[allow(non_upper_case_globals)]
     pub fn try_recognize(subtype: &GUID) -> Option<Self> {
         match subtype {
-            &MFVideoFormat_RGB24 | &MEDIASUBTYPE_RGB24 => Some(Self::Uncompressed(PixelFormat::RGB24)),
-            &MFVideoFormat_RGB32 | &MEDIASUBTYPE_RGB32 => Some(Self::Uncompressed(PixelFormat::RGB32)),
-            &MFVideoFormat_YUY2 /*| &MEDIASUBTYPE_YUY2*/ => Some(Self::Uncompressed(PixelFormat::YUY2)),
-            &MFVideoFormat_NV12 /*| &MEDIASUBTYPE_NV12*/ => Some(Self::Uncompressed(PixelFormat::NV12)),
+            &MFVideoFormat_RGB24 | &MEDIASUBTYPE_RGB24 => Some(Self::Uncompressed(HandledPixelFormat::RGB24)),
+            &MFVideoFormat_RGB32 | &MEDIASUBTYPE_RGB32 => Some(Self::Uncompressed(HandledPixelFormat::RGB32)),
+            &MFVideoFormat_YUY2 /*| &MEDIASUBTYPE_YUY2*/ => Some(Self::Uncompressed(HandledPixelFormat::YUY2)),
+            &MFVideoFormat_NV12 /*| &MEDIASUBTYPE_NV12*/ => Some(Self::Uncompressed(HandledPixelFormat::NV12)),
             &MFVideoFormat_MJPG /*| &MEDIASUBTYPE_MJPG*/ => Some(Self::CompressedFrame(CompressedFrame::MJpeg)),
             _ => None,
         }
@@ -283,7 +283,7 @@ impl VideoSubtype {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum PixelFormat {
+pub enum HandledPixelFormat {
     /// RGB 24
     ///
     /// FourCC:

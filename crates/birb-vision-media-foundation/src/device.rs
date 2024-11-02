@@ -1,6 +1,6 @@
-use std::{cell::RefCell, collections::VecDeque, error::Error, rc::Rc, sync::{Arc, Mutex, Weak}, task::{Context, Poll, Waker}};
+use std::{borrow::Cow, cell::RefCell, error::Error, sync::{Arc, Mutex, Weak}};
 
-use birb_vision_core::{anyhow::anyhow, backend::{DeviceInfo, DeviceInfoEntry}, decoders::{decode_mjpg, nv12_to_rgb_image, yuyv422_to_rgb}, CameraDevice, DeviceAccessMode, DeviceError, DeviceResult, Event};
+use birb_vision_core::{anyhow::anyhow, context::{DeviceInfo, DeviceInfoEntry}, decoders::{decode_mjpg, nv12_to_rgb_image, yuyv422_to_rgb}, CameraDevice, DeviceResult, FlatSample, FlatSampleLayout, FourCC, ImageSampleBuffer, PixelFormat, Sample, SampleType, StreamEvent};
 use image::{DynamicImage, RgbImage};
 use serde::{Deserialize, Serialize};
 use windows::{core::PWSTR, Win32::Media::MediaFoundation::{IMFAttributes, IMFMediaSource, IMFSourceReader, IMFSourceReaderCallback, IMFSourceReaderCallback_Impl, MFCreateAttributes, MFCreateSourceReaderFromMediaSource, MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK, MF_E_NOTACCEPTING, MF_READWRITE_DISABLE_CONVERTERS, MF_SOURCE_READERF_ALLEFFECTSREMOVED, MF_SOURCE_READERF_CURRENTMEDIATYPECHANGED, MF_SOURCE_READERF_ENDOFSTREAM, MF_SOURCE_READERF_ERROR, MF_SOURCE_READERF_NATIVEMEDIATYPECHANGED, MF_SOURCE_READERF_NEWSTREAM, MF_SOURCE_READERF_STREAMTICK, MF_SOURCE_READER_ASYNC_CALLBACK, MF_SOURCE_READER_FIRST_VIDEO_STREAM, MF_SOURCE_READER_FLAG}};
@@ -315,7 +315,7 @@ impl CameraDevice for MFDevice {
     //    self.finish_poll(inner)
     //}
 
-    fn set_stream_callback(&self, f: Box<dyn Fn(Event) + Send + Sync>) -> DeviceResult {
+    fn set_stream_callback(&self, f: Box<dyn Fn(StreamEvent) + Send + Sync>) -> DeviceResult {
         let mut inner = self.callback_inner.lock().unwrap();
         let inner = &mut *inner;
 
@@ -394,7 +394,7 @@ impl MFDevice {
 struct ReaderCallbackInner {
     format: Option<VideoFormat>,
     subtype: Option<VideoSubtype>,
-    tx: Box<dyn Fn(Event)>,
+    tx: Box<dyn Fn(StreamEvent)>,
     source_reader: Weak<IMFSourceReader>,
     flushing: bool,
     capture: bool,
@@ -405,7 +405,7 @@ struct ReaderCallbackInner {
 }
 
 impl ReaderCallbackInner {
-    fn send_event_impl(&mut self, event: Event) {
+    fn send_event_impl(&mut self, event: StreamEvent) {
         (self.tx)(event);
     }
 
@@ -428,11 +428,11 @@ impl ReaderCallbackInner {
             }
         };
 
-        self.send_event_impl(Event::Sample(sample));
+        self.send_event_impl(StreamEvent::Sample(sample));
     }
 
     fn send_flushed(&mut self) {
-        self.send_event_impl(Event::Flushed);
+        self.send_event_impl(StreamEvent::Flushed);
     }
 }
 
@@ -468,7 +468,7 @@ impl IMFSourceReaderCallback_Impl for ReaderCallback_Impl {
         lltimestamp: i64,
         psample: Option<&windows::Win32::Media::MediaFoundation::IMFSample>,
     ) -> windows_core::Result<()> {
-        println!("OnReadSample: {hrstatus}, {dwstreamindex}, {dwstreamflags}, {lltimestamp}, {psample:?}");
+        //println!("OnReadSample: {hrstatus}, {dwstreamindex}, {dwstreamflags}, {lltimestamp}, {psample:?}");
 
         if dwstreamindex != 0 {
             todo!("dwstreamindex != 0");
@@ -538,36 +538,63 @@ impl IMFSourceReaderCallback_Impl for ReaderCallback_Impl {
         let r = match subtype {
             VideoSubtype::Uncompressed(pixel_format) => {
                 match pixel_format {
-                    PixelFormat::RGB24 => {
+                    HandledPixelFormat::RGB24 => {
                         let stride = format.stride().unwrap_or(format.width() as i32 * 3); // TODO check if row major
-
-                        // HACK: windows actually uses BGR, so we need to convert it to swap the RED and BLUE channels
-                        let img = birb_vision_core::decoders::decode_bgr(
-                            &bytes,
-                            format.width(),
-                            format.height(),
-                            stride,
-                            true
-                        );
-
-                        Ok(DynamicImage::ImageRgb8(img))
+                        Ok(FlatSample {
+                            buffer: ImageSampleBuffer::Cow(Cow::Borrowed(bytes)),
+                            layout: FlatSampleLayout {
+                                offset: 0,
+                                sample_type: SampleType::Plain(PixelFormat::BGR8Packed),
+                                width: format.width(),
+                                height: format.height(),
+                                row_major: true,
+                                stride,
+                            },
+                        })
                     }
-                    PixelFormat::NV12 => nv12_to_rgb_image(format.width(), format.height(), &bytes, false).map(DynamicImage::ImageRgb8),
-                    PixelFormat::YUY2 => {
-                        yuyv422_to_rgb(&bytes, false) // TODO true or false????
-                            .map(|pixels| DynamicImage::ImageRgb8(RgbImage::from_raw(format.width(), format.height(), pixels).unwrap()))
-                    }
+                    HandledPixelFormat::NV12 => Ok(FlatSample {
+                        buffer: ImageSampleBuffer::Cow(Cow::Borrowed(bytes)),
+                        layout: FlatSampleLayout {
+                            offset: 0,
+                            sample_type: SampleType::FourCC(FourCC::new(b"NV12")),
+                            width: format.width(),
+                            height: format.height(),
+                            row_major: true,
+                            stride: 0,
+                        },
+                    }),
+                    HandledPixelFormat::YUY2 => Ok(FlatSample {
+                        buffer: ImageSampleBuffer::Cow(Cow::Borrowed(bytes)),
+                        layout: FlatSampleLayout {
+                            offset: 0,
+                            sample_type: SampleType::FourCC(FourCC::new(b"YUY2")),
+                            width: format.width(),
+                            height: format.height(),
+                            row_major: true,
+                            stride: 0,
+                        },
+                    }),
                     _ => todo!("Uncompressed pixel format: {pixel_format:?}"),
                 }
             },
             VideoSubtype::CompressedFrame(compressed_frame) => {
                 match compressed_frame {
-                    CompressedFrame::MJpeg => decode_mjpg(&bytes).map(DynamicImage::ImageRgb8),
+                    CompressedFrame::MJpeg => Ok(FlatSample {
+                        buffer: ImageSampleBuffer::Cow(Cow::Borrowed(bytes)),
+                        layout: FlatSampleLayout {
+                            offset: 0,
+                            sample_type: SampleType::FourCC(FourCC::new(b"MJPG")),
+                            width: format.width(),
+                            height: format.height(),
+                            row_major: true,
+                            stride: 0,
+                        },
+                    }),
                 }
             }
         };
 
-        inner.send_sample(Ok(r.map(birb_vision_core::Sample::Image).map_err(|e| anyhow!("Failed to decode frame: {e}").into()))); // TODO 
+        inner.send_sample(Ok(r.map(Sample::ImageSample)));
 
         Ok(())
     }

@@ -4,7 +4,7 @@ use image::{DynamicImage, Luma, RgbImage};
 use log_once::warn_once;
 use serde::{Deserialize, Serialize};
 
-use crate::decoders::yuyv422_to_rgb;
+use crate::decoders::{self, yuyv422_to_rgb};
 
 use super::{FourCC, PixelFormat};
 
@@ -24,7 +24,7 @@ impl FlatSample<()> {
     /// - Err(Sample) if the sample is not decodable
     pub fn try_decode_buffer<'a>(buffer: Cow<'a, [u8]>, layout: &FlatSampleLayout) -> Result<Result<DynamicImage, anyhow::Error>, Cow<'a, [u8]>> {
 
-        if layout.sample_type == SampleType::FourCC(FourCC::new(b"YUYV")) {
+        if layout.sample_type == SampleType::FourCC(FourCC::new(b"YUYV")) || layout.sample_type == SampleType::FourCC(FourCC::new(b"YUY2")) { // TODO not sure ...
             let data = yuyv422_to_rgb(&buffer, false).unwrap();
             let img = DynamicImage::ImageRgb8(RgbImage::from_raw(
                 layout.width as u32,
@@ -32,6 +32,11 @@ impl FlatSample<()> {
                 data,
             ).unwrap());
             return Ok(Ok(img));
+        }
+
+        if layout.sample_type == SampleType::FourCC(FourCC::new(b"NV12")) {
+            let img = decoders::nv12_to_rgb_image(layout.width, layout.height, &buffer, false).unwrap();
+            return Ok(Ok(DynamicImage::ImageRgb8(img)));
         }
 
         if layout.sample_type == SampleType::FourCC(FourCC::new(b"RGB3")) {
@@ -67,6 +72,18 @@ impl FlatSample<()> {
             if layout.row_major && layout.height > 0 && layout.width > 0 && layout.offset == 0 {
                 let buffer = buffer.into_owned();
                 let image = image::ImageBuffer::<image::Rgb<u8>, Vec<u8>>::from_raw(layout.width, layout.height, buffer).unwrap();
+                let dynamic_image = DynamicImage::ImageRgb8(image);
+                return Ok(Ok(dynamic_image));
+            }
+        }
+
+        if layout.sample_type == SampleType::Plain(PixelFormat::BGR8Packed) {
+            // TODO this is just a quick hack to get the image to display but it's not correct
+            warn_once!("Quick hack to display BGR8Packed image");
+            if layout.row_major && layout.height > 0 && layout.width > 0 && layout.offset == 0 {
+                let buffer = buffer.into_owned();
+                let stride = layout.width * 3; // TODO
+                let image = decoders::decode_bgr(&buffer, layout.width, layout.height, stride as _, true);
                 let dynamic_image = DynamicImage::ImageRgb8(image);
                 return Ok(Ok(dynamic_image));
             }

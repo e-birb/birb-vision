@@ -1,6 +1,6 @@
 use std::{cell::RefCell, mem::MaybeUninit, sync::{Arc, Weak}};
 
-use birb_vision_core::{anyhow::anyhow, backend::{Backend, DeviceInfoEntry}};
+use birb_vision_core::{anyhow::anyhow, context::{DeviceInfo, DeviceInfoEntry, VisionContext}};
 use windows::{core::PWSTR, Win32::{Media::MediaFoundation::{IMFActivate, IMFAttributes, MFCreateAttributes, MFEnumDeviceSources, MF_DEVSOURCE_ATTRIBUTE_FRIENDLY_NAME, MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE, MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_GUID, MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK}, System::Com::{self, COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE}}};
 
 use crate::*;
@@ -188,16 +188,16 @@ fn uninit_com() {
     }
 }
 
-impl Backend for MediaFoundationContext {
-    fn enumerate(&self, _transport_layers: &[String]) -> birb_vision_core::anyhow::Result<Vec<birb_vision_core::backend::DeviceInfo>> {
+impl VisionContext for MediaFoundationContext {
+    fn enumerate(&self, _transport_layers: &[String]) -> birb_vision_core::anyhow::Result<Vec<DeviceInfo>> {
         let devices = self.enumerate_devices().map_err(|e| anyhow!("Device enumeration failed: {e}"))?;
-        Ok(devices.into_iter().map(|d| birb_vision_core::backend::DeviceInfo {
+        Ok(devices.into_iter().map(|d| DeviceInfo {
             display_name: d.name,
             other: std::iter::once(("symlink".to_string(), DeviceInfoEntry::new("symlink", d.symlink))).collect(),
         }).collect())
     }
 
-    fn create(&self, info: &birb_vision_core::backend::DeviceInfo) -> birb_vision_core::anyhow::Result<Option<Box<dyn birb_vision_core::CameraDevice>>> {
+    fn create(&self, info: &DeviceInfo) -> birb_vision_core::anyhow::Result<Option<Box<dyn birb_vision_core::CameraDevice>>> {
         let symlink = info.other.get("symlink").ok_or(anyhow!("No symlink specified"))?.value.as_str();
         let device_info = self
             .enumerate_devices()

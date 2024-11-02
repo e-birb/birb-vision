@@ -1,3 +1,4 @@
+use birb_vision_core::anyhow::anyhow;
 pub use birb_vision_core as core;
 
 mod backend;
@@ -37,7 +38,7 @@ pub fn all_backends() -> BackendRegistry {
     #[cfg(feature = "media-foundation")]
     set.register(
         BackendPackage::from_builder_fn(|| {
-            let ctx = birb_vision_media_foundation::MediaFoundationContext::new()?;
+            let ctx = birb_vision_media_foundation::MediaFoundationContext::new().map_err(|e| anyhow!("Failed to create MediaFoundationContext: {e}"))?;
             Ok(ctx)
         })
         .with_display_name("Hikrobot (MVS SDK)")
