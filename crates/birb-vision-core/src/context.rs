@@ -9,7 +9,7 @@
  * Usually if your app you would define a [`VisionBackendSet`]
  */
 
-use std::{collections::{BTreeMap, HashMap}, error::Error, fmt::Debug, hash::Hash, rc::Rc, sync::{Arc, Mutex}};
+use std::{collections::BTreeMap, fmt::Debug, hash::Hash};
 
 use serde::{Deserialize, Serialize};
 
