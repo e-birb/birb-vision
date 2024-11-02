@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use anyhow::anyhow;
-use birb_vision_core::{backend::{Backend, DeviceInfo, DeviceInfoEntry}, CameraDevice, DeviceError, DeviceResult, FlatSample, FlatSampleLayout, GroupNode, ImageSampleBuffer, Node, NodeInfo, PixelFormat, Sample, SampleType, StreamEvent, StringProperty};
+use birb_vision_core::{backend::{Backend, DeviceInfo, DeviceInfoEntry}, CameraDevice, DeviceError, DeviceResult, FlatSample, FlatSampleLayout, GroupNode, ImageSampleBuffer, Node, NodeId, NodeInfo, PixelFormat, Sample, SampleType, StreamEvent, StringProperty};
 use icube_sdk_sys::SDK;
 
 use crate::{iCubeContext, iCubeDevice, CallbackEventType, IntoICubeResult};
@@ -88,22 +88,22 @@ impl CameraDevice for iCubeDevice {
         Ok(properties)
     }
 
-    fn read_property(&self, node: &Node) -> DeviceResult<birb_vision_core::PropertyState> {
+    fn read_property(&self, id: &NodeId) -> DeviceResult<birb_vision_core::PropertyState> {
         use common_property::*;
 
-        if node.id == NAME {
+        if id == &NAME {
             let version = self.get_name()?;
             Ok(birb_vision_core::PropertyState::String(version))
-        } else if node.id == VERSION {
+        } else if id == &VERSION {
             let version = self.get_version()?;
             Ok(birb_vision_core::PropertyState::String(version))
-        } else if node.id == FIRMWARE_VERSION {
+        } else if id == &FIRMWARE_VERSION {
             let version = self.get_firmware_version()?;
             Ok(birb_vision_core::PropertyState::String(version))
-        } else if node.id == SERIAL_NUMBER {
+        } else if id == &SERIAL_NUMBER {
             let serial_number = self.get_serial_number()?;
             Ok(birb_vision_core::PropertyState::String(serial_number))
-        } else if node.id == FPGA_VERSION {
+        } else if id == &FPGA_VERSION {
             let version = self.get_fpga_version()?;
             Ok(birb_vision_core::PropertyState::String(version))
         } else {

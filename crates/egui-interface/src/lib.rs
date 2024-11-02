@@ -514,7 +514,7 @@ impl Properties {
         match property {
             Property::Group(_) => {},
             Property::Bool(b) => {
-                let v = match camera.read_property(node) {
+                let v = match camera.read_property(&node.id) {
                     Ok(v) => v,
                     Err(e) => {
                         log::error!("Error reading BOOL property: {id:?}: {e}");
@@ -531,7 +531,7 @@ impl Properties {
                 b.set_value(v);
             },
             Property::Integer(i) => {
-                let v = match camera.read_property(node) {
+                let v = match camera.read_property(&node.id) {
                     Ok(v) => v,
                     Err(e) => {
                         log::error!("Error reading INT property: {id:?}: {e}");
@@ -550,7 +550,7 @@ impl Properties {
                 i.max = *v.range.end();
             },
             Property::Float(f) => {
-                let v = match camera.read_property(node) {
+                let v = match camera.read_property(&node.id) {
                     Ok(v) => v,
                     Err(e) => {
                         log::error!("Error reading FLOAT property: {id:?}: {e}");
@@ -569,7 +569,7 @@ impl Properties {
                 f.max = *v.range.end();
             },
             Property::Enum(e) => {
-                let v = match camera.read_property(node) {
+                let v = match camera.read_property(&node.id) {
                     Ok(v) => v,
                     Err(e) => {
                         log::error!("Error reading ENUM property: {id:?}: {e}");
@@ -587,7 +587,7 @@ impl Properties {
                 e.set_value(v.current);
             },
             Property::String(e) => {
-                let v = match camera.read_property(node) {
+                let v = match camera.read_property(&node.id) {
                     Ok(v) => v,
                     Err(e) => {
                         log::error!("Error reading STRING property: {id:?}: {e}");
@@ -631,7 +631,7 @@ impl Properties {
                 let v = b.requested;
                 // HACK: remove and proper erro handling in case of write/read failures:
                 b.requested = b.value;
-                if let Err(e) = camera.write_property(node, PropertyValue::Bool(v)) {
+                if let Err(e) = camera.write_property(&node.id, PropertyValue::Bool(v)) {
                     log::error!("Error writing BOOL property: {id:?}: {e}");
                 }
             },
@@ -642,7 +642,7 @@ impl Properties {
                 let v = i.requested;
                 // HACK: remove and proper erro handling in case of write/read failures:
                 i.requested = i.value;
-                if let Err(e) = camera.write_property(node, PropertyValue::Integer(v)) {
+                if let Err(e) = camera.write_property(&node.id, PropertyValue::Integer(v)) {
                     log::error!("Error writing INT property: {id:?}: {e}");
                 }
             },
@@ -653,7 +653,7 @@ impl Properties {
                 let v = f.requested;
                 // HACK: remove and proper erro handling in case of write/read failures:
                 f.requested = f.value;
-                if let Err(e) = camera.write_property(node, PropertyValue::Float(v)) {
+                if let Err(e) = camera.write_property(&node.id, PropertyValue::Float(v)) {
                     log::error!("Error writing FLOAT property: {id:?}: {e}");
                 }
             },
@@ -664,7 +664,7 @@ impl Properties {
                 let v = e.requested;
                 // HACK: remove and proper erro handling in case of write/read failures:
                 e.requested = e.value;
-                if let Err(e) = camera.write_property(node, PropertyValue::Enum(v)) {
+                if let Err(e) = camera.write_property(&node.id, PropertyValue::Enum(v)) {
                     log::error!("Error writing ENUM property: {id:?}: {e}");
                 }
             },
@@ -675,7 +675,7 @@ impl Properties {
                 let v = e.requested.clone();
                 // HACK: remove and proper erro handling in case of write/read failures:
                 e.requested = e.value.clone();
-                if let Err(e) = camera.write_property(node, PropertyValue::String(v)) {
+                if let Err(e) = camera.write_property(&node.id, PropertyValue::String(v)) {
                     log::error!("Error writing STRING property: {id:?}: {e}");
                 }
             },
@@ -684,7 +684,7 @@ impl Properties {
                     return false;
                 }
                 c.requested = false;
-                if let Err(e) = camera.write_property(node, PropertyValue::Command) {
+                if let Err(e) = camera.write_property(&node.id, PropertyValue::Command) {
                     log::error!("Error sending COMMAND property: {id:?}: {e}");
                 }
             },

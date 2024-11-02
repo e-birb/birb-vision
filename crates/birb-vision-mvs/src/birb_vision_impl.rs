@@ -24,6 +24,8 @@ impl CameraDevice for MVDevice {
         let root = parse_root(xml_root, ROOT_ID, &mut list);
         list.push(root);
 
+        self.nodes.lock().unwrap().replace(list.iter().map(|n| (n.id.clone(), n.clone())).collect());
+
         Ok(list)
     }
 
@@ -55,9 +57,16 @@ impl CameraDevice for MVDevice {
     //        .next().ok_or(DeviceError::Other(anyhow::Error::msg("Root node not found")))
     //}
 
-    fn read_property(&self, node: &Node) -> DeviceResult<PropertyState> {
-        let id = node.id.as_str().unwrap();
-        let r = match &node {
+    fn read_property(&self, id: &NodeId) -> DeviceResult<PropertyState> {
+        // TODO this is ugly
+        if self.nodes.lock().unwrap().is_none() {
+            let _ = self.all_properties()?;
+        }
+
+        let node = self.nodes.lock().unwrap().as_ref().unwrap().get(id).ok_or(anyhow!("Node not found"))?.clone(); // TODO a proper error
+        let id = id.as_str().unwrap(); // TODO error
+
+        let r = match node {
             Node::Property(variant) => match variant {
                 Property::Bool(_) => PropertyState::Bool(self.get_bool_value(id)?),
                 Property::Integer(_) => self
@@ -88,8 +97,8 @@ impl CameraDevice for MVDevice {
         Ok(r)
     }
 
-    fn write_property(&self, node: &Node, value: PropertyValue) -> DeviceResult {
-        let id = node.id.as_str().unwrap();
+    fn write_property(&self, id: &NodeId, value: PropertyValue) -> DeviceResult {
+        let id = id.as_str().unwrap();
         match value {
             PropertyValue::Bool(value) => self.set_bool_value(id, value).map_err(|e| e.into()),
             PropertyValue::Integer(value) => self.set_int_value(id, value as _).map_err(|e| e.into()),

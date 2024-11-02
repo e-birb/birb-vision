@@ -21,6 +21,7 @@ pub struct V4lDevice {
     _marker: *mut (),
 
     properties: HashMap<NodeId, Node>,
+    all_properties: Vec<NodeId>,
 }
 
 impl V4lDevice {
@@ -38,7 +39,7 @@ impl V4lDevice {
 
         let mut root: Node = GroupNode::new("birb-vision-v4l::Root").into();
         root.display_name = "V4L2".into();
-        let mut root_children = Vec::new();
+        let mut all_properties = Vec::new();
 
         let mut properties = HashMap::new();
 
@@ -46,7 +47,7 @@ impl V4lDevice {
             let Some(node) = control_compat::parse(control) else {
                 continue;
             };
-            root_children.push(node.id.clone());
+            all_properties.push(node.id.clone());
             let prev = properties.insert(node.id.clone(), node);
             if let Some(_) = prev {
                 // TODO handle error
@@ -63,6 +64,7 @@ impl V4lDevice {
             stream: RefCell::new(None),
             _marker: std::ptr::null_mut(),
             properties,
+            all_properties,
         })
     }
 }
@@ -81,8 +83,11 @@ impl CameraDevice for V4lDevice {
         )
     }
 
-    fn read_property(&self, node: &Node) -> DeviceResult<PropertyState> {
-        let id = &node.id; // TODO since now we take node as a parameter, the V4lDevice::properties machinery is not necessary anymore
+    fn root_properties(&self) -> DeviceResult<Vec<NodeId>> {
+        Ok(self.all_properties.clone())
+    }
+
+    fn read_property(&self, id: &NodeId) -> DeviceResult<PropertyState> {
         let node = self.properties.get(id).ok_or(anyhow!("Control {id:?} not found"))?;
 
         // read the value from the device
@@ -94,8 +99,7 @@ impl CameraDevice for V4lDevice {
         control_compat::node_value_to_property_state(node, value)
     }
 
-    fn write_property(&self, node: &Node, value: PropertyValue) -> DeviceResult {
-        let id = &node.id; // TODO since now we take node as a parameter, the V4lDevice::properties machinery is not necessary anymore
+    fn write_property(&self, id: &NodeId, value: PropertyValue) -> DeviceResult {
         self.dev.lock().unwrap().set_control(Control {
             id: *id.as_i32().ok_or(InvalidNodeId)? as _,
             value: control_compat::property_value_to_v4l(value)?,

@@ -33,10 +33,10 @@ pub trait CameraDevice {
         self.root_properties()
     }
 
-    fn read_property(&self, _node: &Node) -> DeviceResult<PropertyState> {
+    fn read_property(&self, _id: &NodeId) -> DeviceResult<PropertyState> {
         Err(DeviceError::NotImplemented)
     }
-    fn write_property(&self, _node: &Node, _value: PropertyValue) -> DeviceResult {
+    fn write_property(&self, _id: &NodeId, _value: PropertyValue) -> DeviceResult {
         Err(DeviceError::NotImplemented)
     }
 

@@ -1,8 +1,8 @@
 #![doc = include_str!("../README.md")]
 
-use std::{borrow::Cow, ffi::{c_uchar, c_void, CStr}, path::Path, pin::Pin, sync::Mutex, time::Duration};
+use std::{borrow::Cow, collections::HashMap, ffi::{c_uchar, c_void, CStr}, path::Path, pin::Pin, sync::Mutex, time::Duration};
 
-use birb_vision_core::{utils::try_no_panic, FlatSample, FlatSampleLayout, ImageSampleBuffer, PixelFormat, SampleType};
+use birb_vision_core::{utils::try_no_panic, FlatSample, FlatSampleLayout, ImageSampleBuffer, Node, NodeId, PixelFormat, SampleType};
 use device::{AccessMode, DeviceInfo};
 pub use log;
 
@@ -51,6 +51,8 @@ pub struct MVDevice {
     ///
     /// Note that this correctly makes the struct `!Send` and `!Sync`
     handle: *mut c_void,
+
+    pub(crate) nodes: Mutex<Option<HashMap<NodeId, Node>>>, // TODO remove mutex...
 
     callbacks: Pin<Box<Mutex<Callbacks>>>,
 }
@@ -109,6 +111,7 @@ impl MVDevice {
         Ok(Self {
             cx,
             handle,
+            nodes: Mutex::new(None),
             callbacks: Box::pin(Mutex::new(Callbacks::new())),
         })
     }
