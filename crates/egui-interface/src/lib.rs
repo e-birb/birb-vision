@@ -167,7 +167,10 @@ impl CameraControl {
                     let mut selected_nodes = HashSet::new();
                     for root_id in &properties.roots {
                         let (_, root) = properties.leafs.get(root_id).unwrap();
-                        root.filter(&properties, &mut selected_nodes, &re);
+                        let matches = root.filter(&properties, &mut selected_nodes, &re);
+                        if matches {
+                            selected_nodes.insert(root_id.clone());
+                        }
                         // unnecessary? selected_nodes.insert(root_id.clone());
                     }
 
@@ -327,7 +330,10 @@ impl CameraControl {
                                     let mut selected = HashSet::new();
                                     for root_id in &props.roots {
                                         let (_, root) = props.leafs.get(root_id).unwrap();
-                                        root.filter(&props, &mut selected, &re);
+                                        let matches = root.filter(&props, &mut selected, &re);
+                                        if matches {
+                                            selected.insert(root_id.clone());
+                                        }
                                     }
                                     state.selected = selected;
                                 }
@@ -347,7 +353,9 @@ impl CameraControl {
                             if let Some(props) = state.props.as_mut() {
                                 //println!("OK 1");
                                 for root_id in props.roots.clone() {
-                                    props.show_property(ui, &selected, &root_id, &tx);
+                                    if selected.contains(&root_id) {
+                                        props.show_property(ui, &selected, &root_id, &tx);
+                                    }
                                 }
                             }
                         });
