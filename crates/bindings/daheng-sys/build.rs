@@ -8,6 +8,11 @@ fn main() {
 
     let target_triple = env::var("TARGET").unwrap();
 
+    // HACK for some reason bindgen and rustfmt freak out on windows after producing
+    // an unreasonably large bindings file, then rustfmt stack overflows
+    // I think it is related to https://github.com/rust-lang/rust-bindgen/issues/2929
+    let target_triple = "x86_64-unknown-linux-gnu".to_string();
+
     bindgen::Builder::default()
         .header(HEADER_V1)
         .dynamic_library_name("API")

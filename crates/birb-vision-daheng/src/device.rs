@@ -59,6 +59,16 @@ impl Device {
 
         Ok(device)
     }
+
+    pub fn open_from_serial_number(sn: &str) -> Result<Self, DahengError> {
+        let ctx = Ctx::new()?;
+        let info = ctx.get_all_device_base_info()?
+            .into_iter()
+            .find(|info| info.serial_number().to_str().unwrap() == sn)
+            .unwrap(); // TODO .ok_or(DeviceError::NotFound)?;
+
+        Self::open(info)
+    }
 }
 
 impl Drop for Device {
@@ -71,15 +81,7 @@ impl Drop for Device {
 
 impl CameraDevice for Device {
     fn get_device_info(&self) -> birb_vision_core::DeviceResult<birb_vision_core::context::DeviceInfo> {
-        let mut info = birb_vision_core::context::DeviceInfo::new();
-        info.display_name = self.info.display_name().to_string_lossy().into_owned();
-        info.other.insert("vendor_name".into(), DeviceInfoEntry::new("Vendor Name", self.info.vendor_name().to_string_lossy()));
-        info.other.insert("model_name".into(), DeviceInfoEntry::new("Model Name", self.info.model_name().to_string_lossy()));
-        info.other.insert("serial_number".into(), DeviceInfoEntry::new("Serial Number", self.info.serial_number().to_string_lossy()));
-        info.other.insert("device_id".into(), DeviceInfoEntry::new("Device ID", self.info.device_id().to_string_lossy()));
-        info.other.insert("user_id".into(), DeviceInfoEntry::new("User ID", self.info.vendor_name().to_string_lossy()));
-        // TODO ...
-        Ok(info)
+        Ok(info::to_birb_info(&self.info))
     }
 
     fn start_grabbing(&self) -> birb_vision_core::DeviceResult {

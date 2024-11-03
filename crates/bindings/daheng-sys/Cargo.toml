@@ -8,6 +8,7 @@ libloading = "0.8"
 log = "0.4.22"
 
 [build-dependencies]
+#bindgen = { version = "0.70.1", default-features = false, features = ["logging", "prettyplease"] }
 bindgen = "0.70.1"
 doxygen-rs = "0.4.2"
 

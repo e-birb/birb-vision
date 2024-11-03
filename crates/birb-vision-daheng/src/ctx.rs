@@ -86,7 +86,7 @@ impl Ctx {
 }
 
 struct CtxInner {
-    sdk: SDK,
+    sdk: Arc<SDK>,
 }
 
 impl CtxInner {
@@ -103,11 +103,25 @@ impl CtxInner {
 
         GxError::result(&sdk, match &sdk {
             SDK::V1(api) => unsafe { api.GXInitLib() },
-            SDK::V2(_) => { 0 },
+            SDK::V2(api) => unsafe { api.GXInitLib() },
         })?;
 
         Ok(Arc::new(CtxInner {
-            sdk,
+            sdk: Arc::new(sdk),
         }))
+    }
+}
+
+impl Drop for CtxInner {
+    fn drop(&mut self) {
+        GxError::result(&self.sdk, match &*self.sdk {
+            SDK::V1(api) => unsafe { api.GXCloseLib() },
+            SDK::V2(api) => unsafe { api.GXCloseLib() },
+        }).unwrap();
+
+        // FIXME
+        // HACK: for some reason when unloading the dll it freezes the program... so we just leak it
+        #[cfg(windows)]
+        std::mem::forget(self.sdk.clone());
     }
 }

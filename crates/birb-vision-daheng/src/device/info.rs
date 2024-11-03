@@ -69,3 +69,15 @@ fn convert_string_array(data: &[i8]) -> &CStr {
     let data = unsafe { std::slice::from_raw_parts(data.as_ptr() as *const u8, data.len()) };
     CStr::from_bytes_with_nul(data).unwrap()
 }
+
+pub(crate) fn to_birb_info(info: &DeviceInfo) -> birb_vision_core::context::DeviceInfo {
+    use birb_vision_core::context::DeviceInfoEntry;
+    let mut birb_info = birb_vision_core::context::DeviceInfo::new();
+    birb_info.display_name = info.display_name().to_string_lossy().into_owned();
+    birb_info.other.insert("vendor_name".into(), DeviceInfoEntry::new("Vendor Name", info.vendor_name().to_string_lossy()));
+    birb_info.other.insert("model_name".into(), DeviceInfoEntry::new("Model Name", info.model_name().to_string_lossy()));
+    birb_info.other.insert("serial_number".into(), DeviceInfoEntry::new("Serial Number", info.serial_number().to_string_lossy()));
+    birb_info.other.insert("device_id".into(), DeviceInfoEntry::new("Device ID", info.device_id().to_string_lossy()));
+    birb_info.other.insert("user_id".into(), DeviceInfoEntry::new("User ID", info.user_id().to_string_lossy()));
+    birb_info
+}
