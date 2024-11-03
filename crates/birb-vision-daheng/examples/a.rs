@@ -4,8 +4,7 @@ use birb_vision_daheng::{Ctx, Device};
 use birb_vision_core::CameraDevice;
 
 fn main() {
-    {
-        let ctx = Ctx::new().unwrap();
+    let ctx = Ctx::new().unwrap();
     let n = ctx.get_all_device_base_info().unwrap().len();
     println!("Found {n} devices");
 
@@ -20,7 +19,4 @@ fn main() {
         std::thread::sleep(Duration::from_secs(5));
         dev.stop_grabbing().unwrap();
     }
-    println!("Done");
-}
-println!("Done2");
 }
