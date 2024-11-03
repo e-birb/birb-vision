@@ -38,7 +38,13 @@ pub enum Sample<'a> {
 
 impl<'a> Sample<'a> {
     pub fn into_owned(self) -> Sample<'static> {
-        todo!()
+        let Self::ImageSample(sample) = self;
+        let layout = sample.layout;
+        let buffer = match sample.buffer {
+            ImageSampleBuffer::LockedBuffer(buffer) => ImageSampleBuffer::LockedBuffer(buffer),
+            ImageSampleBuffer::Cow(buffer) => ImageSampleBuffer::Cow(buffer.into_owned().into()),
+        };
+        Sample::ImageSample(FlatSample { buffer, layout })
     }
 
     /// Tries to decode the sample into a DynamicImage
