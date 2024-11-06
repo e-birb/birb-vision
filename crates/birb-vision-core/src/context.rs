@@ -27,7 +27,7 @@ use crate::CameraDevice;
 ///
 /// Contexts may not be [`Send`] or [`Sync`], for this reason a convenient
 /// 
-pub trait VisionContext: 'static {
+pub trait VisionContext: 'static { // TODO possibly return errors!!!
     fn available_transport_layers(&self) -> Vec<String> {
         vec![]
     }
@@ -60,7 +60,7 @@ pub trait VisionContext: 'static {
     /// Try to create a device.
     ///
     /// If no corresponding device is found, this function should return `Ok(None)`.
-    fn create(&self, info: &DeviceInfo) -> anyhow::Result<Option<Box<dyn CameraDevice>>>;
+    fn create(&self, info: &DeviceInfo) -> anyhow::Result<Option<Box<dyn CameraDevice>>>; // TODO maybe rename to "open"? with which mode?
 }
 
 pub trait GenericDeviceInfo {

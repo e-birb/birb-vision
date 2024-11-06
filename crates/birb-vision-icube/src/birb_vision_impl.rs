@@ -120,7 +120,8 @@ impl CameraDevice for iCubeDevice {
     }
 
     fn grab(&self) -> DeviceResult {
-        todo!()
+        // TODO implement
+        Err(DeviceError::NotImplemented)
     }
 
     fn set_stream_callback(&self, f: Box<dyn for<'a> Fn(StreamEvent<'a>) + Send + Sync>) -> DeviceResult {

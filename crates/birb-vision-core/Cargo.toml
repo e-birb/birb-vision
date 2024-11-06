@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.91"
+async-std = "1.13.0"
 clap = { version = "4.5.16", features = ["derive"] }
 #async-trait = "0.1.81"
 enum-as-inner = "0.6.0"
