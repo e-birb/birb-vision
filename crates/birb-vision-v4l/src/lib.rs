@@ -70,11 +70,11 @@ impl V4lDevice {
 }
 
 impl CameraDevice for V4lDevice {
-    fn get_device_info(&self) -> DeviceResult<DeviceInfo> {
+    fn get_device_info(&mut self) -> DeviceResult<DeviceInfo> {
         Ok(self.info.deref().clone())
     }
 
-    fn all_properties(&self) -> DeviceResult<Vec<Node>> {
+    fn all_properties(&mut self) -> DeviceResult<Vec<Node>> {
         Ok(self
             .properties
             .iter()
@@ -83,11 +83,11 @@ impl CameraDevice for V4lDevice {
         )
     }
 
-    fn root_properties(&self) -> DeviceResult<Vec<NodeId>> {
+    fn root_properties(&mut self) -> DeviceResult<Vec<NodeId>> {
         Ok(self.all_properties.clone())
     }
 
-    fn read_property(&self, id: &NodeId) -> DeviceResult<PropertyState> {
+    fn read_property(&mut self, id: &NodeId) -> DeviceResult<PropertyState> {
         let node = self.properties.get(id).ok_or(anyhow!("Control {id:?} not found"))?;
 
         // read the value from the device
@@ -99,7 +99,7 @@ impl CameraDevice for V4lDevice {
         control_compat::node_value_to_property_state(node, value)
     }
 
-    fn write_property(&self, id: &NodeId, value: PropertyValue) -> DeviceResult {
+    fn write_property(&mut self, id: &NodeId, value: PropertyValue) -> DeviceResult {
         self.dev.lock().unwrap().set_control(Control {
             id: *id.as_i32().ok_or(InvalidNodeId)? as _,
             value: control_compat::property_value_to_v4l(value)?,
@@ -108,7 +108,7 @@ impl CameraDevice for V4lDevice {
         Ok(())
     }
 
-    fn start_grabbing(&self) -> DeviceResult {
+    fn start_grabbing(&mut self) -> DeviceResult {
         if self.stream.borrow().is_some() { // TODO also check thread, maybe wait if necessary (only one none)?
             return Ok(());
         }
@@ -156,7 +156,7 @@ impl CameraDevice for V4lDevice {
 
         Ok(())
     }
-    fn stop_grabbing(&self) -> DeviceResult {
+    fn stop_grabbing(&mut self) -> DeviceResult {
         self.stream.replace(None);
         if let Some(j) = self.thread.replace(None) {
             j.join().unwrap();
@@ -164,17 +164,17 @@ impl CameraDevice for V4lDevice {
         Ok(())
     }
 
-    fn grab(&self) -> DeviceResult<()> {
+    fn grab(&mut self) -> DeviceResult<()> {
         // TODO
         Ok(())
     }
 
-    fn flush(&self) -> DeviceResult {
+    fn flush(&mut self) -> DeviceResult {
         // TODO
         Ok(())
     }
 
-    fn set_stream_callback(&self, f: Box<dyn Fn(StreamEvent) + Send + Sync>) -> DeviceResult {
+    fn set_stream_callback(&mut self, f: Box<dyn Fn(StreamEvent) + Send + Sync>) -> DeviceResult {
         *self.callback.lock().unwrap() = f;
         Ok(())
     }

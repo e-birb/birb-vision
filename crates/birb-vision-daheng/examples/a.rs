@@ -10,7 +10,7 @@ fn main() {
 
     for info in ctx.get_all_device_base_info().unwrap() {
         println!("Opening device: {:?}", info.model_name());
-        let dev = Device::open(info).unwrap();
+        let mut dev = Device::open(info).unwrap();
         dev.set_stream_callback(Box::new(|e| {
             println!("Event: {e:?}");
         })).unwrap();

@@ -13,7 +13,7 @@ fn main() {
     cx.init_device_list(|devices| {
         for device in devices {
             println!("Device {}: {:?}", device.sdk_index(), device.name());
-            let camera = device.open().expect("failed to open device");
+            let mut camera = device.open().expect("failed to open device");
 
             camera.set_callback(Box::new(|e| {
                 match e {

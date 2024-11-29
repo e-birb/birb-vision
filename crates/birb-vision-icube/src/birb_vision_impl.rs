@@ -41,14 +41,14 @@ mod common_property {
 }
 
 impl CameraDevice for iCubeDevice {
-    fn get_device_info(&self) -> DeviceResult<DeviceInfo> {
+    fn get_device_info(&mut self) -> DeviceResult<DeviceInfo> {
         let mut info = DeviceInfo::new();
         info.display_name = self.get_name()?.into(); // TODO get from SDK
         info.other.insert("device_index".into(), DeviceInfoEntry::new("Device Index", self.device_index().to_string()));
         Ok(info)
     }
 
-    fn all_properties(&self) -> DeviceResult<Vec<birb_vision_core::Node>> {
+    fn all_properties(&mut self) -> DeviceResult<Vec<birb_vision_core::Node>> {
         let mut properties: Vec<Node> = Vec::<Node>::new();
 
         use common_property::*;
@@ -88,7 +88,7 @@ impl CameraDevice for iCubeDevice {
         Ok(properties)
     }
 
-    fn read_property(&self, id: &NodeId) -> DeviceResult<birb_vision_core::PropertyState> {
+    fn read_property(&mut self, id: &NodeId) -> DeviceResult<birb_vision_core::PropertyState> {
         use common_property::*;
 
         if id == &NAME {
@@ -111,20 +111,20 @@ impl CameraDevice for iCubeDevice {
         }
     }
 
-    fn start_grabbing(&self) -> DeviceResult {
+    fn start_grabbing(&mut self) -> DeviceResult {
         self.start_video_stream(false, true).map_err(|e| e.into())
     }
 
-    fn stop_grabbing(&self) -> DeviceResult {
+    fn stop_grabbing(&mut self) -> DeviceResult {
         self.stop_video_stream().map_err(|e| e.into())
     }
 
-    fn grab(&self) -> DeviceResult {
+    fn grab(&mut self) -> DeviceResult {
         // TODO implement
         Err(DeviceError::NotImplemented)
     }
 
-    fn set_stream_callback(&self, f: Box<dyn for<'a> Fn(StreamEvent<'a>) + Send + Sync>) -> DeviceResult {
+    fn set_stream_callback(&mut self, f: Box<dyn for<'a> Fn(StreamEvent<'a>) + Send + Sync>) -> DeviceResult {
         let device_index = self.device_index();
         self.set_callback(Box::new(move |e: CallbackEventType<'_>| {
             let mut width = 0;
@@ -175,7 +175,7 @@ impl VisionContext for iCubeContext {
         self.init_device_list(|device_indices| {
             let mut devices = vec![];
             for device_index in device_indices {
-                let device = device_index.open()?;
+                let mut device = device_index.open()?;
                 devices.push(device.get_device_info()?);
             }
             Ok(devices)

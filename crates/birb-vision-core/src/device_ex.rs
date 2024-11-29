@@ -9,7 +9,7 @@ impl<T: CameraDevice + ?Sized> CameraDeviceEx for T {}
 
 pub trait CameraDeviceEx: CameraDevice {
     // TODO timeout
-    fn get_one_frame<'a>(&'a self, timeout: Duration) -> impl Future<Output = DeviceResult<Sample<'static>>> + 'a {
+    fn get_one_frame<'a>(&'a mut self, timeout: Duration) -> impl Future<Output = DeviceResult<Sample<'static>>> + 'a {
         async move {
             let (tx, rx) = oneshot::channel();
             let tx = Mutex::new(Some(tx));

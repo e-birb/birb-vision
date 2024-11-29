@@ -5,20 +5,20 @@ use serde::{Deserialize, Serialize};
 use crate::{context::DeviceInfo, DeviceError, DeviceResult, StreamEvent, Node, NodeId, PropertyState, PropertyValue};
 
 pub trait CameraDevice {
-    fn get_device_info(&self) -> DeviceResult<DeviceInfo> {
+    fn get_device_info(&mut self) -> DeviceResult<DeviceInfo> {
         Err(DeviceError::NotImplemented)
     }
 
-    fn access_mode(&self) -> DeviceResult<DeviceAccessMode> {
+    fn access_mode(&mut self) -> DeviceResult<DeviceAccessMode> {
         Err(DeviceError::NotImplemented)
     }
 
     /// All controls
-    fn all_properties(&self) -> DeviceResult<Vec<Node>> {
+    fn all_properties(&mut self) -> DeviceResult<Vec<Node>> {
         return Ok(vec![]);
     }
 
-    fn root_properties(&self) -> DeviceResult<Vec<NodeId>> {
+    fn root_properties(&mut self) -> DeviceResult<Vec<NodeId>> {
         Ok(
             self
                 .all_properties()?
@@ -29,19 +29,19 @@ pub trait CameraDevice {
     }
 
     /// Root of the interesting properties to be exposed to the user
-    fn user_root_properties(&self) -> DeviceResult<Vec<NodeId>> {
+    fn user_root_properties(&mut self) -> DeviceResult<Vec<NodeId>> {
         self.root_properties()
     }
 
-    fn read_property(&self, _id: &NodeId) -> DeviceResult<PropertyState> {
+    fn read_property(&mut self, _id: &NodeId) -> DeviceResult<PropertyState> {
         Err(DeviceError::NotImplemented)
     }
-    fn write_property(&self, _id: &NodeId, _value: PropertyValue) -> DeviceResult {
+    fn write_property(&mut self, _id: &NodeId, _value: PropertyValue) -> DeviceResult {
         Err(DeviceError::NotImplemented)
     }
 
-    fn start_grabbing(&self) -> DeviceResult; // TODO a stream object?
-    fn stop_grabbing(&self) -> DeviceResult;
+    fn start_grabbing(&mut self) -> DeviceResult; // TODO a stream object?
+    fn stop_grabbing(&mut self) -> DeviceResult;
 
     /// Tell the camera to read a sample from the stream
     ///
@@ -53,9 +53,9 @@ pub trait CameraDevice {
     ///
     /// # Notes
     /// - This method is similar to [OpenCV's `VideoCapture::grab`](https://github.com/opencv/opencv/blob/ae4a11b0c0986809d2f938f68343c8da99286b29/modules/videoio/include/opencv2/videoio.hpp#L878), but it is not guaranteed to have effect.
-    fn grab(&self) -> DeviceResult;
+    fn grab(&mut self) -> DeviceResult;
 
-    fn flush(&self) -> DeviceResult {
+    fn flush(&mut self) -> DeviceResult {
         Err(DeviceError::NotImplemented)
     }
 
@@ -63,7 +63,7 @@ pub trait CameraDevice {
     // TODO Is this "no Pin requirement" good?
     //fn poll_events(&self, ctx: &mut std::task::Context) -> Poll<DeviceResult<Event>>;
 
-    fn set_stream_callback(&self, f: Box<dyn for<'a> Fn(StreamEvent<'a>) + Send + Sync>) -> DeviceResult;
+    fn set_stream_callback(&mut self, f: Box<dyn for<'a> Fn(StreamEvent<'a>) + Send + Sync>) -> DeviceResult;
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

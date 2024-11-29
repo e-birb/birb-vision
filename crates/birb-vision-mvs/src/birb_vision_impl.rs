@@ -10,11 +10,11 @@ use crate::genicam::{ROOT_ID, USER_ROOT_ID};
 use crate::{genicam::parse_root, mvs_try, prelude::*};
 
 impl CameraDevice for MVDevice {
-    fn get_device_info(&self) -> DeviceResult<birb_vision_core::context::DeviceInfo> {
+    fn get_device_info(&mut self) -> DeviceResult<birb_vision_core::context::DeviceInfo> {
         Ok(convert_info(self.get_info()?))
     }
 
-    fn all_properties(&self) -> DeviceResult<Vec<Node>> {
+    fn all_properties(&mut self) -> DeviceResult<Vec<Node>> {
         let xml = self.get_GenICam_xml()?;
         std::fs::write("mvs.xml", &xml).unwrap();
         let doc = roxmltree::Document::parse(&xml).unwrap();
@@ -28,7 +28,7 @@ impl CameraDevice for MVDevice {
         Ok(list)
     }
 
-    fn user_root_properties(&self) -> DeviceResult<Vec<NodeId>> {
+    fn user_root_properties(&mut self) -> DeviceResult<Vec<NodeId>> {
         for node in self.all_properties()? {
             if node.id == USER_ROOT_ID {
                 if let Node::Group(root) = node {
@@ -56,7 +56,7 @@ impl CameraDevice for MVDevice {
     //        .next().ok_or(DeviceError::Other(anyhow::Error::msg("Root node not found")))
     //}
 
-    fn read_property(&self, id: &NodeId) -> DeviceResult<PropertyState> {
+    fn read_property(&mut self, id: &NodeId) -> DeviceResult<PropertyState> {
         // TODO this is ugly
         if self.nodes.lock().unwrap().is_none() {
             let _ = self.all_properties()?;
@@ -96,7 +96,7 @@ impl CameraDevice for MVDevice {
         Ok(r)
     }
 
-    fn write_property(&self, id: &NodeId, value: PropertyValue) -> DeviceResult {
+    fn write_property(&mut self, id: &NodeId, value: PropertyValue) -> DeviceResult {
         let id = id.as_str().unwrap();
         match value {
             PropertyValue::Bool(value) => self.set_bool_value(id, value).map_err(|e| e.into()),
@@ -108,25 +108,25 @@ impl CameraDevice for MVDevice {
         }
     }
 
-    fn start_grabbing(&self) -> DeviceResult<()> {
-        self.start_grabbing().map_err(|e| e.into())
+    fn start_grabbing(&mut self) -> DeviceResult<()> {
+        Self::start_grabbing(self).map_err(|e| e.into())
     }
 
-    fn stop_grabbing(&self) -> DeviceResult<()> {
-        self.stop_grabbing().map_err(|e| e.into())
+    fn stop_grabbing(&mut self) -> DeviceResult<()> {
+        Self::stop_grabbing(self).map_err(|e| e.into())
     }
 
-    fn flush(&self) -> DeviceResult<()> {
+    fn flush(&mut self) -> DeviceResult<()> {
         log::error!("flush not implemented for MVSDevice");
         Ok(())
     }
 
-    fn grab(&self) -> DeviceResult<()> {
+    fn grab(&mut self) -> DeviceResult<()> {
         // TODO this function is deprecated, what should we use instead? Maybe MV_CC_SetCommandValue
         mvs_try!(self.cx => MV_CC_TriggerSoftwareExecute(self.handle)).map_err(|e| e.into())
     }
 
-    fn set_stream_callback(&self, f: Box<dyn Fn(StreamEvent) + Send + Sync>) -> DeviceResult {
+    fn set_stream_callback(&mut self, f: Box<dyn Fn(StreamEvent) + Send + Sync>) -> DeviceResult {
         self.set_image_callback(Box::new(move |sample| {
             f(StreamEvent::Sample(Ok(Sample::ImageSample(sample))))
         }));

@@ -124,7 +124,7 @@ impl CameraControl {
             let state = StateRef(Arc::downgrade(&state));
 
             move || {
-                let camera = init();
+                let mut camera = init();
                 let info = camera.get_device_info().unwrap();
                 state.on_state_mut(|state| {
                     state.device_info = Some(Arc::new(info));
@@ -159,8 +159,8 @@ impl CameraControl {
                     })
                 }).unwrap();
 
-                let mut properties = Properties::parse(&*camera);
-                properties.update_all_nodes(&*camera);
+                let mut properties = Properties::parse(&mut *camera);
+                properties.update_all_nodes(&mut *camera);
 
                 state.on_state_mut(|state| {
                     let re = state.filter_re();
@@ -187,7 +187,7 @@ impl CameraControl {
                         Command::Write => {
                             if state.on_state_mut(|state| {
                                 let props = state.props.as_mut().unwrap();
-                                props.write_all_nodes(&*camera);
+                                props.write_all_nodes(&mut *camera);
                             }).is_none() {
                                 break;
                             }
@@ -402,7 +402,7 @@ struct Properties {
 }
 
 impl Properties {
-    fn parse(camera: &dyn CameraDevice) -> Self {
+    fn parse(camera: &mut dyn CameraDevice) -> Self {
         let mut leafs: HashMap<NodeId, (Node, Property)> = HashMap::new();
         let nodes = camera.all_properties().unwrap();
         for node in nodes {
@@ -513,7 +513,7 @@ impl Properties {
         }
     }
 
-    pub fn update_node(&mut self, camera: &dyn CameraDevice, id: &NodeId) {
+    pub fn update_node(&mut self, camera: &mut dyn CameraDevice, id: &NodeId) {
         let Some((node, property)) = self.leafs.get_mut(id) else {
             log::error!("Node not found: {id:?}");
             return;
@@ -616,13 +616,13 @@ impl Properties {
         }
     }
 
-    pub fn update_all_nodes(&mut self, camera: &dyn CameraDevice) {
+    pub fn update_all_nodes(&mut self, camera: &mut dyn CameraDevice) {
         for id in self.leafs.keys().cloned().collect::<Vec<_>>() {
             self.update_node(camera, &id);
         }
     }
 
-    pub fn write_node(&mut self, camera: &dyn CameraDevice, id: &NodeId, force: bool)-> bool {
+    pub fn write_node(&mut self, camera: &mut dyn CameraDevice, id: &NodeId, force: bool)-> bool {
         let Some((node, property)) = self.leafs.get_mut(id) else {
             log::error!("Node not found: {id:?}");
             return false;
@@ -701,7 +701,7 @@ impl Properties {
         true
     }
 
-    fn write_all_nodes(&mut self, camera: &dyn CameraDevice){
+    fn write_all_nodes(&mut self, camera: &mut dyn CameraDevice){
         for id in self.leafs.keys().cloned().collect::<Vec<_>>() {
             if self.write_node(camera, &id, false) {
                 self.update_node(camera, &id);
