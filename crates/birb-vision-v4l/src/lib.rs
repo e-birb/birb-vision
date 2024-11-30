@@ -12,13 +12,13 @@ pub struct V4lDevice {
     current_format: Arc<Mutex<v4l::Format>>,
 
     callback: Arc<Mutex<Box<dyn Fn(StreamEvent) + Send + Sync>>>,
-    thread: RefCell<Option<std::thread::JoinHandle<()>>>,
-    stream: RefCell<Option<Arc<Mutex<v4l::io::mmap::Stream<'static>>>>>,
+    thread: Mutex<Option<std::thread::JoinHandle<()>>>,
+    stream: Mutex<Option<Arc<Mutex<v4l::io::mmap::Stream<'static>>>>>,
 
     // TODO I'm not sure if Device is actually Send and Sync
     // (even though `v4l::Device` struct is). I'm just going to
     // assume it is not for now, better safe than sorry.
-    _marker: *mut (),
+    //_marker: *mut (),
 
     properties: HashMap<NodeId, Node>,
     all_properties: Vec<NodeId>,
@@ -59,10 +59,10 @@ impl V4lDevice {
             info: Arc::new(info),
             dev: Mutex::new(dev),
             current_format: Arc::new(Mutex::new(format)),
-            thread: RefCell::new(None),
+            thread: Mutex::new(None),
             callback: Arc::new(Mutex::new(Box::new(|_| {}))),
-            stream: RefCell::new(None),
-            _marker: std::ptr::null_mut(),
+            stream: Mutex::new(None),
+            //_marker: std::ptr::null_mut(),
             properties,
             all_properties,
         })
@@ -109,7 +109,7 @@ impl CameraDevice for V4lDevice {
     }
 
     fn start_grabbing(&mut self) -> DeviceResult {
-        if self.stream.borrow().is_some() { // TODO also check thread, maybe wait if necessary (only one none)?
+        if self.stream.lock().unwrap().is_some() { // TODO also check thread, maybe wait if necessary (only one none)?
             return Ok(());
         }
 
@@ -151,14 +151,14 @@ impl CameraDevice for V4lDevice {
             }
         });
 
-        self.stream.replace(Some(stream));
-        self.thread.replace(Some(j));
+        self.stream.lock().unwrap().replace(stream);
+        self.thread.lock().unwrap().replace(j);
 
         Ok(())
     }
     fn stop_grabbing(&mut self) -> DeviceResult {
-        self.stream.replace(None);
-        if let Some(j) = self.thread.replace(None) {
+        self.stream.lock().unwrap().take();
+        if let Some(j) = self.thread.lock().unwrap().take() {
             j.join().unwrap();
         }
         Ok(())

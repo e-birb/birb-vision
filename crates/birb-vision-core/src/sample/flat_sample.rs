@@ -8,7 +8,7 @@ use crate::decoders::{self, yuyv422_to_rgb};
 
 use super::{FourCC, PixelFormat};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FlatSample<Buffer> {
     pub buffer: Buffer,
     pub layout: FlatSampleLayout,
@@ -100,7 +100,7 @@ pub enum SampleType {
     Plain(PixelFormat),
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct FlatSampleLayout {
     /// Offset of the first row/column
     ///

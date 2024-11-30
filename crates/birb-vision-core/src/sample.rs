@@ -11,6 +11,7 @@ pub use pixel_format::PixelFormat;
 pub use fourcc::FourCC;
 pub use flat_sample::*;
 pub use locked_buffer::LockedBuffer;
+use serde::{Deserialize, Serialize};
 
 
 #[derive(Clone)]

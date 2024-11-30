@@ -57,6 +57,9 @@ pub struct MVDevice {
     callbacks: Pin<Box<Mutex<Callbacks>>>,
 }
 
+unsafe impl Send for MVDevice {}
+unsafe impl Sync for MVDevice {}
+
 struct Callbacks {
     image_callback: Box<dyn for<'a> Fn(FlatSample<ImageSampleBuffer<'a>>) + Send + Sync>,
     event_callback: Box<dyn Fn(/*TODO*/) + Send + Sync>,

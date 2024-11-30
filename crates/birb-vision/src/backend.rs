@@ -1,6 +1,7 @@
 use std::{collections::HashMap, fmt::Debug, sync::Arc};
 
 use birb_vision_core::{anyhow::{self, anyhow}, context::VisionContext};
+use serde::{Deserialize, Serialize};
 
 
 #[derive(Clone)]
@@ -42,6 +43,13 @@ impl BackendRegistry {
         self.packages
             .clone()
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct BackendPackageInfo {
+    pub identifier: String,
+    pub display_name: String,
+    pub description: Option<String>,
 }
 
 pub struct BackendPackage {
@@ -97,6 +105,14 @@ impl BackendPackage {
 
     pub fn build_backend(&self) -> ContextProviderResult {
         (self.builder)()
+    }
+
+    pub fn info(&self) -> BackendPackageInfo {
+        BackendPackageInfo {
+            identifier: self.identifier.clone(),
+            display_name: self.display_name.clone(),
+            description: self.description.clone(),
+        }
     }
 }
 

@@ -27,7 +27,7 @@ use crate::CameraDevice;
 ///
 /// Contexts may not be [`Send`] or [`Sync`], for this reason a convenient
 /// 
-pub trait VisionContext: 'static { // TODO possibly return errors!!!
+pub trait VisionContext: Send + Sync + 'static { // TODO possibly return errors!!!
     fn available_transport_layers(&self) -> Vec<String> {
         vec![]
     }

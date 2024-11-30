@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{context::DeviceInfo, DeviceError, DeviceResult, StreamEvent, Node, NodeId, PropertyState, PropertyValue};
 
-pub trait CameraDevice {
+pub trait CameraDevice: Send + Sync {
     fn get_device_info(&mut self) -> DeviceResult<DeviceInfo> {
         Err(DeviceError::NotImplemented)
     }

@@ -262,7 +262,7 @@ impl<'a> DeviceIndex<'a> {
         Ok(iCubeDevice {
             handle,
             callback,
-            _marker: std::marker::PhantomData,
+            //_marker: std::marker::PhantomData,
         })
     }
 

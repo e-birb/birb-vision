@@ -11,8 +11,8 @@ pub struct iCubeDevice {
 
     pub(crate) callback: Box<OptionalCallbackWrapper>,
 
-    /// This is a marker to ensure that the device is not [`Send`] nor [`Sync`].
-    pub(crate) _marker: PhantomData<*const ()>,
+    //// This is a marker to ensure that the device is not [`Send`] nor [`Sync`].
+    //pub(crate) _marker: PhantomData<*const ()>,
 }
 
 impl iCubeDevice {

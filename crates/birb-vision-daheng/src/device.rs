@@ -18,6 +18,9 @@ pub struct Device {
     callbacks: Box<Mutex<DeviceCallbacks>>, // TODO maybe pin it?
 }
 
+unsafe impl Send for Device {}
+unsafe impl Sync for Device {}
+
 impl Device {
     pub fn open(info: DeviceInfo) -> Result<Self, DahengError> {
         let mut handle = std::ptr::null_mut();
