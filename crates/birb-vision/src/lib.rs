@@ -41,7 +41,7 @@ pub fn all_backends() -> BackendRegistry {
             let ctx = birb_vision_media_foundation::MediaFoundationContext::new().map_err(|e| anyhow!("Failed to create MediaFoundationContext: {e}"))?;
             Ok(ctx)
         })
-        .with_display_name("Hikrobot (MVS SDK)")
+        .with_display_name("Media Foundation")
     ).unwrap();
 
     set
