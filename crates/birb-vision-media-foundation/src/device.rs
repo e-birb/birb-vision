@@ -99,7 +99,7 @@ impl MFDeviceInfo {
             let device = MFDevice {
                 _cx: cx,
                 info: self.clone(),
-                is_streaming: RefCell::new(false),
+                is_streaming: Mutex::new(false),
                 _callback: callback,
                 callback_inner,
                 source_reader,
@@ -117,13 +117,16 @@ impl MFDeviceInfo {
 pub struct MFDevice {
     _cx: MediaFoundationContext,
     info: MFDeviceInfo,
-    is_streaming: RefCell<bool>,
+    is_streaming: Mutex<bool>,
 
     // Note: this SHALL be placed AFTER IMFSourceReader so that it is dropped AFTER IMFSourceReader
     _callback: Box<IMFSourceReaderCallback>,
     callback_inner: Arc<Mutex<ReaderCallbackInner>>,
     source_reader: Arc<IMFSourceReader>,
 }
+
+unsafe impl Send for MFDevice {}
+unsafe impl Sync for MFDevice {}
 
 impl MFDevice {
     pub fn info(&self) -> &MFDeviceInfo {
@@ -159,7 +162,7 @@ impl MFDevice {
     }
 
     pub fn is_open(&self) -> bool {
-        self.is_streaming.borrow().clone()
+        self.is_streaming.lock().unwrap().clone()
     }
 
     pub fn select_format(&mut self, query: impl Into<VideoFormatQuery>) -> MFResult<VideoFormat> {
@@ -230,7 +233,7 @@ impl MFDevice {
 const FIRST_VIDEO_STREAM: u32 = MF_SOURCE_READER_FIRST_VIDEO_STREAM.0 as u32;
 
 impl CameraDevice for MFDevice {
-    fn get_device_info(&self) -> DeviceResult<DeviceInfo> {
+    fn get_device_info(&mut self) -> DeviceResult<DeviceInfo> {
         let mut info = DeviceInfo::new();
         info.display_name = self.info.name.clone();
         info.other.insert("symlink".into(), DeviceInfoEntry::new("symlink", self.info.symlink.clone()));
@@ -238,17 +241,17 @@ impl CameraDevice for MFDevice {
         Ok(info)
     }
 
-    fn start_grabbing(&self) -> DeviceResult<()> {
+    fn start_grabbing(&mut self) -> DeviceResult<()> {
         self.start_stream().unwrap(); // TODO handle error
         Ok(())
     }
 
-    fn stop_grabbing(&self) -> DeviceResult<()> {
+    fn stop_grabbing(&mut self) -> DeviceResult<()> {
         self.stop_stream().unwrap(); // TODO handle error
         Ok(())
     }
 
-    fn flush(&self) -> DeviceResult<()> {
+    fn flush(&mut self) -> DeviceResult<()> {
         let mut inner = self.callback_inner.lock().unwrap();
         inner.flushing = true;
         self.flush_reader().unwrap();
@@ -315,7 +318,7 @@ impl CameraDevice for MFDevice {
     //    self.finish_poll(inner)
     //}
 
-    fn set_stream_callback(&self, f: Box<dyn Fn(StreamEvent) + Send + Sync>) -> DeviceResult {
+    fn set_stream_callback(&mut self, f: Box<dyn Fn(StreamEvent) + Send + Sync>) -> DeviceResult {
         let mut inner = self.callback_inner.lock().unwrap();
         let inner = &mut *inner;
 
@@ -328,7 +331,7 @@ impl CameraDevice for MFDevice {
         Ok(())
     }
 
-    fn grab(&self) -> DeviceResult<()> {
+    fn grab(&mut self) -> DeviceResult<()> {
         Self::send_read_sample(&self.source_reader);
         Ok(())
     }
