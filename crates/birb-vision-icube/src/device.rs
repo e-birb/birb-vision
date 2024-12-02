@@ -1,4 +1,4 @@
-use std::{ffi::c_ulong, marker::PhantomData, ops::{Deref, RangeInclusive}, sync::Mutex};
+use std::{ffi::c_ulong, ops::{Deref, RangeInclusive}, sync::Mutex};
 
 use anyhow::anyhow;
 use icube_sdk_sys::{v1, v2, SDK};

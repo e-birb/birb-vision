@@ -1,7 +1,7 @@
 use std::{future::Future, sync::Mutex, time::Duration};
 
 use anyhow::anyhow;
-use futures::{channel::oneshot, select};
+use futures::channel::oneshot;
 
 use crate::{CameraDevice, DeviceError, DeviceResult, Sample, StreamEvent};
 

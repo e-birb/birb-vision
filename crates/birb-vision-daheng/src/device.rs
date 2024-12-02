@@ -1,6 +1,6 @@
 use std::{ffi::c_void, sync::Mutex};
 
-use birb_vision_core::{context::DeviceInfoEntry, CameraDevice, DeviceError};
+use birb_vision_core::{CameraDevice, DeviceError};
 use callbacks::DeviceCallbacks;
 use daheng_sys::{v1, v2, SDK};
 

@@ -1,4 +1,4 @@
-use std::{borrow::Cow, cell::RefCell, collections::HashMap, ops::Deref, path::Path, sync::{Arc, Mutex}, time::Duration};
+use std::{borrow::Cow, collections::HashMap, ops::Deref, path::Path, sync::{Arc, Mutex}, time::Duration};
 
 use birb_vision_core::{anyhow::{self, anyhow}, context::{VisionContext, DeviceInfo, DeviceInfoEntry}, CameraDevice, DeviceResult, StreamEvent, FlatSample, FlatSampleLayout, FourCC, GroupNode, Node, NodeId, PropertyState, PropertyValue, Sample, ImageSampleBuffer, SampleType};
 use v4l::{io::traits::CaptureStream, video::Capture, Control, Device};
