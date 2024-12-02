@@ -6,7 +6,7 @@ const HEADER_V2: &str = "ffi/v2/GxIAPI.h";
 fn main() {
     let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
 
-    let target_triple = env::var("TARGET").unwrap();
+    //let target_triple = env::var("TARGET").unwrap();
 
     // HACK for some reason bindgen and rustfmt freak out on windows after producing
     // an unreasonably large bindings file, then rustfmt stack overflows

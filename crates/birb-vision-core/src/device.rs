@@ -40,6 +40,9 @@ pub trait CameraDevice: Send + Sync {
         Err(DeviceError::NotImplemented)
     }
 
+    fn is_grabbing(&self) -> DeviceResult<bool> {
+        Err(DeviceError::NotImplemented)
+    }
     fn start_grabbing(&mut self) -> DeviceResult; // TODO a stream object?
     fn stop_grabbing(&mut self) -> DeviceResult;
 

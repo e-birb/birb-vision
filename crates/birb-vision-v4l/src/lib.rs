@@ -1,6 +1,6 @@
 use std::{borrow::Cow, collections::HashMap, ops::Deref, path::Path, sync::{Arc, Mutex}, time::Duration};
 
-use birb_vision_core::{anyhow::{self, anyhow}, context::{VisionContext, DeviceInfo, DeviceInfoEntry}, CameraDevice, DeviceResult, StreamEvent, FlatSample, FlatSampleLayout, FourCC, GroupNode, Node, NodeId, PropertyState, PropertyValue, Sample, ImageSampleBuffer, SampleType};
+use birb_vision_core::{anyhow::{self, anyhow}, context::{DeviceInfo, DeviceInfoEntry, VisionContext}, CameraDevice, DeviceResult, EnumEntry, EnumProperty, EnumState, FlatSample, FlatSampleLayout, FourCC, ImageSampleBuffer, Node, NodeId, Property, PropertyState, PropertyValue, Sample, SampleType, StreamEvent};
 use v4l::{io::traits::CaptureStream, video::Capture, Control, Device};
 
 use birb_vision_core::DeviceError::*;
@@ -37,11 +37,30 @@ impl V4lDevice {
         let format = dev.format().unwrap();
         //dev.set_format(&Format::new(format.width, format.height, V4lFourCC::new(b"YUYV"))).unwrap();
 
-        let mut root: Node = GroupNode::new("birb-vision-v4l::Root").into();
-        root.display_name = "V4L2".into();
         let mut all_properties = Vec::new();
 
         let mut properties = HashMap::new();
+
+        // format node
+        {
+            let mut property = EnumProperty::new("video-format");
+            property.display_name = "Video Format".into();
+            property.description = Some("The video format of the camera".into());
+            let formats = dev.enum_formats()?;
+            for format in formats {
+                let entry = EnumEntry {
+                    discriminant: format.index as _,
+                    name: format.fourcc.to_string().into(),
+                    help: Some(format.description.into()),
+                };
+                property.entries.to_mut().push(entry);
+            }
+
+            let property = Property::Enum(property);
+            let node: Node = property.into();
+            all_properties.push(node.id.clone());
+            properties.insert(node.id.clone(), node);
+        }
 
         for control in dev.query_controls().unwrap() {
             let Some(node) = control_compat::parse(control) else {
@@ -90,6 +109,16 @@ impl CameraDevice for V4lDevice {
     fn read_property(&mut self, id: &NodeId) -> DeviceResult<PropertyState> {
         let node = self.properties.get(id).ok_or(anyhow!("Control {id:?} not found"))?;
 
+        if id.as_str() == Some("video-format") {
+            let format = self.current_format.lock().unwrap();
+            let formats = self.dev.lock().unwrap().enum_formats()?;
+            println!("{:?}", formats);
+            return Ok(PropertyState::Enum(EnumState {
+                current: formats.iter().find(|f| f.fourcc == format.fourcc).map(|d| d.index).unwrap() as _,
+                support: formats.iter().map(|f| f.index as _).collect(),
+            }));
+        }
+
         // read the value from the device
         let value = self.dev
             .lock().unwrap()
@@ -100,12 +129,30 @@ impl CameraDevice for V4lDevice {
     }
 
     fn write_property(&mut self, id: &NodeId, value: PropertyValue) -> DeviceResult {
+        if id.as_str() == Some("video-format") {
+            println!("Setting video format");
+            let PropertyValue::Enum(value) = value else {
+                return Err(InvalidParameter.into());
+            };
+            let formats = self.dev.lock().unwrap().enum_formats()?;
+            let format = formats.iter().find(|f| f.index == value as _).ok_or(InvalidParameter)?;
+            let current_format = self.current_format.lock().unwrap().clone();
+            let format = v4l::Format::new(current_format.width, current_format.height, format.fourcc);
+            let format = self.dev.lock().unwrap().set_format(&format)?;
+            *self.current_format.lock().unwrap() = format;
+            return Ok(());
+        }
+
         self.dev.lock().unwrap().set_control(Control {
             id: *id.as_i32().ok_or(InvalidNodeId)? as _,
             value: control_compat::property_value_to_v4l(value)?,
         })?;
 
         Ok(())
+    }
+
+    fn is_grabbing(&self) -> DeviceResult<bool> {
+        Ok(self.stream.lock().unwrap().is_some())
     }
 
     fn start_grabbing(&mut self) -> DeviceResult {
