@@ -30,7 +30,7 @@ impl<'a> Debug for ImageSampleBuffer<'a> {
 }
 
 /// A sample (possibly a frame) captured by a camera
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 #[derive(EnumAsInner)]
 pub enum Sample<'a> {
     ImageSample(FlatSample<ImageSampleBuffer<'a>>),
@@ -71,15 +71,6 @@ impl<'a> Sample<'a> {
                         layout: flat_sample.layout
                     }))
             },
-        }
-    }
-}
-
-impl<'a> Debug for Sample<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            //Sample::LockedBuffer(_) => write!(f, "LockedBuffer"),
-            Sample::ImageSample(_) => write!(f, "FlatSample"),
         }
     }
 }

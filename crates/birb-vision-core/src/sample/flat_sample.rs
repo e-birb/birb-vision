@@ -8,10 +8,19 @@ use crate::decoders::{self, yuyv422_to_rgb};
 
 use super::{FourCC, PixelFormat};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct FlatSample<Buffer> {
     pub buffer: Buffer,
     pub layout: FlatSampleLayout,
+}
+
+impl<Buffer> std::fmt::Debug for FlatSample<Buffer> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FlatSample")
+            .field("layout", &self.layout)
+            .field("buffer", &"...")
+            .finish()
+    }
 }
 
 impl<Buffer> FlatSample<Buffer> {
@@ -48,7 +57,7 @@ impl FlatSample<()> {
             return Ok(Ok(img));
         }
 
-        if layout.sample_type == SampleType::FourCC(FourCC::new(b"MJPG")) {
+        if layout.sample_type == SampleType::FourCC(FourCC::new(b"MJPG")) || layout.sample_type == SampleType::FourCC(FourCC::new(b"JPEG")) {
             //let img = birb_vision_core::decoders::decode_mjpg(data).unwrap();
             //let img = DynamicImage::ImageRgb8(img);
             let img = image::load_from_memory(&buffer).unwrap();
