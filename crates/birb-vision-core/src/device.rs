@@ -1,8 +1,6 @@
-use std::io::Write;
 
 use clap::ValueEnum;
 use enum_as_inner::EnumAsInner;
-use futures::{AsyncRead, AsyncWrite};
 use serde::{Deserialize, Serialize};
 
 use crate::{context::DeviceInfo, DeviceError, DeviceResult, StreamEvent, Node, NodeId, PropertyState, PropertyValue};
