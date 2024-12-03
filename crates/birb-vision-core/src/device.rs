@@ -1,8 +1,19 @@
+use std::io::Write;
+
 use clap::ValueEnum;
 use enum_as_inner::EnumAsInner;
+use futures::{AsyncRead, AsyncWrite};
 use serde::{Deserialize, Serialize};
 
 use crate::{context::DeviceInfo, DeviceError, DeviceResult, StreamEvent, Node, NodeId, PropertyState, PropertyValue};
+
+mod io;
+
+pub use io::DeviceIO;
+
+// TODO a lower level "DeviceIO" or something trait that exposes lower level functions like read/write register, etc.
+// and make a function `CameraDevice::io(&mut self) -> Option<&mut dyn DeviceIO>` (or result) that returns a reference to the IO trait
+// (might be self). Teh methods exposed by CameraDevice are instead high-level functions.
 
 pub trait CameraDevice: Send + Sync {
     fn get_device_info(&mut self) -> DeviceResult<DeviceInfo> {
@@ -13,11 +24,12 @@ pub trait CameraDevice: Send + Sync {
         Err(DeviceError::NotImplemented)
     }
 
-    /// All controls
+    /// Get all the properties of the device
     fn all_properties(&mut self) -> DeviceResult<Vec<Node>> {
         return Ok(vec![]);
     }
 
+    /// Roots of all properties
     fn root_properties(&mut self) -> DeviceResult<Vec<NodeId>> {
         Ok(
             self
@@ -33,6 +45,10 @@ pub trait CameraDevice: Send + Sync {
         self.root_properties()
     }
 
+    // We may add a "timeout" parameter or some other async way to handle reads
+    // of properties that may either take a long time, block teh device or
+    // need to wait for some event to happen (example frames).
+    // Allow read frames with this method? (maybe adding the appropriate node)
     fn read_property(&mut self, _id: &NodeId) -> DeviceResult<PropertyState> {
         Err(DeviceError::NotImplemented)
     }
@@ -45,6 +61,11 @@ pub trait CameraDevice: Send + Sync {
     }
     fn start_grabbing(&mut self) -> DeviceResult; // TODO a stream object?
     fn stop_grabbing(&mut self) -> DeviceResult;
+
+    /// Get a reference to the underlying IO object to read/write registers.
+    fn io<'a>(&'a mut self) -> Option<Box<dyn DeviceIO + 'a>> {
+        None
+    }
 
     /// Tell the camera to read a sample from the stream
     ///
@@ -94,3 +115,4 @@ pub enum DeviceAccessMode {
     /// Monitor access to the device
     Monitor,
 }
+

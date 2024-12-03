@@ -2,7 +2,7 @@
 use std::borrow::Cow;
 
 use birb_vision_core::anyhow::anyhow;
-use birb_vision_core::{PropertyState, PropertyValue, Property};
+use birb_vision_core::{DeviceIO, Property, PropertyState, PropertyValue};
 
 use birb_vision_core::{CameraDevice, DeviceResult, EnumState, StreamEvent, Sample, Node, NodeId, NumericState};
 use crate::ctx::convert_info;
@@ -137,6 +137,26 @@ impl CameraDevice for MVDevice {
             //f(Event::Flushed)
         }));
 
+        Ok(())
+    }
+}
+
+impl DeviceIO for MVDevice {
+    unsafe fn read_register<'a>(
+        &'a mut self,
+        address: u64,
+        buffer: &'a mut [u8],
+    ) -> DeviceResult {
+        self.read_memory(address, buffer)?;
+        Ok(())
+    }
+
+    unsafe fn write_register<'a>(
+        &'a mut self,
+        address: u64,
+        buffer: &'a [u8],
+    ) -> DeviceResult {
+        self.write_memory(address, buffer)?;
         Ok(())
     }
 }
