@@ -43,6 +43,7 @@ impl AccessMode {
 
 #[derive(Debug, Clone)]
 #[derive(EnumAsInner)]
+#[derive(Serialize, Deserialize)]
 pub enum Property {
     Bool(BoolProperty),
     Integer(NumericProperty<i64>),

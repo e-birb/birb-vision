@@ -11,6 +11,7 @@ pub use property::*;
 
 #[derive(Debug, Clone)]
 #[derive(EnumAsInner)]
+#[derive(Serialize, Deserialize)]
 pub enum Node {
     Group(GroupNode),
     Property(Property),
@@ -80,6 +81,7 @@ pub enum Visibility {
 }
 
 #[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize)]
 pub struct GroupNode {
     pub info: NodeInfo,
     pub children: Cow<'static, [NodeId]>,
