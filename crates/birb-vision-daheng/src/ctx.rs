@@ -3,7 +3,9 @@ use std::{sync::{Arc, Mutex, Weak}, time::Duration};
 use anyhow::{anyhow, Error};
 use daheng_sys::SDK;
 
-use crate::{DahengError, DeviceInfo, GxError};
+use crate::{DahengError, Device, DeviceInfo, GxError};
+
+use birb_vision_core::{context::{DeviceInfo as BirbDeviceInfo, DeviceInfoEntry, VisionContext}, CameraDevice};
 
 pub struct Ctx {
     inner: Arc<CtxInner>,
@@ -82,6 +84,36 @@ impl Ctx {
 
     pub(crate) fn sdk(&self) -> &SDK {
         &self.inner.sdk
+    }
+}
+
+impl VisionContext for Ctx {
+    fn available_transport_layers(&self) -> Vec<String> {
+        vec![] // Daheng SDK does not provide transport layers
+    }
+
+    fn enumerate(&self, _transport_layers: &[String]) -> anyhow::Result<Vec<BirbDeviceInfo>> {
+        self.update_device_list(Duration::from_secs(1))?;
+        let devices = self.get_all_device_base_info()?;
+        let device_infos = devices.into_iter().map(|device| {
+            let mut info = BirbDeviceInfo::new();
+            info.display_name = device.display_name().to_string_lossy().into_owned();
+            info.other.insert("serial_number".into(), DeviceInfoEntry::new("Serial Number", device.serial_number().to_string_lossy()));
+            info
+        }).collect();
+        Ok(device_infos)
+    }
+
+    fn create(&self, info: &BirbDeviceInfo) -> anyhow::Result<Option<Box<dyn CameraDevice>>> {
+        let serial_number = info.other.get("serial_number").ok_or(anyhow!("No serial number specified"))?.value.clone();
+        let devices = self.get_all_device_base_info()?;
+        for device in devices {
+            if device.serial_number().to_string_lossy() == serial_number {
+                let camera_device = Device::open(device)?; // Assuming `open` returns a `Box<dyn CameraDevice>`
+                return Ok(Some(Box::new(camera_device)));
+            }
+        }
+        Ok(None)
     }
 }
 

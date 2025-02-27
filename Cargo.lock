@@ -667,6 +667,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "birb-vision-core",
+ "birb-vision-daheng",
  "birb-vision-icube",
  "birb-vision-media-foundation",
  "birb-vision-mvs",

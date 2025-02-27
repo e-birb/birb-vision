@@ -44,5 +44,16 @@ pub fn all_backends() -> BackendRegistry {
         .with_display_name("Media Foundation")
     ).unwrap();
 
+    #[cfg(feature = "daheng")]
+    set.register(
+        BackendPackage::from_builder_fn(|| {
+            let ctx = birb_vision_daheng::Ctx::new()
+                .map_err(|e| anyhow::anyhow!("Failed to create DahengContext: {e}"))?;
+            Ok(ctx)
+        })
+        .with_display_name("Daheng")
+    ).unwrap();
+
+
     set
 }
