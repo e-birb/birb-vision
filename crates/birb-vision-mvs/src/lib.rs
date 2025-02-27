@@ -422,7 +422,7 @@ extern "C" fn evtent_callback(pEventInfo: *mut mvs_sys::MV_EVENT_OUT_INFO, pUser
         let info = unsafe { &*pEventInfo };
         let name: &[u8; 128] = unsafe { std::mem::transmute(&info.EventName) };
         let name = CStr::from_bytes_until_nul(name).unwrap();
-        println!("EVENT: {:?}", name);
+        log::trace!("EVENT: {:?}", name);
 
         assert!(!pUser.is_null());
         let callbacks = pUser as CallbacksPtr;

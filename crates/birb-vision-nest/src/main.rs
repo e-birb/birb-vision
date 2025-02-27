@@ -45,10 +45,10 @@ fn main() -> Result<(), anyhow::Error> {
 
 
     let api = bindings::load(args.shared_library).map_err(|e| anyhow::anyhow!("Failed to load API: {}", e))?;
-    println!("Loaded API: {api} with version: {:?}", api.get_version());
+    eprintln!("Loaded API: {api} with version: {:?}", api.get_version());
 
     let layers = api.supported_transport_layers().map_err(|e| anyhow::anyhow!("Failed to get supported transport layers: {}", e))?;
-    println!("Supported transport layers: {:?}", layers);
+    eprintln!("Supported transport layers: {:?}", layers);
 
     let Api::V0(api) = api;
     unsafe { api.device_close(std::ptr::null_mut()) };
@@ -57,6 +57,6 @@ fn main() -> Result<(), anyhow::Error> {
     drop(api);
     log::debug!("API dropped");
 
-    println!("Ok, LGTM.");
+    eprintln!("Ok, LGTM.");
     Ok(())
 }

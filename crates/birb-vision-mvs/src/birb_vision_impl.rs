@@ -133,7 +133,7 @@ impl CameraDevice for MVDevice {
 
         // TODO
         self.set_all_event_callback(Box::new(move || {
-            println!("EVENT!-------------------------------------------------")
+            eprintln!("EVENT!-------------------------------------------------")
             //f(Event::Flushed)
         }));
 

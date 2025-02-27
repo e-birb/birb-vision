@@ -112,7 +112,7 @@ impl CameraDevice for V4lDevice {
         if id.as_str() == Some("video-format") {
             let format = self.current_format.lock().unwrap();
             let formats = self.dev.lock().unwrap().enum_formats()?;
-            println!("{:?}", formats);
+            log::trace!("{:?}", formats);
             return Ok(PropertyState::Enum(EnumState {
                 current: formats.iter().find(|f| f.fourcc == format.fourcc).map(|d| d.index).unwrap() as _,
                 support: formats.iter().map(|f| f.index as _).collect(),
@@ -130,7 +130,7 @@ impl CameraDevice for V4lDevice {
 
     fn write_property(&mut self, id: &NodeId, value: PropertyValue) -> DeviceResult {
         if id.as_str() == Some("video-format") {
-            println!("Setting video format");
+            log::trace!("Setting video format");
             let PropertyValue::Enum(value) = value else {
                 return Err(InvalidParameter.into());
             };
