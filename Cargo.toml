@@ -9,7 +9,7 @@ members = [
     "crates/birb-vision-icube",
     "crates/birb-vision-media-foundation",
     "crates/birb-vision-media-uvc",
-    "crates/birb-vision-mvs", "crates/birb-vision-nest",
+    "crates/birb-vision-mvs", # FIXME "crates/birb-vision-nest", temporarily broken?
     "crates/birb-vision-v4l", "crates/egui-interface", "examples/egui", "crates/birb-vision-daheng",
     #"crates/birb-vision-nokhwa",
 ]
