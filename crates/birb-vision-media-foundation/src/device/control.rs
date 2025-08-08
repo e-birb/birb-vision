@@ -61,13 +61,13 @@ impl MFKnownControl {
             Self::Gamma => MFControlId::ProcAmp(VideoProcAmp_Gamma.0),
             Self::WhiteBalance => MFControlId::ProcAmp(VideoProcAmp_WhiteBalance.0),
             Self::BacklightComp => MFControlId::ProcAmp(VideoProcAmp_BacklightCompensation.0),
-            Self::Gain => MFControlId::ProcAmp(VideoProcAmp_Gain.0),
-            Self::Pan => MFControlId::CameraControl(CameraControl_Pan.0),
-            Self::Tilt => MFControlId::CameraControl(CameraControl_Tilt.0),
-            Self::Zoom => MFControlId::CameraControl(CameraControl_Zoom.0),
+            Self::Gain => MFControlId::ProcAmp(VideoProcAmp_Gain.0), // !
+            Self::Pan => MFControlId::CameraControl(CameraControl_Pan.0), // !
+            Self::Tilt => MFControlId::CameraControl(CameraControl_Tilt.0), // !
+            Self::Zoom => MFControlId::CameraControl(CameraControl_Zoom.0), // !
             Self::Exposure => MFControlId::CameraControl(CameraControl_Exposure.0),
-            Self::Iris => MFControlId::CameraControl(CameraControl_Iris.0),
-            Self::Focus => MFControlId::CameraControl(CameraControl_Focus.0),
+            Self::Iris => MFControlId::CameraControl(CameraControl_Iris.0), // !
+            Self::Focus => MFControlId::CameraControl(CameraControl_Focus.0), // !
         };
 
         Some(control_id)
