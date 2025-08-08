@@ -1,6 +1,5 @@
 use birb_vision_media_foundation::{MFKnownControl, MediaFoundationContext};
 
-
 fn main() {
     env_logger::builder()
         .filter_level(log::LevelFilter::Debug)

@@ -2,19 +2,14 @@
 
 use std::error::Error;
 
-use windows::core::{HRESULT, Error as WinError};
-
+use windows::core::{Error as WinError, HRESULT};
 
 mod ctx;
 mod device;
 mod media_type;
 
 pub use ctx::MediaFoundationContext;
-pub use device::{
-    MFDeviceInfo,
-    MFDevice,
-    *
-};
+pub use device::{MFDevice, MFDeviceInfo, *};
 pub use media_type::*;
 
 #[derive(Debug)]

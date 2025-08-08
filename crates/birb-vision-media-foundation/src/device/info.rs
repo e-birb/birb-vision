@@ -1,7 +1,14 @@
-use std::{error::Error, sync::{Mutex, Arc}};
+use std::{
+    error::Error,
+    sync::{Arc, Mutex},
+};
 
 use serde::{Deserialize, Serialize};
-use windows::Win32::{Media::MediaFoundation::{IMFAttributes, IMFMediaSource, IMFSourceReaderCallback, MFCreateAttributes, MFCreateSourceReaderFromMediaSource, MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK, MF_READWRITE_DISABLE_CONVERTERS, MF_SOURCE_READER_ASYNC_CALLBACK}};
+use windows::Win32::Media::MediaFoundation::{
+    IMFAttributes, IMFMediaSource, IMFSourceReaderCallback, MFCreateAttributes,
+    MFCreateSourceReaderFromMediaSource, MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK,
+    MF_READWRITE_DISABLE_CONVERTERS, MF_SOURCE_READER_ASYNC_CALLBACK,
+};
 use windows_core::PWSTR;
 
 use crate::{device::ReaderCallback, MFDevice, MFError, MFResult, MediaFoundationContext};
@@ -43,21 +50,17 @@ impl MFDeviceInfo {
             }
 
             let symlink = unsafe {
-                pwstr_symlink
-                    .to_string()
-                    .map_err(|e| {
-                        let r: Box<dyn Error> = Box::new(e);
-                        r
-                    })?
+                pwstr_symlink.to_string().map_err(|e| {
+                    let r: Box<dyn Error> = Box::new(e);
+                    r
+                })?
             };
 
             if self.symlink != symlink {
                 continue;
             }
 
-            let media_source = unsafe {
-                imf_activate.ActivateObject::<IMFMediaSource>()?
-            };
+            let media_source = unsafe { imf_activate.ActivateObject::<IMFMediaSource>()? };
 
             // NOTE: since this is declared before the source_reader AND source_reader_attributes, it will be dropped AFTER
             // even if it we fail and return/panic somewhere in the middle
@@ -83,7 +86,9 @@ impl MFDeviceInfo {
             };
 
             unsafe {
-                source_reader_attributes.SetUnknown(&MF_SOURCE_READER_ASYNC_CALLBACK, &*callback).unwrap(); // !!!!!!
+                source_reader_attributes
+                    .SetUnknown(&MF_SOURCE_READER_ASYNC_CALLBACK, &*callback)
+                    .unwrap(); // !!!!!!
             }
 
             let source_reader = unsafe {

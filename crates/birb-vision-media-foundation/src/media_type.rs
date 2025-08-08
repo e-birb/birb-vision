@@ -89,12 +89,11 @@ impl VideoFormat {
     pub fn from_media_type(media_type: &IMFMediaType) -> MFResult<Self> {
         let media_subtype = unsafe { media_type.GetGUID(&MF_MT_SUBTYPE)? };
 
-        let (width, height) = unsafe { media_type.GetUINT64(&MF_MT_FRAME_SIZE) }
-            .map(|s| {
-                let width = (s >> 32) as u32;
-                let height = s as u32; // the cast will truncate the upper bits
-                (width, height)
-            })?;
+        let (width, height) = unsafe { media_type.GetUINT64(&MF_MT_FRAME_SIZE) }.map(|s| {
+            let width = (s >> 32) as u32;
+            let height = s as u32; // the cast will truncate the upper bits
+            (width, height)
+        })?;
 
         let stride = unsafe { media_type.GetUINT32(&MF_MT_DEFAULT_STRIDE) }
             .ok()
@@ -121,12 +120,11 @@ impl VideoFormat {
     pub fn list(media_type: &IMFMediaType) -> MFResult<Vec<Self>> {
         let media_subtype = unsafe { media_type.GetGUID(&MF_MT_SUBTYPE)? };
 
-        let (width, height) = unsafe { media_type.GetUINT64(&MF_MT_FRAME_SIZE) }
-            .map(|s| {
-                let width = (s >> 32) as u32;
-                let height = s as u32; // the cast will truncate the upper bits
-                (width, height)
-            })?;
+        let (width, height) = unsafe { media_type.GetUINT64(&MF_MT_FRAME_SIZE) }.map(|s| {
+            let width = (s >> 32) as u32;
+            let height = s as u32; // the cast will truncate the upper bits
+            (width, height)
+        })?;
 
         let stride = unsafe { media_type.GetUINT32(&MF_MT_DEFAULT_STRIDE) }
             .ok()

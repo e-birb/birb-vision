@@ -1,6 +1,10 @@
 use num_enum::{IntoPrimitive, TryFromPrimitive};
-use windows::Win32::Media::DirectShow::{CameraControl_Exposure, CameraControl_Focus, CameraControl_Iris, CameraControl_Pan, CameraControl_Tilt, CameraControl_Zoom, VideoProcAmp_BacklightCompensation, VideoProcAmp_Brightness, VideoProcAmp_Contrast, VideoProcAmp_Gain, VideoProcAmp_Gamma, VideoProcAmp_Hue, VideoProcAmp_Saturation, VideoProcAmp_Sharpness, VideoProcAmp_WhiteBalance};
-
+use windows::Win32::Media::DirectShow::{
+    CameraControl_Exposure, CameraControl_Focus, CameraControl_Iris, CameraControl_Pan,
+    CameraControl_Tilt, CameraControl_Zoom, VideoProcAmp_BacklightCompensation,
+    VideoProcAmp_Brightness, VideoProcAmp_Contrast, VideoProcAmp_Gain, VideoProcAmp_Gamma,
+    VideoProcAmp_Hue, VideoProcAmp_Saturation, VideoProcAmp_Sharpness, VideoProcAmp_WhiteBalance,
+};
 
 #[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Eq)]
 pub enum MFKnownControlKind {
@@ -8,8 +12,7 @@ pub enum MFKnownControlKind {
     Range,
 }
 
-#[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Eq)]
-#[derive(TryFromPrimitive, IntoPrimitive)]
+#[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Eq, TryFromPrimitive, IntoPrimitive)]
 #[repr(i32)]
 pub enum MFKnownControl {
     Brightness,

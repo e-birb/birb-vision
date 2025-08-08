@@ -1,7 +1,19 @@
-use std::{borrow::Cow, sync::{Arc, Mutex, Weak}};
+use std::{
+    borrow::Cow,
+    sync::{Arc, Mutex, Weak},
+};
 
-use birb_vision_core::{anyhow::anyhow, DeviceResult, FlatSample, FlatSampleLayout, FourCC, ImageSampleBuffer, PixelFormat, Sample, SampleType, StreamEvent};
-use windows::Win32::Media::{MediaFoundation::{IMFSourceReader, IMFSourceReaderCallback, IMFSourceReaderCallback_Impl, MF_SOURCE_READERF_ALLEFFECTSREMOVED, MF_SOURCE_READERF_CURRENTMEDIATYPECHANGED, MF_SOURCE_READERF_ENDOFSTREAM, MF_SOURCE_READERF_ERROR, MF_SOURCE_READERF_NATIVEMEDIATYPECHANGED, MF_SOURCE_READERF_NEWSTREAM, MF_SOURCE_READERF_STREAMTICK, MF_SOURCE_READER_FLAG}};
+use birb_vision_core::{
+    anyhow::anyhow, DeviceResult, FlatSample, FlatSampleLayout, FourCC, ImageSampleBuffer,
+    PixelFormat, Sample, SampleType, StreamEvent,
+};
+use windows::Win32::Media::MediaFoundation::{
+    IMFSourceReader, IMFSourceReaderCallback, IMFSourceReaderCallback_Impl,
+    MF_SOURCE_READERF_ALLEFFECTSREMOVED, MF_SOURCE_READERF_CURRENTMEDIATYPECHANGED,
+    MF_SOURCE_READERF_ENDOFSTREAM, MF_SOURCE_READERF_ERROR,
+    MF_SOURCE_READERF_NATIVEMEDIATYPECHANGED, MF_SOURCE_READERF_NEWSTREAM,
+    MF_SOURCE_READERF_STREAMTICK, MF_SOURCE_READER_FLAG,
+};
 
 use crate::{CompressedFrame, HandledPixelFormat, MFDevice, VideoFormat, VideoSubtype};
 
@@ -12,7 +24,6 @@ pub(super) struct ReaderCallbackInner {
     pub source_reader: Weak<IMFSourceReader>,
     pub flushing: bool,
     pub capture: bool,
-
     //on_read_sample: Option<Box<dyn FnMut() -> windows_core::Result<()>>>,
     //on_flush: Option<Box<dyn FnMut() -> windows_core::Result<()>>>,
     //on_event: Option<Box<dyn FnMut() -> windows_core::Result<()>>>,
@@ -23,7 +34,10 @@ impl ReaderCallbackInner {
         (self.tx)(event);
     }
 
-    pub fn send_sample(&mut self, sample: Result<DeviceResult<birb_vision_core::Sample>, MF_SOURCE_READER_FLAG>) {
+    pub fn send_sample(
+        &mut self,
+        sample: Result<DeviceResult<birb_vision_core::Sample>, MF_SOURCE_READER_FLAG>,
+    ) {
         //self.send_event_impl(Event::Frame(sample.unwrap())); // TODO handle error
 
         let sample = match sample {
@@ -36,10 +50,10 @@ impl ReaderCallbackInner {
                 MF_SOURCE_READERF_CURRENTMEDIATYPECHANGED => todo!(),
                 MF_SOURCE_READERF_STREAMTICK => {
                     return;
-                },
+                }
                 MF_SOURCE_READERF_ALLEFFECTSREMOVED => todo!(),
                 _ => todo!(),
-            }
+            },
         };
 
         self.send_event_impl(StreamEvent::Sample(sample));
@@ -91,7 +105,7 @@ impl IMFSourceReaderCallback_Impl for ReaderCallback_Impl {
         let mut inner = self.inner.lock().unwrap();
         let source_reader = inner.source_reader.clone();
         let capture = inner.capture;
-        
+
         scopeguard::defer! {
             if capture {
                 if let Some(source_reader) = source_reader.upgrade() {
@@ -126,16 +140,12 @@ impl IMFSourceReaderCallback_Impl for ReaderCallback_Impl {
             return Ok(());
         };
 
-        let buffer = unsafe {
-            imf_sample.ConvertToContiguousBuffer()?
-        };
+        let buffer = unsafe { imf_sample.ConvertToContiguousBuffer()? };
 
         let mut buffer_valid_length = 0;
         let mut buffer_start_ptr = std::ptr::null_mut::<u8>();
 
-        unsafe {
-            buffer.Lock(&mut buffer_start_ptr, None, Some(&mut buffer_valid_length))?
-        };
+        unsafe { buffer.Lock(&mut buffer_start_ptr, None, Some(&mut buffer_valid_length))? };
 
         scopeguard::defer! {
             unsafe {
@@ -145,9 +155,8 @@ impl IMFSourceReaderCallback_Impl for ReaderCallback_Impl {
             }
         }
 
-        let bytes = unsafe {
-            std::slice::from_raw_parts(buffer_start_ptr, buffer_valid_length as usize)
-        };
+        let bytes =
+            unsafe { std::slice::from_raw_parts(buffer_start_ptr, buffer_valid_length as usize) };
 
         let r = match subtype {
             VideoSubtype::Uncompressed(pixel_format) => {
@@ -190,22 +199,20 @@ impl IMFSourceReaderCallback_Impl for ReaderCallback_Impl {
                     }),
                     _ => todo!("Uncompressed pixel format: {pixel_format:?}"),
                 }
-            },
-            VideoSubtype::CompressedFrame(compressed_frame) => {
-                match compressed_frame {
-                    CompressedFrame::MJpeg => Ok(FlatSample {
-                        buffer: ImageSampleBuffer::Cow(Cow::Borrowed(bytes)),
-                        layout: FlatSampleLayout {
-                            offset: 0,
-                            sample_type: SampleType::FourCC(FourCC::new(b"MJPG")),
-                            width: format.width(),
-                            height: format.height(),
-                            row_major: true,
-                            stride: 0,
-                        },
-                    }),
-                }
             }
+            VideoSubtype::CompressedFrame(compressed_frame) => match compressed_frame {
+                CompressedFrame::MJpeg => Ok(FlatSample {
+                    buffer: ImageSampleBuffer::Cow(Cow::Borrowed(bytes)),
+                    layout: FlatSampleLayout {
+                        offset: 0,
+                        sample_type: SampleType::FourCC(FourCC::new(b"MJPG")),
+                        width: format.width(),
+                        height: format.height(),
+                        row_major: true,
+                        stride: 0,
+                    },
+                }),
+            },
         };
 
         inner.send_sample(Ok(r.map(Sample::ImageSample)));
@@ -213,11 +220,7 @@ impl IMFSourceReaderCallback_Impl for ReaderCallback_Impl {
         Ok(())
     }
 
-    fn OnFlush(
-        &self,
-        dwstreamindex: u32,
-    ) -> windows_core::Result<()> {
-        
+    fn OnFlush(&self, dwstreamindex: u32) -> windows_core::Result<()> {
         if dwstreamindex != 0 {
             todo!("dwstreamindex != 0");
         }

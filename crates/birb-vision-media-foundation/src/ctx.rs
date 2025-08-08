@@ -1,10 +1,27 @@
-use std::{cell::RefCell, mem::MaybeUninit, sync::{Arc, Weak}};
+use std::{
+    cell::RefCell,
+    mem::MaybeUninit,
+    sync::{Arc, Weak},
+};
 
-use birb_vision_core::{anyhow::anyhow, context::{DeviceInfo, DeviceInfoEntry, VisionContext}};
-use windows::{core::PWSTR, Win32::{Media::MediaFoundation::{IMFActivate, IMFAttributes, MFCreateAttributes, MFEnumDeviceSources, MF_DEVSOURCE_ATTRIBUTE_FRIENDLY_NAME, MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE, MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_GUID, MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK}, System::Com::{self, COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE}}};
+use birb_vision_core::{
+    anyhow::anyhow,
+    context::{DeviceInfo, DeviceInfoEntry, VisionContext},
+};
+use windows::{
+    core::PWSTR,
+    Win32::{
+        Media::MediaFoundation::{
+            IMFActivate, IMFAttributes, MFCreateAttributes, MFEnumDeviceSources,
+            MF_DEVSOURCE_ATTRIBUTE_FRIENDLY_NAME, MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE,
+            MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_GUID,
+            MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK,
+        },
+        System::Com::{self, COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE},
+    },
+};
 
 use crate::*;
-
 
 pub struct MediaFoundationContext {
     _inner: Arc<CtxInner>,
@@ -26,20 +43,19 @@ impl MediaFoundationContext {
             Ok(cx)
         })?;
 
-        Ok(Self {
-            _inner: ctx,
-        })
+        Ok(Self { _inner: ctx })
     }
 
     pub fn enumerate_devices(&self) -> MFResult<Vec<MFDeviceInfo>> {
-        let list: Vec<MFDeviceInfo> = self.query_activate_pointers()?
+        let list: Vec<MFDeviceInfo> = self
+            .query_activate_pointers()?
             .into_iter()
             .map(|imf_activate| -> MFResult<MFDeviceInfo> {
                 let mut pwstr_name = PWSTR(&mut 0_u16);
                 let mut len_pwstrname = 0;
                 let mut pwstr_symlink = PWSTR(&mut 0_u16);
                 let mut len_pwstrsymlink = 0;
-        
+
                 unsafe {
                     imf_activate.GetAllocatedString(
                         &MF_DEVSOURCE_ATTRIBUTE_FRIENDLY_NAME,
@@ -52,7 +68,7 @@ impl MediaFoundationContext {
                         &mut len_pwstrsymlink,
                     )?;
                 }
-        
+
                 if pwstr_name.is_null() {
                     return Err(MFError::Other("pwstr_name is null".into()));
                 }
@@ -62,39 +78,29 @@ impl MediaFoundationContext {
                 }
 
                 let name = unsafe {
-                    pwstr_name
-                        .to_string()
-                        .map_err(|e| {
-                            let r: Box<dyn Error> = Box::new(e);
-                            r
-                        })?
+                    pwstr_name.to_string().map_err(|e| {
+                        let r: Box<dyn Error> = Box::new(e);
+                        r
+                    })?
                 };
 
                 let symlink = unsafe {
-                    pwstr_symlink
-                        .to_string()
-                        .map_err(|e| {
-                            let r: Box<dyn Error> = Box::new(e);
-                            r
-                        })?
+                    pwstr_symlink.to_string().map_err(|e| {
+                        let r: Box<dyn Error> = Box::new(e);
+                        r
+                    })?
                 };
 
-                Ok(MFDeviceInfo {
-                    name,
-                    symlink,
-                })
+                Ok(MFDeviceInfo { name, symlink })
             })
-            .filter_map(|r| {
-                match r {
-                    Ok(d) => Some(d),
-                    Err(e) => {
-                        log::error!("Error: {}", e);
-                        None
-                    }
+            .filter_map(|r| match r {
+                Ok(d) => Some(d),
+                Err(e) => {
+                    log::error!("Error: {}", e);
+                    None
                 }
             })
             .collect();
-
 
         Ok(list)
     }
@@ -117,13 +123,7 @@ impl MediaFoundationContext {
         let mut count: u32 = 0;
         let mut unused_mf_activate: MaybeUninit<*mut Option<IMFActivate>> = MaybeUninit::uninit();
 
-        unsafe {
-            MFEnumDeviceSources(
-                &attributes,
-                unused_mf_activate.as_mut_ptr(),
-                &mut count,
-            )
-        }?;
+        unsafe { MFEnumDeviceSources(&attributes, unused_mf_activate.as_mut_ptr(), &mut count) }?;
 
         let device_list = unsafe {
             Vec::from_raw_parts(
@@ -183,22 +183,40 @@ fn init_com() -> MFResult<()> {
 }
 
 fn uninit_com() {
-    unsafe {
-        Com::CoUninitialize()
-    }
+    unsafe { Com::CoUninitialize() }
 }
 
 impl VisionContext for MediaFoundationContext {
-    fn enumerate(&self, _transport_layers: &[String]) -> birb_vision_core::anyhow::Result<Vec<DeviceInfo>> {
-        let devices = self.enumerate_devices().map_err(|e| anyhow!("Device enumeration failed: {e}"))?;
-        Ok(devices.into_iter().map(|d| DeviceInfo {
-            display_name: d.name,
-            other: std::iter::once(("symlink".to_string(), DeviceInfoEntry::new("symlink", d.symlink))).collect(),
-        }).collect())
+    fn enumerate(
+        &self,
+        _transport_layers: &[String],
+    ) -> birb_vision_core::anyhow::Result<Vec<DeviceInfo>> {
+        let devices = self
+            .enumerate_devices()
+            .map_err(|e| anyhow!("Device enumeration failed: {e}"))?;
+        Ok(devices
+            .into_iter()
+            .map(|d| DeviceInfo {
+                display_name: d.name,
+                other: std::iter::once((
+                    "symlink".to_string(),
+                    DeviceInfoEntry::new("symlink", d.symlink),
+                ))
+                .collect(),
+            })
+            .collect())
     }
 
-    fn create(&self, info: &DeviceInfo) -> birb_vision_core::anyhow::Result<Option<Box<dyn birb_vision_core::CameraDevice>>> {
-        let symlink = info.other.get("symlink").ok_or(anyhow!("No symlink specified"))?.value.as_str();
+    fn create(
+        &self,
+        info: &DeviceInfo,
+    ) -> birb_vision_core::anyhow::Result<Option<Box<dyn birb_vision_core::CameraDevice>>> {
+        let symlink = info
+            .other
+            .get("symlink")
+            .ok_or(anyhow!("No symlink specified"))?
+            .value
+            .as_str();
         let device_info = self
             .enumerate_devices()
             .map_err(|e| anyhow!("Device enumeration failed: {e}"))?

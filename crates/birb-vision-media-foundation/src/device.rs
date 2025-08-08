@@ -1,20 +1,34 @@
-use std::{ffi::c_void, mem::MaybeUninit, sync::{Arc, Mutex}};
+use std::{
+    ffi::c_void,
+    mem::MaybeUninit,
+    sync::{Arc, Mutex},
+};
 
-use birb_vision_core::{anyhow::anyhow, context::{DeviceInfo, DeviceInfoEntry}, BoolProperty, CameraDevice, CommandProperty, DeviceResult, Node, NodeId, NumericProperty, NumericState, Property, PropertyState, PropertyValue, Representation, StreamEvent, ValueOrRef};
-use windows::Win32::Media::{DirectShow::{IAMCameraControl, IAMVideoProcAmp}, KernelStreaming::GUID_NULL, MediaFoundation::{IMFSourceReader, IMFSourceReaderCallback, MF_E_NOTACCEPTING, MF_E_NOT_FOUND, MF_SOURCE_READER_FIRST_VIDEO_STREAM, MF_SOURCE_READER_MEDIASOURCE}};
+use birb_vision_core::{
+    anyhow::anyhow,
+    context::{DeviceInfo, DeviceInfoEntry},
+    BoolProperty, CameraDevice, CommandProperty, DeviceResult, Node, NodeId, NumericProperty,
+    NumericState, Property, PropertyState, PropertyValue, Representation, StreamEvent, ValueOrRef,
+};
+use windows::Win32::Media::{
+    DirectShow::{IAMCameraControl, IAMVideoProcAmp},
+    KernelStreaming::GUID_NULL,
+    MediaFoundation::{
+        IMFSourceReader, IMFSourceReaderCallback, MF_E_NOTACCEPTING,
+        MF_SOURCE_READER_FIRST_VIDEO_STREAM, MF_SOURCE_READER_MEDIASOURCE,
+    },
+};
 use windows_core::Interface;
 
 use crate::*;
 
-mod info;
 mod control;
+mod info;
 mod reader_callback;
 
-pub use info::MFDeviceInfo;
 pub use control::*;
+pub use info::MFDeviceInfo;
 use reader_callback::*;
-
-
 
 pub struct MFDevice {
     _cx: MediaFoundationContext,
@@ -40,15 +54,18 @@ impl MFDevice {
 
         let mut index = 0;
         while let Ok(media_type) = unsafe {
-            self.source_reader.GetNativeMediaType(FIRST_VIDEO_STREAM, index)
+            self.source_reader
+                .GetNativeMediaType(FIRST_VIDEO_STREAM, index)
         } {
             index += 1;
 
             match VideoFormat::list(&media_type) {
                 Ok(framerates) => {
                     list.extend(framerates);
-                },
-                Err(e) => log::warn!("Failed to list video formats for media type {media_type:?}, error: {e}"),
+                }
+                Err(e) => log::warn!(
+                    "Failed to list video formats for media type {media_type:?}, error: {e}"
+                ),
             };
         }
 
@@ -56,9 +73,7 @@ impl MFDevice {
     }
 
     pub fn get_current_format(&self) -> MFResult<VideoFormat> {
-        let media_type = unsafe {
-            self.source_reader.GetCurrentMediaType(FIRST_VIDEO_STREAM)?
-        };
+        let media_type = unsafe { self.source_reader.GetCurrentMediaType(FIRST_VIDEO_STREAM)? };
 
         VideoFormat::from_media_type(&media_type)
     }
@@ -76,7 +91,8 @@ impl MFDevice {
 
         let mut index = 0;
         while let Ok(media_type) = unsafe {
-            self.source_reader.GetNativeMediaType(FIRST_VIDEO_STREAM, index)
+            self.source_reader
+                .GetNativeMediaType(FIRST_VIDEO_STREAM, index)
         } {
             index += 1;
 
@@ -88,7 +104,11 @@ impl MFDevice {
             // TODO use query.matches(&format) instead for better methods organization
             if format.satisfies(&query) {
                 unsafe {
-                    self.source_reader.SetCurrentMediaType(FIRST_VIDEO_STREAM, None, &media_type)?;
+                    self.source_reader.SetCurrentMediaType(
+                        FIRST_VIDEO_STREAM,
+                        None,
+                        &media_type,
+                    )?;
                 }
 
                 log::debug!("Selected format: {format:?}");
@@ -103,7 +123,8 @@ impl MFDevice {
     pub fn start_stream(&self) -> MFResult<()> {
         self.callback_inner.lock().unwrap().capture = true;
         unsafe {
-            self.source_reader.SetStreamSelection(FIRST_VIDEO_STREAM, true)?
+            self.source_reader
+                .SetStreamSelection(FIRST_VIDEO_STREAM, true)?
         };
         Self::send_read_sample(&self.source_reader);
 
@@ -124,9 +145,7 @@ impl MFDevice {
     }
 
     pub fn flush_reader(&self) -> MFResult<()> {
-        unsafe {
-            self.source_reader.Flush(FIRST_VIDEO_STREAM)?
-        };
+        unsafe { self.source_reader.Flush(FIRST_VIDEO_STREAM)? };
 
         Ok(())
     }
@@ -138,7 +157,7 @@ impl MFDevice {
 
         match control_id {
             MFControlId::ProcAmp(property) => unsafe {
-                    self.get_media_source::<IAMVideoProcAmp>()?.GetRange(
+                self.get_media_source::<IAMVideoProcAmp>()?.GetRange(
                     property,
                     &mut range.min,
                     &mut range.max,
@@ -187,7 +206,11 @@ impl MFDevice {
         Ok(value)
     }
 
-    pub fn set_control_value(&self, control: MFKnownControl, value: MFControlValue) -> MFResult<()> {
+    pub fn set_control_value(
+        &self,
+        control: MFKnownControl,
+        value: MFControlValue,
+    ) -> MFResult<()> {
         let control_id = control.control_id().unwrap();
 
         match control_id {
@@ -238,7 +261,10 @@ impl CameraDevice for MFDevice {
     fn get_device_info(&mut self) -> DeviceResult<DeviceInfo> {
         let mut info = DeviceInfo::new();
         info.display_name = self.info.name.clone();
-        info.other.insert("symlink".into(), DeviceInfoEntry::new("symlink", self.info.symlink.clone()));
+        info.other.insert(
+            "symlink".into(),
+            DeviceInfoEntry::new("symlink", self.info.symlink.clone()),
+        );
 
         Ok(info)
     }
@@ -267,11 +293,11 @@ impl CameraDevice for MFDevice {
     //fn poll_events(&self, ctx: &mut Context) -> Poll<DeviceResult<Event>> {
     //    let inner = &mut self.callback_inner.lock().unwrap();
     //    inner.waker = Some(ctx.waker().clone());
-//
+    //
     //    if inner.format.is_none() || inner.subtype.is_none() {
     //        self.set_format_to_callback(inner)?;
     //    }
-//
+    //
     //    while let Some(event) = inner.events.pop_front() {
     //        match event {
     //            Sample(Ok(frame)) => self.push_event(Event::Frame(frame)),
@@ -316,7 +342,7 @@ impl CameraDevice for MFDevice {
     //            Event => todo!(),
     //        }
     //    }
-//
+    //
     //    self.finish_poll(inner)
     //}
 
@@ -357,7 +383,7 @@ impl CameraDevice for MFDevice {
                     property.display_name = name;
                     property.default = Some(default);
                     Property::Bool(property)
-                },
+                }
                 MFKnownControlKind::Range => {
                     let mut property = NumericProperty::<i64>::new(NodeId::I32(control.into()));
                     property.display_name = name;
@@ -367,7 +393,7 @@ impl CameraDevice for MFDevice {
                     property.increment = Some(ValueOrRef::Value(range.stepping_delta as i64));
                     property.representation = Some(Representation::Linear);
                     Property::Integer(property)
-                },
+                }
             };
 
             Ok(Some(Node::Property(property)))
@@ -378,12 +404,16 @@ impl CameraDevice for MFDevice {
         for control in MFKnownControl::ALL {
             match to_property_node(self, *control) {
                 Ok(Some(node)) => properties.push(node),
-                Ok(None) => {},
+                Ok(None) => {}
                 Err(e) => {
-                    log::error!("Failed to create property node for control {:?}: {}", control, e);
+                    log::error!(
+                        "Failed to create property node for control {:?}: {}",
+                        control,
+                        e
+                    );
                     failed += 1;
                     continue;
-                },
+                }
             }
         }
         if failed > 0 {
@@ -419,12 +449,15 @@ impl CameraDevice for MFDevice {
             return Err(anyhow!("Invalid NodeId: {id:?}").into());
         };
 
-        let control = MFKnownControl::try_from(*id).map_err(|_| anyhow!("Invalid control id: {id}"))?;
+        let control =
+            MFKnownControl::try_from(*id).map_err(|_| anyhow!("Invalid control id: {id}"))?;
 
-        let value = self.get_control_value(control)
+        let value = self
+            .get_control_value(control)
             .map_err(|e| anyhow!("Failed to get control value: {e}"))?;
 
-        let range = self.get_control_range(control)
+        let range = self
+            .get_control_range(control)
             .map_err(|e| anyhow!("Failed to get control range: {e}"))?;
 
         let state = match control.kind() {
@@ -449,13 +482,13 @@ impl CameraDevice for MFDevice {
                                 if let Some(default) = prop.default {
                                     self.write_property(&node.id, PropertyValue::Bool(default))?;
                                 }
-                            },
+                            }
                             Property::Integer(prop) => {
                                 if let Some(default) = prop.default {
                                     self.write_property(&node.id, PropertyValue::Integer(default))?;
                                 }
-                            },
-                            _ => {},
+                            }
+                            _ => {}
                         }
                     }
                 }
@@ -467,22 +500,26 @@ impl CameraDevice for MFDevice {
             return Err(anyhow!("Invalid NodeId: {id:?}").into());
         };
 
-        let control = MFKnownControl::try_from(*id).map_err(|_| anyhow!("Invalid control id: {id}"))?;
+        let control =
+            MFKnownControl::try_from(*id).map_err(|_| anyhow!("Invalid control id: {id}"))?;
 
-        let current = self.get_control_value(control).map_err(|e| anyhow!("Failed to get control value: {e}"))?;
+        let current = self
+            .get_control_value(control)
+            .map_err(|e| anyhow!("Failed to get control value: {e}"))?;
         let mut new_value = current;
 
         match value {
             PropertyValue::Bool(value) => {
                 new_value.value = if value { 1 } else { 0 };
-            },
+            }
             PropertyValue::Integer(value) => {
                 new_value.value = value as i32;
-            },
+            }
             _ => Err(anyhow!("Unsupported property value type: {value:?}"))?,
         }
 
-        self.set_control_value(control, new_value).map_err(|e| anyhow!("Failed to set control value: {e}"))?;
+        self.set_control_value(control, new_value)
+            .map_err(|e| anyhow!("Failed to set control value: {e}"))?;
 
         Ok(())
     }
@@ -507,17 +544,9 @@ impl MFDevice {
 
     fn send_read_sample(source_reader: &IMFSourceReader) {
         loop {
-            match unsafe {
-                source_reader.ReadSample(
-                    FIRST_VIDEO_STREAM,
-                    0,
-                    None,
-                    None,
-                    None,
-                    None,
-                )
-            } {
-                Ok(()) => {},
+            match unsafe { source_reader.ReadSample(FIRST_VIDEO_STREAM, 0, None, None, None, None) }
+            {
+                Ok(()) => {}
                 Err(err) => {
                     // HACK MSDN says:
                     // "In Windows 7, there was a bug in the implementation of this method, which causes OnFlush to be called before the flush operation completes. A hotfix used to be available that fixed that bug."
