@@ -98,7 +98,7 @@ impl VideoFormat {
 
         let stride = unsafe { media_type.GetUINT32(&MF_MT_DEFAULT_STRIDE) }
             .ok()
-            .map(|stride| unsafe { std::mem::transmute(stride) });
+            .map(u32::cast_signed);
 
         let fraction_u64 = unsafe { media_type.GetUINT64(&MF_MT_FRAME_RATE)? };
         let frame_rate = Framerate {
@@ -130,7 +130,7 @@ impl VideoFormat {
 
         let stride = unsafe { media_type.GetUINT32(&MF_MT_DEFAULT_STRIDE) }
             .ok()
-            .map(|stride| unsafe { std::mem::transmute(stride) });
+            .map(u32::cast_signed);
 
         let mut list = vec![];
 

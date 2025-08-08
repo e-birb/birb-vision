@@ -1,6 +1,26 @@
 {
     "cSpell.words": [
         "Daheng",
+        "framerates",
         "streamable"
+    ],
+    "cSpell.ignoreWords": [
+        "ALLEFFECTSREMOVED",
+        "CURRENTMEDIATYPECHANGED",
+        "ENDOFSTREAM",
+        "HRESULT",
+        "NATIVEMEDIATYPECHANGED",
+        "NEWSTREAM",
+        "NOTACCEPTING",
+        "READERF",
+        "STREAMTICK",
+        "dwstreamflags",
+        "dwstreamindex",
+        "hresult",
+        "hrstatus",
+        "lltimestamp",
+        "psample",
+        "pwstrsymlink",
+        "scopeguard"
     ]
 }
