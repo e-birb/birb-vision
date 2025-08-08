@@ -1,7 +1,7 @@
 use std::{ffi::c_void, mem::MaybeUninit, sync::{Arc, Mutex}};
 
-use birb_vision_core::{anyhow::anyhow, context::{DeviceInfo, DeviceInfoEntry}, BoolProperty, CameraDevice, DeviceResult, Node, NodeId, NumericProperty, NumericState, Property, PropertyState, PropertyValue, Representation, StreamEvent, ValueOrRef};
-use windows::Win32::Media::{DirectShow::{IAMCameraControl, IAMVideoProcAmp}, KernelStreaming::GUID_NULL, MediaFoundation::{IMFSourceReader, IMFSourceReaderCallback, MF_E_NOTACCEPTING, MF_SOURCE_READER_FIRST_VIDEO_STREAM, MF_SOURCE_READER_MEDIASOURCE}};
+use birb_vision_core::{anyhow::anyhow, context::{DeviceInfo, DeviceInfoEntry}, BoolProperty, CameraDevice, CommandProperty, DeviceResult, Node, NodeId, NumericProperty, NumericState, Property, PropertyState, PropertyValue, Representation, StreamEvent, ValueOrRef};
+use windows::Win32::Media::{DirectShow::{IAMCameraControl, IAMVideoProcAmp}, KernelStreaming::GUID_NULL, MediaFoundation::{IMFSourceReader, IMFSourceReaderCallback, MF_E_NOTACCEPTING, MF_E_NOT_FOUND, MF_SOURCE_READER_FIRST_VIDEO_STREAM, MF_SOURCE_READER_MEDIASOURCE}};
 use windows_core::Interface;
 
 use crate::*;
@@ -339,8 +339,16 @@ impl CameraDevice for MFDevice {
     }
 
     fn all_properties(&mut self) -> DeviceResult<Vec<Node>> {
-        fn to_property_node(dev: &MFDevice, control: MFKnownControl) -> DeviceResult<Node> {
-            let range = dev.get_control_range(control).map_err(|e| anyhow!("Failed to get control range: {e}"))?;
+        fn to_property_node(dev: &MFDevice, control: MFKnownControl) -> DeviceResult<Option<Node>> {
+            let r = dev.get_control_range(control);
+            const ELEMENT_NOT_FOUND_ERROR_CODE: i32 = 0x80070490_u32 as i32; // TODO find the correct MF_E_* instead
+            if let Err(MFError::WinError(err)) = &r {
+                if err.code() == HRESULT(ELEMENT_NOT_FOUND_ERROR_CODE) {
+                    log::warn!("Control {:?} not found", control);
+                    return Ok(None);
+                }
+            };
+            let range = r.map_err(|e| anyhow!("Failed to get control range: {e}"))?;
             let name = format!("{control:?}");
             let property = match control.kind() {
                 MFKnownControlKind::Boolean => {
@@ -362,24 +370,29 @@ impl CameraDevice for MFDevice {
                 },
             };
 
-            Ok(Node::Property(property))
+            Ok(Some(Node::Property(property)))
         }
 
         let mut properties = vec![];
         let mut failed = 0;
         for control in MFKnownControl::ALL {
             match to_property_node(self, *control) {
-                Ok(node) => properties.push(node),
+                Ok(Some(node)) => properties.push(node),
+                Ok(None) => {},
                 Err(e) => {
                     log::error!("Failed to create property node for control {:?}: {}", control, e);
                     failed += 1;
                     continue;
-                }
+                },
             }
         }
         if failed > 0 {
             log::error!("Failed to create {failed} property nodes for MFDevice");
         }
+
+        let mut default_button = CommandProperty::new(NodeId::String("reset-defaults".into()));
+        default_button.display_name = "Reset Defaults".into();
+        properties.push(Node::Property(Property::Command(default_button)));
 
         //Ok(vec![
         //    to_property_node(self, MFKnownControl::Brightness)?,
@@ -426,6 +439,30 @@ impl CameraDevice for MFDevice {
     }
 
     fn write_property(&mut self, id: &NodeId, value: PropertyValue) -> DeviceResult {
+        if let NodeId::String(id) = id {
+            if id == "reset-defaults" {
+                let all = self.all_properties()?;
+                for node in all {
+                    if let Node::Property(property) = &node {
+                        match property {
+                            Property::Bool(prop) => {
+                                if let Some(default) = prop.default {
+                                    self.write_property(&node.id, PropertyValue::Bool(default))?;
+                                }
+                            },
+                            Property::Integer(prop) => {
+                                if let Some(default) = prop.default {
+                                    self.write_property(&node.id, PropertyValue::Integer(default))?;
+                                }
+                            },
+                            _ => {},
+                        }
+                    }
+                }
+                return Ok(());
+            }
+        }
+
         let NodeId::I32(id) = id else {
             return Err(anyhow!("Invalid NodeId: {id:?}").into());
         };
