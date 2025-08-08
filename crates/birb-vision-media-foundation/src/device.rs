@@ -1,13 +1,16 @@
-use std::{borrow::Cow, sync::{Arc, Mutex, Weak}};
+use std::{borrow::Cow, ffi::c_void, mem::MaybeUninit, sync::{Arc, Mutex, Weak}};
 
-use birb_vision_core::{anyhow::anyhow, context::{DeviceInfo, DeviceInfoEntry}, CameraDevice, DeviceResult, FlatSample, FlatSampleLayout, FourCC, ImageSampleBuffer, PixelFormat, Sample, SampleType, StreamEvent};
-use windows::{Win32::Media::MediaFoundation::{IMFSourceReader, IMFSourceReaderCallback, IMFSourceReaderCallback_Impl, MF_E_NOTACCEPTING, MF_SOURCE_READERF_ALLEFFECTSREMOVED, MF_SOURCE_READERF_CURRENTMEDIATYPECHANGED, MF_SOURCE_READERF_ENDOFSTREAM, MF_SOURCE_READERF_ERROR, MF_SOURCE_READERF_NATIVEMEDIATYPECHANGED, MF_SOURCE_READERF_NEWSTREAM, MF_SOURCE_READERF_STREAMTICK, MF_SOURCE_READER_FIRST_VIDEO_STREAM, MF_SOURCE_READER_FLAG}};
+use birb_vision_core::{anyhow::anyhow, context::{DeviceInfo, DeviceInfoEntry}, BoolProperty, CameraDevice, DeviceResult, FlatSample, FlatSampleLayout, FourCC, ImageSampleBuffer, Node, NodeId, NumericProperty, NumericState, PixelFormat, Property, PropertyState, PropertyValue, Representation, Sample, SampleType, StreamEvent, ValueOrRef};
+use windows::Win32::Media::{DirectShow::{IAMCameraControl, IAMVideoProcAmp}, KernelStreaming::GUID_NULL, MediaFoundation::{IMFSourceReader, IMFSourceReaderCallback, IMFSourceReaderCallback_Impl, MF_E_NOTACCEPTING, MF_SOURCE_READERF_ALLEFFECTSREMOVED, MF_SOURCE_READERF_CURRENTMEDIATYPECHANGED, MF_SOURCE_READERF_ENDOFSTREAM, MF_SOURCE_READERF_ERROR, MF_SOURCE_READERF_NATIVEMEDIATYPECHANGED, MF_SOURCE_READERF_NEWSTREAM, MF_SOURCE_READERF_STREAMTICK, MF_SOURCE_READER_FIRST_VIDEO_STREAM, MF_SOURCE_READER_FLAG, MF_SOURCE_READER_MEDIASOURCE}};
+use windows_core::Interface;
 
 use crate::*;
 
 mod info;
+mod control;
 
 pub use info::MFDeviceInfo;
+pub use control::*;
 
 
 
@@ -125,6 +128,106 @@ impl MFDevice {
 
         Ok(())
     }
+
+    pub fn get_control_range(&self, control: MFKnownControl) -> MFResult<MFControlRange> {
+        let control_id = control.control_id().unwrap();
+
+        let mut range = MFControlRange::default();
+
+        match control_id {
+            MFControlId::ProcAmp(property) => unsafe {
+                    self.get_media_source::<IAMVideoProcAmp>()?.GetRange(
+                    property,
+                    &mut range.min,
+                    &mut range.max,
+                    &mut range.stepping_delta,
+                    &mut range.default,
+                    &mut range.caps_flags,
+                )?
+            },
+            MFControlId::CameraControl(property) => unsafe {
+                self.get_media_source::<IAMCameraControl>()?.GetRange(
+                    property,
+                    &mut range.min,
+                    &mut range.max,
+                    &mut range.stepping_delta,
+                    &mut range.default,
+                    &mut range.caps_flags,
+                )?
+            },
+        };
+
+        Ok(range)
+    }
+
+    pub fn get_control_value(&self, control: MFKnownControl) -> MFResult<MFControlValue> {
+        let control_id = control.control_id().unwrap();
+
+        let mut value = MFControlValue::default();
+
+        match control_id {
+            MFControlId::ProcAmp(property) => unsafe {
+                self.get_media_source::<IAMVideoProcAmp>()?.Get(
+                    property,
+                    &mut value.value,
+                    &mut value.flags,
+                )?
+            },
+            MFControlId::CameraControl(property) => unsafe {
+                self.get_media_source::<IAMCameraControl>()?.Get(
+                    property,
+                    &mut value.value,
+                    &mut value.flags,
+                )?
+            },
+        };
+
+        Ok(value)
+    }
+
+    pub fn set_control_value(&self, control: MFKnownControl, value: MFControlValue) -> MFResult<()> {
+        let control_id = control.control_id().unwrap();
+
+        match control_id {
+            MFControlId::ProcAmp(property) => unsafe {
+                self.get_media_source::<IAMVideoProcAmp>()?.Set(
+                    property,
+                    value.value,
+                    value.flags,
+                )?
+            },
+            MFControlId::CameraControl(property) => unsafe {
+                self.get_media_source::<IAMCameraControl>()?.Set(
+                    property,
+                    value.value,
+                    value.flags,
+                )?
+            },
+        };
+
+        Ok(())
+    }
+
+    fn get_media_source<T: Interface>(&self) -> MFResult<T> {
+        // see https://github.com/l1npengtul/nokhwa/blob/aabdaeb0623208a31707ea838dfed555282e2890/nokhwa-bindings-windows/src/lib.rs#L836
+        unsafe {
+            let mut receiver: MaybeUninit<T> = MaybeUninit::uninit();
+            if let Err(_why) = self.source_reader.GetServiceForStream(
+                MF_SOURCE_READER_MEDIASOURCE.0 as u32,
+                &GUID_NULL,
+                &T::IID,
+                receiver.as_mut_ptr().cast::<*mut c_void>(),
+            ) {
+                //return Err(NokhwaError::SetPropertyError {
+                //    property: "MF_SOURCE_READER_MEDIASOURCE".to_string(),
+                //    value: "IAMCameraControl".to_string(),
+                //    error: why.to_string(),
+                //});
+                todo!();
+            }
+            Ok(receiver.assume_init())
+        }
+    }
 }
 
 const FIRST_VIDEO_STREAM: u32 = MF_SOURCE_READER_FIRST_VIDEO_STREAM.0 as u32;
@@ -230,6 +333,113 @@ impl CameraDevice for MFDevice {
 
     fn grab(&mut self) -> DeviceResult<()> {
         Self::send_read_sample(&self.source_reader);
+        Ok(())
+    }
+
+    fn all_properties(&mut self) -> DeviceResult<Vec<Node>> {
+        fn to_property_node(dev: &MFDevice, control: MFKnownControl) -> DeviceResult<Node> {
+            let range = dev.get_control_range(control).map_err(|e| anyhow!("Failed to get control range: {e}"))?;
+            let name = format!("{control:?}");
+            let property = match control.kind() {
+                MFKnownControlKind::Boolean => {
+                    let default = range.default != 0;
+                    let mut property = BoolProperty::new(NodeId::I32(control.into()));
+                    property.display_name = name;
+                    property.default = Some(default);
+                    Property::Bool(property)
+                },
+                MFKnownControlKind::Range => {
+                    let mut property = NumericProperty::<i64>::new(NodeId::I32(control.into()));
+                    property.display_name = name;
+                    property.min = Some(ValueOrRef::Value(range.min as i64));
+                    property.max = Some(ValueOrRef::Value(range.max as i64));
+                    property.default = Some(range.default as i64);
+                    property.increment = Some(ValueOrRef::Value(range.stepping_delta as i64));
+                    property.representation = Some(Representation::Linear);
+                    Property::Integer(property)
+                },
+            };
+
+            Ok(Node::Property(property))
+        }
+
+        let mut properties = vec![];
+        for control in MFKnownControl::ALL {
+            match to_property_node(self, *control) {
+                Ok(node) => properties.push(node),
+                Err(e) => {
+                    log::error!("Failed to create property node for control {:?}: {}", control, e);
+                    continue;
+                }
+            }
+        }
+
+        //Ok(vec![
+        //    to_property_node(self, MFKnownControl::Brightness)?,
+        //    to_property_node(self, MFKnownControl::Contrast)?,
+        //    to_property_node(self, MFKnownControl::Hue)?,
+        //    to_property_node(self, MFKnownControl::Saturation)?,
+        //    to_property_node(self, MFKnownControl::Sharpness)?,
+        //    to_property_node(self, MFKnownControl::Gamma)?,
+        //    to_property_node(self, MFKnownControl::WhiteBalance)?,
+        //    to_property_node(self, MFKnownControl::BacklightComp)?,
+        //    to_property_node(self, MFKnownControl::Gain)?,
+        //    to_property_node(self, MFKnownControl::Pan)?,
+        //    to_property_node(self, MFKnownControl::Tilt)?,
+        //    to_property_node(self, MFKnownControl::Zoom)?,
+        //    to_property_node(self, MFKnownControl::Exposure)?,
+        //    to_property_node(self, MFKnownControl::Iris)?,
+        //    to_property_node(self, MFKnownControl::Focus)?,
+        //])
+        Ok(properties)
+    }
+
+    fn read_property(&mut self, id: &NodeId) -> DeviceResult<PropertyState> {
+        let NodeId::I32(id) = id else {
+            return Err(anyhow!("Invalid NodeId: {id:?}").into());
+        };
+
+        let control = MFKnownControl::try_from(*id).map_err(|_| anyhow!("Invalid control id: {id}"))?;
+
+        let value = self.get_control_value(control)
+            .map_err(|e| anyhow!("Failed to get control value: {e}"))?;
+
+        let range = self.get_control_range(control)
+            .map_err(|e| anyhow!("Failed to get control range: {e}"))?;
+
+        let state = match control.kind() {
+            MFKnownControlKind::Boolean => PropertyState::Bool(value.value != 0),
+            MFKnownControlKind::Range => PropertyState::Int(NumericState {
+                current: value.value as i64,
+                range: range.min as i64..=range.max as i64,
+            }),
+        };
+
+        Ok(state)
+    }
+
+    fn write_property(&mut self, id: &NodeId, value: PropertyValue) -> DeviceResult {
+        let NodeId::I32(id) = id else {
+            return Err(anyhow!("Invalid NodeId: {id:?}").into());
+        };
+
+        let control = MFKnownControl::try_from(*id).map_err(|_| anyhow!("Invalid control id: {id}"))?;
+
+        let current = self.get_control_value(control).map_err(|e| anyhow!("Failed to get control value: {e}"))?;
+        let mut new_value = current;
+
+        match value {
+            PropertyValue::Bool(value) => {
+                new_value.value = if value { 1 } else { 0 };
+            },
+            PropertyValue::Integer(value) => {
+                new_value.value = value as i32;
+            },
+            _ => Err(anyhow!("Unsupported property value type: {value:?}"))?,
+        }
+
+        self.set_control_value(control, new_value).map_err(|e| anyhow!("Failed to set control value: {e}"))?;
+
         Ok(())
     }
 }

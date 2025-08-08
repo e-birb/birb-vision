@@ -13,6 +13,7 @@ pub use ctx::MediaFoundationContext;
 pub use device::{
     MFDeviceInfo,
     MFDevice,
+    *
 };
 pub use media_type::*;
 

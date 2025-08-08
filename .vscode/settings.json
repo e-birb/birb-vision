@@ -22,5 +22,6 @@
         "psample",
         "pwstrsymlink",
         "scopeguard"
-    ]
+    ],
+    "cSpell.enabled": false
 }

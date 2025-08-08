@@ -16,3 +16,6 @@ windows-core = { version = "0.58.0", features = [] }
 [dev-dependencies]
 env_logger = "0.11.3"
 pollster = "0.3.0"
+
+[dependencies]
+num_enum = "0.7.4"
