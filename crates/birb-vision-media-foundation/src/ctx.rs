@@ -125,12 +125,24 @@ impl MediaFoundationContext {
 
         unsafe { MFEnumDeviceSources(&attributes, unused_mf_activate.as_mut_ptr(), &mut count) }?;
 
-        let device_list = unsafe {
-            Vec::from_raw_parts(
-                unused_mf_activate.assume_init(),
-                count as usize,
-                count as usize,
-            )
+        println!("Found {} devices", count);
+
+        let device_list = if count != 0 {
+            unsafe {
+                let ptr = unused_mf_activate.assume_init();
+
+                if ptr.is_null() {
+                    return Err(MFError::Other(format!("MFEnumDeviceSources returned null pointer and count is {count}").into()));
+                }
+
+                Vec::from_raw_parts(
+                    ptr,
+                    count as usize,
+                    count as usize,
+                )
+            }
+        } else {
+            Vec::new()
         };
 
         let device_list = device_list
