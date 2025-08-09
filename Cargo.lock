@@ -710,10 +710,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "birb-vision-explorer"
-version = "0.1.0"
-
-[[package]]
 name = "birb-vision-fake"
 version = "0.1.0"
 dependencies = [
