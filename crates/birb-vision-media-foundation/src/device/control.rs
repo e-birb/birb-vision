@@ -80,15 +80,15 @@ impl MFKnownControl {
         }
     }
 
-    pub fn into_node_id(&self, flag: MFControlFlag) -> DeviceResult<NodeId> {
-        NodeId::try_serialyze_value((*self, flag))
+    pub(super) fn into_node_id(&self, flag: MFControlFlag) -> DeviceResult<NodeId> {
+        NodeId::try_serialyze_value(MFControlNodeId::Known(*self, flag))
     }
 
-    pub fn custom_node_id(name: impl Into<String>) -> DeviceResult<NodeId> {
+    pub(super) fn custom_node_id(name: impl Into<String>) -> DeviceResult<NodeId> {
         NodeId::try_serialyze_value(MFControlNodeId::Custom(name.into()))
     }
 
-    pub fn from_node_id(id: &NodeId) -> DeviceResult<MFControlNodeId> {
+    pub(super) fn from_node_id(id: &NodeId) -> DeviceResult<MFControlNodeId> {
         id.clone().try_deserialize_value()
     }
 }
