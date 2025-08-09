@@ -1,7 +1,9 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/bindings/mvs-sys", "crates/bindings/daheng-sys", "crates/birb-vision",
+    "crates/bindings/mvs-sys",
+    "crates/bindings/daheng-sys",
+    "crates/birb-vision",
     "crates/birb-vision-core",
     #"crates/birb-vision-bundle",
     "crates/birb-vision-fake",
@@ -9,7 +11,10 @@ members = [
     "crates/birb-vision-media-foundation",
     "crates/birb-vision-media-uvc",
     "crates/birb-vision-mvs", # FIXME "crates/birb-vision-nest", temporarily broken?
-    "crates/birb-vision-v4l", "crates/egui-interface", "examples/egui", "crates/birb-vision-daheng",
+    "crates/birb-vision-v4l",
+    "crates/egui-interface",
+    "crates/birb-vision-daheng",
+    "examples/egui",
     #"crates/birb-vision-nokhwa",
 ]
 default-members = [
