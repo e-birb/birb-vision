@@ -19,6 +19,15 @@ jobs:
     #- name: Run tests
     #  run: cargo test --verbose
 
+  build-x86_64-pc-windows-gnu:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Setup target
+      run: rustup target add x86_64-pc-windows-gnu
+    - name: Build
+      run: cargo build --target x86_64-pc-windows-gnu --workspace
+
   build-windows:
     runs-on: windows-latest
     steps:
