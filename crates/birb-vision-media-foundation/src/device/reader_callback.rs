@@ -4,8 +4,7 @@ use std::{
 };
 
 use birb_vision_core::{
-    anyhow::anyhow, DeviceResult, FlatSample, FlatSampleLayout, FourCC, ImageSampleBuffer,
-    PixelFormat, Sample, SampleType, StreamEvent,
+    anyhow::anyhow, DeviceResult, FlatSample, FlatSampleLayout, FourCC, ImageSampleBuffer, NodeId, PixelFormat, Sample, SampleType, StreamEvent
 };
 use windows::Win32::Media::MediaFoundation::{
     IMFSourceReader, IMFSourceReaderCallback, IMFSourceReaderCallback_Impl,
@@ -61,6 +60,10 @@ impl ReaderCallbackInner {
 
     pub fn send_flushed(&mut self) {
         self.send_event_impl(StreamEvent::Flushed);
+    }
+
+    pub fn send_property_changed(&mut self, property: NodeId) {
+        self.send_event_impl(StreamEvent::PropertyChanged(property));
     }
 }
 

@@ -34,6 +34,7 @@ pub struct State {
 }
 
 enum Command {
+    CheckChangedProperties,
     Write,
     StartGrabbing,
     StopGrabbing,
@@ -152,6 +153,16 @@ impl CameraControl {
                                 });
                                 //println!("Sent in {:?}", start.elapsed());
                             },
+                            StreamEvent::PropertyChanged(property) => {
+                                let state = state.clone();
+                                std::thread::spawn(move || { // FIXME stupid af!!! walkaround for recursive lock of state
+                                    state.on_state_mut(|state| {
+                                        //println!("Property changed: {:?}", property);
+                                        state.updated.insert(property);
+                                        (state.update)();
+                                    });
+                                });
+                            }
                             _ => {
 
                             },
@@ -184,6 +195,15 @@ impl CameraControl {
                         break;
                     };
                     match command {
+                        Command::CheckChangedProperties => {
+                            //println!("Updating nodes");
+                            state.on_state_mut(|state| {
+                                for updated in state.updated.drain() {
+                                    //println!("Updating node: {:?}", updated);
+                                    state.props.as_mut().unwrap().update_node(&mut *camera, &updated);
+                                }
+                            });
+                        },
                         Command::Write => {
                             if state.on_state_mut(|state| {
                                 let props = state.props.as_mut().unwrap();
@@ -221,6 +241,10 @@ impl CameraControl {
             let cx = ui.ctx().clone();
             move || cx.request_repaint()
         });
+
+        if !state.updated.is_empty() {
+            tx.send(Command::CheckChangedProperties).unwrap();
+        }
 
         if let Some(img) = state.image.take() {
             self.fps = 1.0 / state.last_frame.elapsed().as_secs_f32();

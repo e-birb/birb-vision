@@ -231,6 +231,16 @@ impl MFDevice {
             },
         };
 
+        let id = control.into_node_id(MFControlFlag::None).map_err(|e| {
+            MFError::Other(format!("Failed to convert control to NodeId: {e}").into())
+        })?;
+        //println!("Sending property changed event for node: {:?}", id);
+        //println!("callback_inner.lock() in set_control_value...");
+        let mut c = self.callback_inner.lock().unwrap();
+        //println!("locked");
+        c.send_property_changed(id);
+        //println!("Sent");
+
         Ok(())
     }
 
