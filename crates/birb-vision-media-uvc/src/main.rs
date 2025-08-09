@@ -1,8 +1,11 @@
-use uvc::Context;
 
 
 fn main() {
-    let ctx = Context::new().expect("Could not create context");
+    #[cfg(target_os = "linux")]
+    {
+        use uvc::Context;
+        let ctx = Context::new().expect("Could not create context");
 
-    let devices = ctx.devices();
+        let devices = ctx.devices();
+    }
 }
