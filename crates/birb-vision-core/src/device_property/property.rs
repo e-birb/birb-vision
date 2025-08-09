@@ -104,7 +104,7 @@ pub enum PropertyValue {
     Command,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[derive(Serialize, Deserialize)]
 #[derive(EnumAsInner)]
 pub enum ValueOrRef<T> {

@@ -1,3 +1,4 @@
+use birb_vision_core::{CameraDevice, CameraDeviceEx};
 use birb_vision_media_foundation::{MFKnownControl, MediaFoundationContext};
 
 fn main() {
@@ -21,5 +22,7 @@ fn main() {
         let range = device.get_control_range(MFKnownControl::Exposure).unwrap();
         dbg!(value);
         dbg!(range);
+
+        device.set_stream_callback();
     }
 }

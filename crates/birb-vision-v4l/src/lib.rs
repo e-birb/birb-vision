@@ -135,7 +135,7 @@ impl CameraDevice for V4lDevice {
                 return Err(InvalidParameter.into());
             };
             let formats = self.dev.lock().unwrap().enum_formats()?;
-            let format = formats.iter().find(|f| f.index == value as _).ok_or(InvalidParameter)?;
+            let format = formats.iter().find(|f| f.index == value as u32).ok_or(InvalidParameter)?;
             let current_format = self.current_format.lock().unwrap().clone();
             let format = v4l::Format::new(current_format.width, current_format.height, format.fourcc);
             let format = self.dev.lock().unwrap().set_format(&format)?;

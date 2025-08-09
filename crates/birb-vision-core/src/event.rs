@@ -1,6 +1,6 @@
 use enum_as_inner::EnumAsInner;
 
-use crate::{DeviceResult, Sample};
+use crate::{DeviceResult, NodeId, Sample};
 
 
 /// An event that can be emitted by a vision device
@@ -19,6 +19,9 @@ pub enum StreamEvent<'a> {
     // TODO consider not having any events that are not "common" since the user may expect them
     // but never emitted by the implementation. Another possibility would be to group them
     // in another enum for non-common/ensured events.
+
+    /// A property value changed
+    PropertyChanged(NodeId),
 }
 
 impl<'a> StreamEvent<'a> {

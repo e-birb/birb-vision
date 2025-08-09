@@ -10,8 +10,9 @@ use birb_vision_core::{
     BoolProperty, CameraDevice, CommandProperty, DeviceResult, Node, NodeId, NumericProperty,
     NumericState, Property, PropertyState, PropertyValue, Representation, StreamEvent, ValueOrRef,
 };
+use strum::IntoEnumIterator;
 use windows::Win32::Media::{
-    DirectShow::{IAMCameraControl, IAMVideoProcAmp},
+    DirectShow::{CameraControl_Flags_Auto, CameraControl_Flags_Manual, IAMCameraControl, IAMVideoProcAmp, VideoProcAmp_Flags_Auto, VideoProcAmp_Flags_Manual},
     KernelStreaming::GUID_NULL,
     MediaFoundation::{
         IMFSourceReader, IMFSourceReaderCallback, MF_E_NOTACCEPTING,
@@ -379,13 +380,13 @@ impl CameraDevice for MFDevice {
             let property = match control.kind() {
                 MFKnownControlKind::Boolean => {
                     let default = range.default != 0;
-                    let mut property = BoolProperty::new(NodeId::I32(control.into()));
+                    let mut property = BoolProperty::new(control.into_node_id(MFControlFlag::None)?);
                     property.display_name = name;
                     property.default = Some(default);
                     Property::Bool(property)
                 }
                 MFKnownControlKind::Range => {
-                    let mut property = NumericProperty::<i64>::new(NodeId::I32(control.into()));
+                    let mut property = NumericProperty::<i64>::new(control.into_node_id(MFControlFlag::None)?);
                     property.display_name = name;
                     property.min = Some(ValueOrRef::Value(range.min as i64));
                     property.max = Some(ValueOrRef::Value(range.max as i64));
@@ -401,8 +402,8 @@ impl CameraDevice for MFDevice {
 
         let mut properties = vec![];
         let mut failed = 0;
-        for control in MFKnownControl::ALL {
-            match to_property_node(self, *control) {
+        for control in MFKnownControl::iter() {
+            match to_property_node(self, control) {
                 Ok(Some(node)) => properties.push(node),
                 Ok(None) => {}
                 Err(e) => {
@@ -420,7 +421,7 @@ impl CameraDevice for MFDevice {
             log::error!("Failed to create {failed} property nodes for MFDevice");
         }
 
-        let mut default_button = CommandProperty::new(NodeId::String("reset-defaults".into()));
+        let mut default_button = CommandProperty::new(MFKnownControl::custom_node_id("reset-defaults")?);
         default_button.display_name = "Reset Defaults".into();
         properties.push(Node::Property(Property::Command(default_button)));
 
@@ -445,12 +446,11 @@ impl CameraDevice for MFDevice {
     }
 
     fn read_property(&mut self, id: &NodeId) -> DeviceResult<PropertyState> {
-        let NodeId::I32(id) = id else {
+        let id = MFKnownControl::from_node_id(id)?;
+
+        let MFControlNodeId::Known(control, flag) = id else {
             return Err(anyhow!("Invalid NodeId: {id:?}").into());
         };
-
-        let control =
-            MFKnownControl::try_from(*id).map_err(|_| anyhow!("Invalid control id: {id}"))?;
 
         let value = self
             .get_control_value(control)
@@ -460,62 +460,90 @@ impl CameraDevice for MFDevice {
             .get_control_range(control)
             .map_err(|e| anyhow!("Failed to get control range: {e}"))?;
 
-        let state = match control.kind() {
-            MFKnownControlKind::Boolean => PropertyState::Bool(value.value != 0),
-            MFKnownControlKind::Range => PropertyState::Int(NumericState {
-                current: value.value as i64,
-                range: range.min as i64..=range.max as i64,
-            }),
+        let state = match flag {
+            MFControlFlag::None => {
+                match control.kind() {
+                    MFKnownControlKind::Boolean => PropertyState::Bool(value.value != 0),
+                    MFKnownControlKind::Range => PropertyState::Int(NumericState {
+                        current: value.value as i64,
+                        range: range.min as i64..=range.max as i64,
+                    }),
+                }
+            },
+            MFControlFlag::Auto | MFControlFlag::Manual => {
+                debug_assert_eq!(CameraControl_Flags_Auto.0, VideoProcAmp_Flags_Auto.0);
+                debug_assert_eq!(CameraControl_Flags_Manual.0, VideoProcAmp_Flags_Manual.0);
+                let auto_value = (value.flags & CameraControl_Flags_Auto.0 as i32) != 0;
+                let manual_value = (value.flags & CameraControl_Flags_Manual.0 as i32) != 0;
+                debug_assert!(auto_value || manual_value, "Control {:?} has no flags set", control);
+                if flag == MFControlFlag::Auto {
+                    PropertyState::Bool(auto_value)
+                } else if flag == MFControlFlag::Manual {
+                    PropertyState::Bool(manual_value)
+                } else {
+                    unreachable!("Invalid MFControlFlag: {flag:?}");
+                }
+            },
         };
 
         Ok(state)
     }
 
     fn write_property(&mut self, id: &NodeId, value: PropertyValue) -> DeviceResult {
-        if let NodeId::String(id) = id {
-            if id == "reset-defaults" {
-                let all = self.all_properties()?;
-                for node in all {
-                    if let Node::Property(property) = &node {
-                        match property {
-                            Property::Bool(prop) => {
-                                if let Some(default) = prop.default {
-                                    self.write_property(&node.id, PropertyValue::Bool(default))?;
+        let id = MFKnownControl::from_node_id(id)?;
+
+        let (control, flag) = match id {
+            MFControlNodeId::Known(control, flag) => (control, flag),
+            MFControlNodeId::Custom(id) => {
+                if id == "reset-defaults" {
+                    let all = self.all_properties()?;
+                    for node in all {
+                        if let Node::Property(property) = &node {
+                            match property {
+                                Property::Bool(prop) => {
+                                    if let Some(default) = prop.default {
+                                        self.write_property(&node.id, PropertyValue::Bool(default))?;
+                                    }
                                 }
-                            }
-                            Property::Integer(prop) => {
-                                if let Some(default) = prop.default {
-                                    self.write_property(&node.id, PropertyValue::Integer(default))?;
+                                Property::Integer(prop) => {
+                                    if let Some(default) = prop.default {
+                                        self.write_property(&node.id, PropertyValue::Integer(default))?;
+                                    }
                                 }
+                                _ => {}
                             }
-                            _ => {}
                         }
                     }
+                    return Ok(());
+                } else {
+                    return Err(anyhow!("Invalid NodeId: {id:?}").into());
                 }
-                return Ok(());
             }
-        }
-
-        let NodeId::I32(id) = id else {
-            return Err(anyhow!("Invalid NodeId: {id:?}").into());
         };
-
-        let control =
-            MFKnownControl::try_from(*id).map_err(|_| anyhow!("Invalid control id: {id}"))?;
 
         let current = self
             .get_control_value(control)
             .map_err(|e| anyhow!("Failed to get control value: {e}"))?;
         let mut new_value = current;
 
-        match value {
-            PropertyValue::Bool(value) => {
-                new_value.value = if value { 1 } else { 0 };
+        match flag {
+            MFControlFlag::None => match value {
+                PropertyValue::Bool(value) => {
+                    new_value.value = if value { 1 } else { 0 };
+                }
+                PropertyValue::Integer(value) => {
+                    new_value.value = value as i32;
+                }
+                _ => Err(anyhow!("Unsupported property value type: {value:?}"))?,
+            },
+            MFControlFlag::Auto => {
+                new_value.flags |= CameraControl_Flags_Auto.0 as i32;
+                new_value.flags &= !CameraControl_Flags_Manual.0 as i32;
             }
-            PropertyValue::Integer(value) => {
-                new_value.value = value as i32;
+            MFControlFlag::Manual => {
+                new_value.flags |= CameraControl_Flags_Manual.0 as i32;
+                new_value.flags &= !CameraControl_Flags_Auto.0 as i32;
             }
-            _ => Err(anyhow!("Unsupported property value type: {value:?}"))?,
         }
 
         self.set_control_value(control, new_value)

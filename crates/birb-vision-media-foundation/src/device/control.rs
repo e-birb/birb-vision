@@ -1,19 +1,22 @@
+use birb_vision_core::{DeviceResult, NodeId};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
+use serde::{Deserialize, Serialize};
 use windows::Win32::Media::DirectShow::{
-    CameraControl_Exposure, CameraControl_Focus, CameraControl_Iris, CameraControl_Pan,
-    CameraControl_Tilt, CameraControl_Zoom, VideoProcAmp_BacklightCompensation,
-    VideoProcAmp_Brightness, VideoProcAmp_Contrast, VideoProcAmp_Gain, VideoProcAmp_Gamma,
-    VideoProcAmp_Hue, VideoProcAmp_Saturation, VideoProcAmp_Sharpness, VideoProcAmp_WhiteBalance,
+    CameraControl_Exposure, CameraControl_Focus, CameraControl_Iris, CameraControl_Pan, CameraControl_Tilt, CameraControl_Zoom, VideoProcAmp_BacklightCompensation, VideoProcAmp_Brightness, VideoProcAmp_Contrast, VideoProcAmp_Gain, VideoProcAmp_Gamma, VideoProcAmp_Hue, VideoProcAmp_Saturation, VideoProcAmp_Sharpness, VideoProcAmp_WhiteBalance
 };
 
 #[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Eq)]
+#[derive(Serialize, Deserialize)]
 pub enum MFKnownControlKind {
     Boolean,
     Range,
 }
 
-#[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Eq, TryFromPrimitive, IntoPrimitive)]
-#[repr(i32)]
+#[derive(Copy, Clone, Debug, PartialOrd, Ord, PartialEq, Eq, Hash)]
+#[derive(TryFromPrimitive, IntoPrimitive)] // TODO maybe useless
+#[derive(Serialize, Deserialize)]
+#[derive(strum::EnumIter)]
+#[repr(i32)]// TODO maybe useless if TryFromPrimitive and IntoPrimitive are not used
 pub enum MFKnownControl {
     Brightness,
     Contrast,
@@ -34,25 +37,6 @@ pub enum MFKnownControl {
 }
 
 impl MFKnownControl {
-    // TODO use strum
-    pub const ALL: &[Self] = &[
-        Self::Brightness,
-        Self::Contrast,
-        Self::Hue,
-        Self::Saturation,
-        Self::Sharpness,
-        Self::Gamma,
-        Self::WhiteBalance,
-        Self::BacklightComp,
-        Self::Gain,
-        Self::Pan,
-        Self::Tilt,
-        Self::Zoom,
-        Self::Exposure,
-        Self::Iris,
-        Self::Focus,
-    ];
-
     pub(super) fn control_id(&self) -> Option<MFControlId> {
         // see https://github.com/l1npengtul/nokhwa/blob/aabdaeb0623208a31707ea838dfed555282e2890/nokhwa-bindings-windows/src/lib.rs#L380
         let control_id = match self {
@@ -95,9 +79,41 @@ impl MFKnownControl {
             Self::Focus => MFKnownControlKind::Range,
         }
     }
+
+    pub fn into_node_id(&self, flag: MFControlFlag) -> DeviceResult<NodeId> {
+        NodeId::try_serialyze_value((*self, flag))
+    }
+
+    pub fn custom_node_id(name: impl Into<String>) -> DeviceResult<NodeId> {
+        NodeId::try_serialyze_value(MFControlNodeId::Custom(name.into()))
+    }
+
+    pub fn from_node_id(id: &NodeId) -> DeviceResult<MFControlNodeId> {
+        id.clone().try_deserialize_value()
+    }
 }
 
-#[derive(Copy, Clone, Debug, PartialOrd, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Serialize, Deserialize)]
+pub(super) enum MFControlNodeId {
+    Known(MFKnownControl, MFControlFlag),
+    Custom(String),
+}
+
+
+#[derive(Copy, Clone, Debug, PartialOrd, Ord, PartialEq, Eq, Hash)]
+#[derive(Serialize, Deserialize)]
+#[repr(i32)]
+pub enum MFControlFlag {
+    None = 0,
+    /// [`VideoProcAmp_Flags_Auto`](windows::Win32::Media::DirectShow::VideoProcAmp_Flags_Auto), [`CameraControl_Flags_Auto`](windows::Win32::Media::DirectShow::CameraControl_Flags_Auto)
+    Auto = 1 << 0,
+    /// [`VideoProcAmp_Flags_Manual`](windows::Win32::Media::DirectShow::VideoProcAmp_Flags_Manual), [`CameraControl_Flags_Manual`](windows::Win32::Media::DirectShow::CameraControl_Flags_Manual)
+    Manual = 1 << 1, // TODO check if this is correct
+}
+
+#[derive(Copy, Clone, Debug, PartialOrd, Ord, PartialEq, Eq)]
+#[derive(Serialize, Deserialize)]
 pub(super) enum MFControlId {
     ProcAmp(i32),
     CameraControl(i32),
