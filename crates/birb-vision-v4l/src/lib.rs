@@ -1,3 +1,5 @@
+#![cfg(target_os = "linux")]
+
 use std::{borrow::Cow, collections::HashMap, ops::Deref, path::Path, sync::{Arc, Mutex}, time::Duration};
 
 use birb_vision_core::{anyhow::{self, anyhow}, context::{DeviceInfo, DeviceInfoEntry, VisionContext}, CameraDevice, DeviceResult, EnumEntry, EnumProperty, EnumState, FlatSample, FlatSampleLayout, FourCC, ImageSampleBuffer, Node, NodeId, Property, PropertyState, PropertyValue, Sample, SampleType, StreamEvent};
