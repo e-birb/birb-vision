@@ -2,10 +2,14 @@ use std::error::Error;
 
 use windows::core::Error as WinError;
 
+/// Error type for DirectShow backend operations.
 #[derive(Debug)]
 pub enum DSError {
+    /// Wraps a Windows COM / system error.
     WinError(WinError),
+    /// Wraps an arbitrary boxed error.
     Other(Box<dyn Error + Send + Sync + 'static>),
+    /// A simple string error message.
     Message(String),
 }
 
