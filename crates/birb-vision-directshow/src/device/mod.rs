@@ -133,16 +133,20 @@ unsafe impl Send for GraphPoller {}
 
 impl GraphPoller {
     fn run(self) {
-        // Initialise COM on this thread
-        let com_ok = unsafe {
+        // Initialise COM on this thread (required before unmarshaling).
+        let com_init = unsafe {
             windows::Win32::System::Com::CoInitializeEx(
                 None,
                 windows::Win32::System::Com::COINIT_APARTMENTTHREADED
                     | windows::Win32::System::Com::COINIT_DISABLE_OLE1DDE,
             )
-        }
-        .is_ok();
+        };
 
+        if let Err(e) = com_init {
+            log::error!("GraphPoller: CoInitializeEx failed: {e}");
+            return;
+        }
+        let com_ok = true;
         // Unmarshal COM interfaces from the marshaled streams.
         // CoGetInterfaceAndReleaseStream unmarshals the interface and then
         // releases the stream. We transmute the raw pointer back to an IStream
