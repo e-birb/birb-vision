@@ -12,6 +12,7 @@ use birb_vision_core::{
 };
 use serde::{Deserialize, Serialize};
 use windows::Win32::Media::DirectShow::{
+    CameraControl_Flags_Auto, CameraControl_Flags_Manual,
     IAMCameraControl, IAMVideoProcAmp, IBaseFilter, IFilterGraph2, IMediaControl,
     IMediaEventEx, IEnumPins, IPin, PIN_DIRECTION, PINDIR_INPUT, PINDIR_OUTPUT,
     VideoProcAmp_Flags_Auto, VideoProcAmp_Flags_Manual,
@@ -30,9 +31,14 @@ use sample_grabber::{
 
 use crate::*;
 
+/// Information about a DirectShow video capture device.
+///
+/// Returned by [`DirectShowContext::enumerate_devices`](crate::DirectShowContext::enumerate_devices).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DSDeviceInfo {
+    /// Human-readable name (e.g. "Logitech Webcam C930e").
     pub friendly_name: String,
+    /// Unique device path (persistent across reboots, useful for re-identification).
     pub device_path: Option<String>,
 }
 
@@ -46,6 +52,19 @@ impl DSDeviceInfo {
     }
 }
 
+/// A DirectShow video capture device.
+///
+/// Wraps a capture filter bound from the system device enumerator.  Provides
+/// access to camera controls (brightness, contrast, pan, tilt, zoom, etc.)
+/// via `IAMVideoProcAmp` and `IAMCameraControl`, and streams frames through
+/// a DirectShow filter graph terminated with a Sample Grabber + Null Renderer.
+///
+/// # COM apartment
+///
+/// COM is initialised (apartment-threaded) on the first call to
+/// [`DirectShowContext::new`].  The initialisation is tied to the calling
+/// thread via a thread-local guard and automatically torn down when the
+/// thread exits.
 pub struct DirectShowDevice {
     _ctx: Arc<crate::ctx::CtxInner>,
     info: DSDeviceInfo,
@@ -79,9 +98,14 @@ struct GraphState {
 
 /// Helper sent to the background polling thread.
 ///
+/// Holds the COM interface pointers needed to poll for frames
+/// (`ISampleGrabber`, `IMediaEventEx`) together with the callback and
+/// stop-signal.
+///
 /// COM interface pointers aren't `Send` by default in the windows crate,
-/// so we wrap them and implement `Send` manually (DirectShow filters are
-/// free-threaded, so this is safe).
+/// so we wrap them and implement `Send` manually.  DirectShow filters are
+/// free-threaded, so accessing them from a dedicated thread (after calling
+/// `CoInitializeEx`) is safe.
 struct GraphPoller {
     sg: ISampleGrabber,
     mev: IMediaEventEx,
@@ -135,20 +159,14 @@ impl GraphPoller {
             }
             buf.truncate(size as usize);
 
-            let sample = FlatSample {
-                buffer: ImageSampleBuffer::Cow(Cow::Owned(buf)),
-                layout: FlatSampleLayout {
-                    offset: 0,
-                    sample_type: SampleType::Plain(PixelFormat::BGR8Packed),
-                    width: self.width,
-                    height: self.height,
-                    row_major: true,
-                    stride: (self.width * 3) as i32,
-                },
-            };
+            let sample = build_flat_sample(&buf, self.width, self.height);
 
-            let cb = self.callback.lock().unwrap();
-            cb(StreamEvent::Sample(Ok(Sample::ImageSample(sample))));
+            if let Ok(cb) = self.callback.lock() {
+                cb(StreamEvent::Sample(Ok(Sample::ImageSample(sample))));
+            } else {
+                // Mutex poisoned — the callback panicked, nothing more we can do
+                break;
+            }
         }
 
         if com_ok {
@@ -162,7 +180,15 @@ unsafe impl Send for DirectShowDevice {}
 unsafe impl Sync for DirectShowDevice {}
 
 impl DirectShowDevice {
-    pub fn new(
+    /// Create a new device from enumerated device info.
+    ///
+    /// Binds the device's moniker to an `IBaseFilter`, queries for
+    /// `IAMVideoProcAmp` and `IAMCameraControl` interfaces, and
+    /// enumerates all supported camera controls.
+    ///
+    /// Prefer using [`DirectShowContext::create`](crate::DirectShowContext) or
+    /// the [`VisionContext`](birb_vision_core::context::VisionContext) trait instead.
+    pub(crate) fn new(
         ctx: Arc<crate::ctx::CtxInner>,
         info: DSDeviceInfo,
     ) -> DSResult<Self> {
@@ -214,12 +240,14 @@ impl DirectShowDevice {
                 }
             };
 
+            let access_mode = property_access_mode(range.caps_flags, control.kind());
+
             let property = if control.is_boolean() {
                 let default = range.default != 0;
                 let mut prop = BoolProperty::new(node_id);
                 prop.display_name = name;
                 prop.default = Some(default);
-                prop.access_mode = property_access_mode(range.caps_flags);
+                prop.access_mode = access_mode;
                 Property::Bool(prop)
             } else {
                 let mut prop = NumericProperty::<i64>::new(node_id);
@@ -229,7 +257,7 @@ impl DirectShowDevice {
                 prop.default = Some(range.default as i64);
                 prop.increment = Some(ValueOrRef::Value(range.stepping_delta.max(1) as i64));
                 prop.representation = Some(Representation::Linear);
-                prop.access_mode = property_access_mode(range.caps_flags);
+                prop.access_mode = access_mode;
                 Property::Integer(prop)
             };
 
@@ -475,7 +503,9 @@ impl DirectShowDevice {
 
     /// Helper: build or reuse the graph, returning a lock guard on graph_state.
     fn ensure_graph(&self) -> DSResult<std::sync::MutexGuard<'_, Option<GraphState>>> {
-        let mut gs = self.graph_state.lock().unwrap();
+        let mut gs = self.graph_state.lock().map_err(|e| {
+            DSError::msg(format!("graph_state mutex poisoned: {e}"))
+        })?;
         if gs.is_none() {
             *gs = Some(self.build_graph(&self.filter)?);
         }
@@ -508,6 +538,21 @@ fn parse_video_dimensions(mt: &AM_MEDIA_TYPE) -> (u32, u32) {
         }
     }
     (0, 0)
+}
+
+/// Build a `FlatSample` from a raw RGB24 buffer with given dimensions.
+fn build_flat_sample(buf: &[u8], width: u32, height: u32) -> FlatSample<ImageSampleBuffer<'static>> {
+    FlatSample {
+        buffer: ImageSampleBuffer::Cow(Cow::Owned(buf.to_vec())),
+        layout: FlatSampleLayout {
+            offset: 0,
+            sample_type: SampleType::Plain(PixelFormat::BGR8Packed),
+            width,
+            height,
+            row_major: true,
+            stride: (width * 3) as i32,
+        },
+    }
 }
 
 /// Find the first pin on `filter` with the given direction.
@@ -544,22 +589,23 @@ impl CameraDevice for DirectShowDevice {
     }
 
     fn set_stream_callback(&self, f: Box<dyn Fn(StreamEvent) + Send + Sync>) -> DeviceResult {
-        *self.callback.lock().unwrap() = f;
+        *self.callback.lock().map_err(|e| anyhow!("{e}"))? = f;
         Ok(())
     }
 
     fn start_grabbing(&self) -> DeviceResult {
-        let mut gs_opt = self
-            .ensure_graph()
-            .map_err(|e| anyhow!("{e}"))?;
-        let gs = gs_opt.as_mut().unwrap();
-
-        // Stop any previous polling thread
+        // Stop any previous polling thread before building a new graph
         self.stop_signal.store(true, Ordering::SeqCst);
-        if let Some(handle) = self.poll_thread.lock().unwrap().take() {
+        if let Some(handle) = self.poll_thread.lock().map_err(|e| anyhow!("{e}"))?.take() {
             let _ = handle.join();
         }
         self.stop_signal.store(false, Ordering::SeqCst);
+
+        // Build (or reuse) the filter graph
+        let mut gs_opt = self
+            .ensure_graph()
+            .map_err(|e| anyhow!("{e}"))?;
+        let gs = gs_opt.as_mut().ok_or_else(|| anyhow!("Graph state is None after ensure_graph"))?;
 
         // Start the filter graph
         unsafe {
@@ -591,7 +637,7 @@ impl CameraDevice for DirectShowDevice {
             })
             .map_err(|e| anyhow!("Failed to spawn polling thread: {e}"))?;
 
-        *self.poll_thread.lock().unwrap() = Some(handle);
+        *self.poll_thread.lock().map_err(|e| anyhow!("{e}"))? = Some(handle);
 
         Ok(())
     }
@@ -599,16 +645,18 @@ impl CameraDevice for DirectShowDevice {
     fn stop_grabbing(&self) -> DeviceResult {
         // Signal the polling thread to stop
         self.stop_signal.store(true, Ordering::SeqCst);
-        if let Some(handle) = self.poll_thread.lock().unwrap().take() {
+        if let Some(handle) = self.poll_thread.lock().map_err(|e| anyhow!("{e}"))?.take() {
             let _ = handle.join();
         }
         self.stop_signal.store(false, Ordering::SeqCst);
 
-        // Stop the filter graph
-        if let Some(ref mut gs) = *self.graph_state.lock().unwrap() {
+        // Stop the filter graph and tear it down so the next start_grabbing
+        // creates a fresh graph.
+        if let Some(gs) = self.graph_state.lock().map_err(|e| anyhow!("{e}"))?.take() {
             unsafe {
                 let _ = gs.media_control.Stop();
             }
+            // Dropping gs here releases all COM references
         }
 
         Ok(())
@@ -618,17 +666,48 @@ impl CameraDevice for DirectShowDevice {
         let mut gs_opt = self
             .ensure_graph()
             .map_err(|e| anyhow!("{e}"))?;
-        let gs = gs_opt.as_mut().unwrap();
+        let gs = gs_opt.as_mut().ok_or_else(|| anyhow!("Graph state is None after ensure_graph"))?;
 
-        // Set one-shot so the graph produces exactly one frame
+        // If a polling thread is already running (continuous streaming), just
+        // read the latest buffered frame — don't touch SetOneShot.
+        let is_streaming = self.poll_thread.lock().map_err(|e| anyhow!("{e}"))?.is_some();
+
+        if is_streaming {
+            // Read the current buffer without changing one-shot mode
+            let mut size = 0;
+            unsafe {
+                gs.sample_grabber
+                    .GetCurrentBuffer(&mut size, std::ptr::null_mut())
+                    .map_err(|e| anyhow!("GetCurrentBuffer (size query) failed: {e}"))?;
+            }
+            if size == 0 {
+                return Err(anyhow!("No frame data available after grab").into());
+            }
+
+            let mut buf: Vec<u8> = vec![0u8; size as usize];
+            unsafe {
+                gs.sample_grabber
+                    .GetCurrentBuffer(&mut size, buf.as_mut_ptr() as *mut i32)
+                    .map_err(|e| anyhow!("GetCurrentBuffer (read) failed: {e}"))?;
+            }
+            buf.truncate(size as usize);
+
+            // Build the sample without holding the graph lock
+            let sample = build_flat_sample(&buf, gs.width, gs.height);
+            drop(gs_opt);
+
+            if let Ok(cb) = self.callback.lock() {
+                cb(StreamEvent::Sample(Ok(Sample::ImageSample(sample))));
+            }
+
+            return Ok(());
+        }
+
+        // --- One-shot mode (no active stream) ---
         unsafe {
             gs.sample_grabber
                 .SetOneShot(true)
                 .map_err(|e| anyhow!("SetOneShot failed: {e}"))?;
-        }
-
-        // Ensure the graph is running
-        unsafe {
             gs.media_control
                 .Run()
                 .map_err(|e| anyhow!("Failed to run filter graph: {e}"))?;
@@ -644,7 +723,11 @@ impl CameraDevice for DirectShowDevice {
                 .GetEvent(&mut ev_code, &mut ev_param1, &mut ev_param2, timeout_ms)
         };
 
-        if hr.is_ok() {
+        if let Err(ref err) = hr {
+            if err.code() == windows_core::HRESULT(0x8007000Eu32 as i32) /* WAIT_TIMEOUT */ {
+                return Err(anyhow!("Grab timed out after {timeout_ms}ms — no frame received").into());
+            }
+        } else {
             unsafe {
                 let _ = gs.media_event.FreeEventParams(ev_code, ev_param1, ev_param2);
             }
@@ -669,20 +752,13 @@ impl CameraDevice for DirectShowDevice {
         }
         buf.truncate(size as usize);
 
-        let sample = FlatSample {
-            buffer: ImageSampleBuffer::Cow(Cow::Owned(buf)),
-            layout: FlatSampleLayout {
-                offset: 0,
-                sample_type: SampleType::Plain(PixelFormat::BGR8Packed),
-                width: gs.width,
-                height: gs.height,
-                row_major: true,
-                stride: (gs.width * 3) as i32,
-            },
-        };
+        // Build the sample without holding the graph lock
+        let sample = build_flat_sample(&buf, gs.width, gs.height);
+        drop(gs_opt);
 
-        let cb = self.callback.lock().unwrap();
-        cb(StreamEvent::Sample(Ok(Sample::ImageSample(sample))));
+        if let Ok(cb) = self.callback.lock() {
+            cb(StreamEvent::Sample(Ok(Sample::ImageSample(sample))));
+        }
 
         Ok(())
     }
@@ -720,17 +796,19 @@ impl CameraDevice for DirectShowDevice {
 
         let control::DSNodeId::Control(control) = node_id;
 
+        let flags = manual_flag_for_kind(control.kind());
+
         let raw = match (control.is_boolean(), value) {
             (true, PropertyValue::Bool(v)) => {
                 DSControlValue {
                     value: if v { 1 } else { 0 },
-                    flags: VideoProcAmp_Flags_Manual.0,
+                    flags,
                 }
             }
             (false, PropertyValue::Integer(v)) => {
                 DSControlValue {
                     value: v as i32,
-                    flags: VideoProcAmp_Flags_Manual.0,
+                    flags,
                 }
             }
             _ => return Err(anyhow!("Unexpected property value type for control {control:?}").into()),
@@ -743,15 +821,36 @@ impl CameraDevice for DirectShowDevice {
     }
 }
 
+/// Return the `Manual` flag constant for the given control kind.
+///
+/// Both `VideoProcAmp_Flags_Manual` and `CameraControl_Flags_Manual` have
+/// the same numeric value (`0x01`), but using the correct constant is
+/// clearer and more defensive.
+fn manual_flag_for_kind(kind: control::DSControlKind) -> i32 {
+    match kind {
+        control::DSControlKind::ProcAmp => VideoProcAmp_Flags_Manual.0,
+        control::DSControlKind::CameraControl => CameraControl_Flags_Manual.0,
+    }
+}
+
+/// Return the `Auto` flag constant for the given control kind.
+fn auto_flag_for_kind(kind: control::DSControlKind) -> i32 {
+    match kind {
+        control::DSControlKind::ProcAmp => VideoProcAmp_Flags_Auto.0,
+        control::DSControlKind::CameraControl => CameraControl_Flags_Auto.0,
+    }
+}
+
 /// Convert DirectShow `VideoProcAmpFlags` / `CameraControlFlags` caps to `AccessMode`.
-fn property_access_mode(caps_flags: i32) -> birb_vision_core::AccessMode {
+fn property_access_mode(caps_flags: i32, kind: control::DSControlKind) -> birb_vision_core::AccessMode {
     use birb_vision_core::AccessMode;
 
-    // If the caps_flags has only auto set, it's effectively read-only from the user's perspective
-    // (though the driver adjusts it automatically).
-    // For simplicity, if neither manual nor auto is set, we assume read-write.
-    let has_manual = (caps_flags & VideoProcAmp_Flags_Manual.0) != 0;
-    let has_auto = (caps_flags & VideoProcAmp_Flags_Auto.0) != 0;
+    // Sanity-check: the flag values are identical across both interfaces.
+    debug_assert_eq!(VideoProcAmp_Flags_Manual.0, CameraControl_Flags_Manual.0);
+    debug_assert_eq!(VideoProcAmp_Flags_Auto.0, CameraControl_Flags_Auto.0);
+
+    let has_manual = (caps_flags & manual_flag_for_kind(kind)) != 0;
+    let has_auto = (caps_flags & auto_flag_for_kind(kind)) != 0;
 
     match (has_manual, has_auto) {
         (true, _) => AccessMode::ReadWrite,

@@ -29,11 +29,29 @@ const CLSID_SystemDeviceEnum: GUID = GUID::from_u128(0x62BE5D10_60EB_11d0_BD3B_0
 #[allow(non_upper_case_globals)]
 const CLSID_VideoInputDeviceCategory: GUID = GUID::from_u128(0x860BB310_5D01_11d0_BD3B_00A0C911CE86);
 
+/// DirectShow backend context.
+///
+/// Manages COM initialisation and device enumeration.  Create one via
+/// [`DirectShowContext::new`], then enumerate devices with
+/// [`enumerate_devices`](Self::enumerate_devices) or use the
+/// [`VisionContext`] trait interface.
+///
+/// # COM initialisation
+///
+/// COM is initialised in apartment-threaded mode on the thread that calls
+/// `new()`.  A per-thread guard ensures `CoUninitialize` is called when
+/// that thread exits — *not* when the context is dropped, avoiding
+/// cross-thread apartment violations.
 pub struct DirectShowContext {
     _inner: Arc<CtxInner>,
 }
 
 impl DirectShowContext {
+    /// Create a new DirectShow context.
+    ///
+    /// Initialises COM on the calling thread (apartment-threaded).  Subsequent
+    /// calls on the same thread re-use the same underlying COM initialisation
+    /// and device-enumeration cache.
     pub fn new() -> DSResult<Self> {
         thread_local! {
             static CTX: RefCell<std::sync::Weak<CtxInner>> = RefCell::new(std::sync::Weak::new());
@@ -53,6 +71,13 @@ impl DirectShowContext {
     }
 
     /// Enumerate all DirectShow video capture devices.
+    ///
+    /// Uses the System Device Enumerator (`ICreateDevEnum`) to find every
+    /// device in the `CLSID_VideoInputDeviceCategory`.  For each device the
+    /// `FriendlyName` and (optionally) `DevicePath` are read from the
+    /// moniker's property bag.
+    ///
+    /// Returns an empty vector if no video input devices are present.
     pub fn enumerate_devices(&self) -> DSResult<Vec<DSDeviceInfo>> {
         // Create the system device enumerator
         let dev_enum: ICreateDevEnum = unsafe {
@@ -193,16 +218,15 @@ impl VisionContext for DirectShowContext {
     }
 }
 
-pub(crate) struct CtxInner {
-    _com_guard: ComGuard,
-}
+pub(crate) struct CtxInner;
 
 impl CtxInner {
     fn new() -> DSResult<Self> {
-        let com_guard = ComGuard::new()?;
-        Ok(Self {
-            _com_guard: com_guard,
-        })
+        // Ensure COM is initialized on the calling thread.
+        // The per-thread guard lives in thread-local storage and will
+        // automatically call CoUninitialize when the thread exits.
+        PerThreadComGuard::ensure()?;
+        Ok(Self)
     }
 
     /// Find the moniker matching `info` and bind it to an [`IBaseFilter`].
@@ -291,16 +315,38 @@ fn find_moniker(info: &DSDeviceInfo) -> DSResult<IMoniker> {
     )))
 }
 
-struct ComGuard;
+/// Per-thread COM apartment initializer.
+///
+/// COM must be initialized once per thread. This guard is stored in
+/// thread-local storage so that `CoUninitialize()` is automatically called
+/// when the thread exits — avoiding the cross-thread-drop problem that would
+/// occur if the guard lived inside an `Arc<CtxInner>`.
+struct PerThreadComGuard {
+    _private: (),
+}
 
-impl ComGuard {
-    fn new() -> DSResult<Self> {
-        init_com()?;
-        Ok(Self)
+impl PerThreadComGuard {
+    /// Ensure COM is initialized on the current thread.
+    /// Safe to call multiple times from the same thread — subsequent calls
+    /// are no-ops.
+    fn ensure() -> DSResult<()> {
+        thread_local! {
+            static GUARD: std::cell::RefCell<Option<PerThreadComGuard>> = const { std::cell::RefCell::new(None) };
+        }
+
+        GUARD.with(|guard| {
+            let mut guard = guard.borrow_mut();
+            if guard.is_some() {
+                return Ok(()); // Already initialised on this thread
+            }
+            init_com()?;
+            *guard = Some(PerThreadComGuard { _private: () });
+            Ok(())
+        })
     }
 }
 
-impl Drop for ComGuard {
+impl Drop for PerThreadComGuard {
     fn drop(&mut self) {
         uninit_com();
     }

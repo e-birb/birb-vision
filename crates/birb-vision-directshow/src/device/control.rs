@@ -14,6 +14,14 @@ use windows::Win32::Media::DirectShow::{
 };
 
 /// Known DirectShow camera controls that can be enumerated.
+///
+/// These correspond to properties exposed through either
+/// [`IAMVideoProcAmp`](windows::Win32::Media::DirectShow::IAMVideoProcAmp)
+/// or [`IAMCameraControl`](windows::Win32::Media::DirectShow::IAMCameraControl).
+///
+/// Use [`DSControl::iter`](strum::IntoEnumIterator::iter) to enumerate all
+/// known controls and query the device for support (unsupported controls
+/// will fail at the [`GetRange`] call and be silently skipped).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, strum::EnumIter)]
 pub enum DSControl {
     // --- IAMVideoProcAmp properties ---
@@ -40,7 +48,11 @@ pub enum DSControl {
 /// Which COM interface this control belongs to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DSControlKind {
+    /// Property on [`IAMVideoProcAmp`](windows::Win32::Media::DirectShow::IAMVideoProcAmp)
+    /// (image adjustments: brightness, contrast, hue, etc.).
     ProcAmp,
+    /// Property on [`IAMCameraControl`](windows::Win32::Media::DirectShow::IAMCameraControl)
+    /// (physical camera adjustments: pan, tilt, zoom, etc.).
     CameraControl,
 }
 
@@ -103,22 +115,34 @@ impl DSControl {
 /// The deserializable node-id payload for DirectShow controls.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum DSNodeId {
+    /// A known DirectShow camera control.
     Control(DSControl),
 }
 
-/// The result of [`IAMVideoProcAmp::GetRange`] / [`IAMCameraControl::GetRange`].
+/// Range metadata returned by
+/// [`IAMVideoProcAmp::GetRange`](windows::Win32::Media::DirectShow::IAMVideoProcAmp::GetRange)
+/// or [`IAMCameraControl::GetRange`](windows::Win32::Media::DirectShow::IAMCameraControl::GetRange).
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct DSControlRange {
+    /// Minimum value.
     pub min: i32,
+    /// Maximum value.
     pub max: i32,
+    /// Step size.
     pub stepping_delta: i32,
+    /// Default value.
     pub default: i32,
+    /// Capability flags (`VideoProcAmpFlags` / `CameraControlFlags`).
     pub caps_flags: i32,
 }
 
-/// The result of [`IAMVideoProcAmp::Get`] / [`IAMCameraControl::Get`].
+/// Current value returned by
+/// [`IAMVideoProcAmp::Get`](windows::Win32::Media::DirectShow::IAMVideoProcAmp::Get)
+/// or [`IAMCameraControl::Get`](windows::Win32::Media::DirectShow::IAMCameraControl::Get).
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct DSControlValue {
+    /// The raw control value.
     pub value: i32,
+    /// Control flags (`VideoProcAmpFlags` / `CameraControlFlags`).
     pub flags: i32,
 }
