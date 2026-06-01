@@ -16,6 +16,14 @@
 use windows::Win32::Foundation::BOOL;
 use windows_core::*;
 
+// SAFETY: COM interface pointers are reference-counted and safe to send/access
+// across threads under the COM apartment model when the underlying COM object supports it.
+// DirectShow filters are free-threaded.
+unsafe impl Send for ISampleGrabber {}
+unsafe impl Sync for ISampleGrabber {}
+unsafe impl Send for ISampleGrabberCB {}
+unsafe impl Sync for ISampleGrabberCB {}
+
 // IID_ISampleGrabber: {6B652FFF-11FE-4fce-92AD-0266B5D7C78F}
 const IID_ISampleGrabber: GUID = GUID::from_u128(0x6B652FFF_11FE_4fce_92AD_0266B5D7C78F);
 
@@ -39,6 +47,24 @@ pub const MEDIASUBTYPE_RGB24: GUID = GUID::from_u128(0xE436EB7D_524F_11CE_9F53_0
 
 // PIN_CATEGORY_CAPTURE: {FB6C4281-0353-11D1-905F-0000C0CC16BA}
 pub const PIN_CATEGORY_CAPTURE: GUID = GUID::from_u128(0xFB6C4281_0353_11D1_905F_0000C0CC16BA);
+
+/// CLSID_CaptureGraphBuilder2: {BF87BFA1-8DE2-11d0-A580-00A0C922E48A}
+pub const CLSID_CaptureGraphBuilder2: GUID = GUID::from_u128(0xBF87BFA1_8DE2_11d0_A580_00A0C922E48A);
+
+/// PIN_CATEGORY_PREVIEW: {FB6C4282-0353-11D1-905F-0000C0CC16BA}
+#[allow(unused)]
+pub const PIN_CATEGORY_PREVIEW: GUID = GUID::from_u128(0xFB6C4282_0353_11D1_905F_0000C0CC16BA);
+
+/// MEDIASUBTYPE_RGB32: {E436EB7E-524F-11CE-9F53-0020AF0BA770}
+#[allow(unused)]
+pub const MEDIASUBTYPE_RGB32: GUID = GUID::from_u128(0xE436EB7E_524F_11CE_9F53_0020AF0BA770);
+
+/// FORMAT_VideoInfo: {05589F80-C356-11CE-BF01-00AA0055595A}
+pub const FORMAT_VideoInfo: GUID = GUID::from_u128(0x05589f80_c356_11ce_bf01_00aa0055595a);
+
+/// FORMAT_VideoInfo2: {F72A76A0-EB0A-11D0-ACE4-0000C0CC16BA}
+#[allow(unused)]
+pub const FORMAT_VideoInfo2: GUID = GUID::from_u128(0xf72a76a0_eb0a_11d0_ace4_0000c0cc16ba);
 
 windows_core::imp::define_interface!(ISampleGrabber, ISampleGrabber_Vtbl, 0x6B652FFF_11FE_4fce_92AD_0266B5D7C78F);
 
