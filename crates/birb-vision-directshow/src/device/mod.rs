@@ -659,8 +659,11 @@ impl CameraDevice for DirectShowDevice {
             .map_err(|e| anyhow!("{e}"))?;
         let gs = gs_opt.as_mut().ok_or_else(|| anyhow!("Graph state is None after ensure_graph"))?;
 
-        // Start the filter graph
+        // Start the filter graph (ensure we are not left in one-shot mode from a previous grab)
         unsafe {
+            gs.sample_grabber
+                .SetOneShot(false)
+                .map_err(|e| anyhow!("SetOneShot(false) failed: {e}"))?;
             gs.media_control
                 .Run()
                 .map_err(|e| anyhow!("Failed to start filter graph: {e}"))?;
