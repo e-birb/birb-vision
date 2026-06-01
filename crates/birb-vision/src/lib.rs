@@ -55,7 +55,7 @@ pub fn all_backends() -> BackendRegistry {
         .with_display_name("Daheng")
     ).unwrap();
 
-    #[cfg(feature = "directshow")]
+    #[cfg(all(feature = "directshow", windows))]
     set.register(
         BackendPackage::from_builder_fn(|| {
             let ctx = birb_vision_directshow::DirectShowContext::new()
