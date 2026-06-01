@@ -1,20 +1,37 @@
 # birb-vision
  A comprehensive Rust library designed for machine vision applications.
 
-`birb-vision` provides a unified interface to interact with various camera systems such as webcams and industrial cameras (including MVS, iCube, Daheng and more). The library aims to simplify the process of camera enumeration, control, and image acquisition, making it easier for developers to build robust vision-based applications.
+`birb-vision` provides a unified interface to interact with various camera systems such as webcams and industrial cameras (including MVS, iCube, Daheng and more). The library aims to simplify the process of camera enumeration, control, and image acquisition, to build robust vision-based applications.
 
 ## Usage
 
-To run the gui example you can use the following command:
 ```sh
-cargo run -p egui-example --release 
+cargo run --example all_cameras --features v4l
+```
+or, on Windows:
+```sh
+cargo run --example all_cameras --features media-foundation,directshow
 ```
 
-![Egui Example](./docs/screen.png)
+To test the windows implementations on Linux, you can use Wine:
+```sh
+cargo build \
+  --example all_cameras \
+  --features media-foundation,directshow \
+  --target x86_64-pc-windows-gnu
+wine target/x86_64-pc-windows-gnu/debug/examples/all_cameras.exe
+```
+For 32-bit Windows you can use the `i686-pc-windows-gnu` target instead.
+
+> [!NOTE]
+> Note that Wine does not currently support DirectShow camera capture so it
+> will not show any cameras.
 
 ## Crates
 
 See #7
+
+(NOTE: not upd to date)
 
 - [`birb-vision`](./crates/birb-vision/): the core crate
 - **interfaces**: some provided interfaces
