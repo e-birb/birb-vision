@@ -1,13 +1,15 @@
-use std::io::Write;
+use std::{io::Write, time::Duration};
 
 use birb_vision::all_backends;
-use birb_vision_core::{ImageSampleBuffer, Sample, StreamEvent};
+use birb_vision_core::CameraDeviceEx;
 use colored::Colorize;
 
 
 
 fn main() -> anyhow::Result<()> {
     let all = all_backends().all_packages();
+
+    let mut frame_counter = 0;
 
     println!("Found {} backends:", all.len());
     for (id, package) in all {
@@ -49,28 +51,34 @@ fn main() -> anyhow::Result<()> {
                 println!("    - {}: {}", prop.display_name.yellow(), prop.description.as_deref().unwrap_or_default());
             }
 
-            let (tx, rx) = std::sync::mpsc::channel::<()>();
-            device.set_stream_callback(Box::new(move |e| {
-                println!("    Event: {:?}", e);
-                if let StreamEvent::Sample(sample) = e {
-                    let sample = sample.unwrap();
-                    let Sample::ImageSample(f) = &sample;
-                    let b = &f.buffer;
-                    let ImageSampleBuffer::Cow(cow) = b else {
-                        println!("Buffer is not a Cow, skipping decode");
-                        return;
-                    };
-                    dbg!(cow.len());
-                    dbg!("Buffer type: {:?}", b);
-                    let sample = sample.try_decode().unwrap().unwrap();
-                    sample.save("sample.png").unwrap();
-                }
-                tx.send(()).unwrap();
-            }))?;
             device.start_grabbing()?;
-            rx.recv()?;
-            std::thread::sleep(std::time::Duration::from_secs(3));
-            device.stop_grabbing()?;
+            let sample = device.get_one_frame(Duration::from_secs(3));
+            let sample = match pollster::block_on(sample) {
+                Ok(frame) => frame,
+                Err(e) => {
+                    println!("    {}: {}", "Failed to grab frame".red(), e);
+                    continue;
+                }
+            };
+
+            let Ok(sample) = sample.try_decode() else {
+                println!("  Cannot decode sample");
+                continue;
+            };
+
+            let sample = match sample {
+                Ok(image) => image,
+                Err(e) => {
+                    println!("    {}: {}", "Failed to decode sample".red(), e);
+                    continue;
+                }
+            };
+
+            frame_counter += 1;
+            let count = frame_counter;
+
+            sample.save(format!("frame-{}.png", count))?;
+            println!("    Saved frame to frame-{}.png", count);
         }
     }
 

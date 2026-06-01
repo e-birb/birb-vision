@@ -23,3 +23,6 @@ icube = ["dep:birb-vision-icube"]
 media-foundation = ["dep:birb-vision-media-foundation"]
 directshow = ["dep:birb-vision-directshow"]
 daheng = ["dep:birb-vision-daheng"]
+
+[dev-dependencies]
+pollster = "0.4.0"
