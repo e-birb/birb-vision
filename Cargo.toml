@@ -13,6 +13,7 @@ members = [
     "crates/birb-vision-mvs", # FIXME "crates/birb-vision-nest", temporarily broken?
     "crates/birb-vision-v4l",
     "crates/birb-vision-daheng",
+    "crates/birb-vision-directshow",
     #"crates/birb-vision-nokhwa",
 ]
 default-members = [
