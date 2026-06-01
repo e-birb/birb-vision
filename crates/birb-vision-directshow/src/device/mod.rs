@@ -179,6 +179,13 @@ impl GraphPoller {
 unsafe impl Send for DirectShowDevice {}
 unsafe impl Sync for DirectShowDevice {}
 
+impl Drop for DirectShowDevice {
+    fn drop(&mut self) {
+        // Best-effort cleanup to avoid leaking the polling thread / holding the device open.
+        let _ = <Self as CameraDevice>::stop_grabbing(self);
+    }
+}
+
 impl DirectShowDevice {
     /// Create a new device from enumerated device info.
     ///
