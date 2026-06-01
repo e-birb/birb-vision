@@ -142,7 +142,7 @@ impl GraphPoller {
             )
         };
 
-        if let Err(e) = com_init {
+        if let Err(e) = com_init.ok() {
             log::error!("GraphPoller: CoInitializeEx failed: {e}");
             return;
         }
