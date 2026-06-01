@@ -12,10 +12,8 @@ members = [
     "crates/birb-vision-media-uvc",
     "crates/birb-vision-mvs", # FIXME "crates/birb-vision-nest", temporarily broken?
     "crates/birb-vision-v4l",
-    "crates/egui-interface",
     "crates/birb-vision-daheng",
     "crates/birb-vision-directshow",
-    "examples/egui",
     #"crates/birb-vision-nokhwa",
 ]
 default-members = [
