@@ -8,6 +8,8 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  WINDOWS_BACKENDS: media-foundation,directshow,mvs,daheng,icube
+  LINUX_BACKENDS: v4l,mvs,daheng,icube
 
 jobs:
   build-linux:
@@ -16,6 +18,8 @@ jobs:
     - uses: actions/checkout@v4
     - name: Build
       run: cargo build --workspace # --verbose
+    - name: Run Example
+      run: cargo run --features "${LINUX_BACKENDS}" --example all_cameras
     #- name: Run tests
     #  run: cargo test --verbose
 
@@ -29,10 +33,36 @@ jobs:
       run: rustup target add x86_64-pc-windows-gnu
     - name: Build
       run: cargo build --target x86_64-pc-windows-gnu --workspace
+    - name: Build Example
+      run: cargo build --target x86_64-pc-windows-gnu --features "${WINDOWS_BACKENDS}" --example all_cameras
 
-  build-windows:
+  build-i686-pc-windows-gnu:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install MinGW-w64
+      run: sudo apt-get update && sudo apt-get install -y gcc-mingw-w64-i686
+    - name: Setup target
+      run: rustup target add i686-pc-windows-gnu
+    - name: Build
+      run: cargo build --target i686-pc-windows-gnu --workspace
+    - name: Build Example
+      run: cargo build --target i686-pc-windows-gnu --features "${WINDOWS_BACKENDS}" --example all_cameras
+
+  build-x86_64-pc-windows-msvc:
     runs-on: windows-latest
     steps:
     - uses: actions/checkout@v4
     - name: Build
       run: cargo build --workspace
+    - name: Run Example
+      run: cargo run --features "${WINDOWS_BACKENDS}" --example all_cameras
+
+  build-i686-pc-windows-msvc:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Build
+      run: cargo build --workspace
+    - name: Run Example
+      run: cargo run --features "${WINDOWS_BACKENDS}" --example all_cameras
