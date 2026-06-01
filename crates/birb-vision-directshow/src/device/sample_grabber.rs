@@ -4,7 +4,7 @@
 //!
 //! The `non_snake_case`, `non_upper_case_globals` and `dead_code` warnings are expected:
 //! COM vtable struct fields and GUID constants use Windows naming conventions,
-//! and these types won't be used until filter-graph rendering is implemented.
+//! and some types/consts may be unused depending on which DirectShow graph features are enabled.
 
 #![allow(
     non_snake_case,
