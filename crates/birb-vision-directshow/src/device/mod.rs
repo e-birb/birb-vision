@@ -208,7 +208,7 @@ impl GraphPoller {
             }
             buf.truncate(size as usize);
 
-            let sample = build_flat_sample(&buf, self.width, self.height);
+            let sample = build_flat_sample(buf, self.width, self.height);
 
             if let Ok(cb) = self.callback.lock() {
                 cb(StreamEvent::Sample(Ok(Sample::ImageSample(sample))));
@@ -597,9 +597,9 @@ fn parse_video_dimensions(mt: &AM_MEDIA_TYPE) -> (u32, u32) {
 }
 
 /// Build a `FlatSample` from a raw RGB24 buffer with given dimensions.
-fn build_flat_sample(buf: &[u8], width: u32, height: u32) -> FlatSample<ImageSampleBuffer<'static>> {
+fn build_flat_sample(buf: Vec<u8>, width: u32, height: u32) -> FlatSample<ImageSampleBuffer<'static>> {
     FlatSample {
-        buffer: ImageSampleBuffer::Cow(Cow::Owned(buf.to_vec())),
+        buffer: ImageSampleBuffer::Cow(Cow::Owned(buf)),
         layout: FlatSampleLayout {
             offset: 0,
             sample_type: SampleType::Plain(PixelFormat::BGR8Packed),
@@ -779,7 +779,7 @@ impl CameraDevice for DirectShowDevice {
             buf.truncate(size as usize);
 
             // Build the sample without holding the graph lock
-            let sample = build_flat_sample(&buf, gs.width, gs.height);
+            let sample = build_flat_sample(buf, gs.width, gs.height);
             drop(gs_opt);
 
             if let Ok(cb) = self.callback.lock() {
@@ -851,7 +851,7 @@ impl CameraDevice for DirectShowDevice {
         buf.truncate(size as usize);
 
         // Build the sample without holding the graph lock
-        let sample = build_flat_sample(&buf, gs.width, gs.height);
+        let sample = build_flat_sample(buf, gs.width, gs.height);
         drop(gs_opt);
 
         if let Ok(cb) = self.callback.lock() {
