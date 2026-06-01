@@ -740,15 +740,27 @@ impl CameraDevice for DirectShowDevice {
             }
         }
 
-        // Read the buffer
+        // Read the buffer (may take a moment after the graph event fires)
+        let deadline = std::time::Instant::now()
+            + std::time::Duration::from_millis(timeout_ms as u64);
+
         let mut size = 0;
-        unsafe {
-            gs.sample_grabber
-                .GetCurrentBuffer(&mut size, std::ptr::null_mut())
-                .map_err(|e| anyhow!("GetCurrentBuffer (size query) failed: {e}"))?;
-        }
-        if size == 0 {
-            return Err(anyhow!("No frame data available after grab").into());
+        loop {
+            unsafe {
+                gs.sample_grabber
+                    .GetCurrentBuffer(&mut size, std::ptr::null_mut())
+                    .map_err(|e| anyhow!("GetCurrentBuffer (size query) failed: {e}"))?;
+            }
+
+            if size != 0 {
+                break;
+            }
+
+            if std::time::Instant::now() >= deadline {
+                return Err(anyhow!("Grab timed out after {timeout_ms}ms — no frame received").into());
+            }
+
+            std::thread::sleep(std::time::Duration::from_millis(10));
         }
 
         let mut buf: Vec<u8> = vec![0u8; size as usize];
