@@ -5,20 +5,28 @@ use colored::Colorize;
 
 
 
-fn main() {
+fn main() -> anyhow::Result<()> {
     let all = all_backends().all_packages();
 
     println!("Found {} backends:", all.len());
     for (id, package) in all {
         println!("- {} ({})", package.display_name.green(), id.cyan());
 
-        let context = package
-            .build_backend()
-            .expect("Failed to initialize backend context");
+        let context = match package.build_backend() {
+            Ok(context) => context,
+            Err(e) => {
+                println!("  {}: {}", "Failed to build backend".red(), e);
+                continue;
+            }
+        };
 
-        let devices = context
-            .enumerate(&context.default_transport_layers())
-            .expect("Failed to enumerate devices");
+        let devices = match context.enumerate(&context.default_transport_layers()) {
+            Ok(devices) => devices,
+            Err(e) => {
+                println!("  {}: {}", "Failed to enumerate devices".red(), e);
+                continue;
+            }
+        };
 
         println!("  Found {} devices:", devices.len());
 
@@ -34,4 +42,6 @@ fn main() {
             println!("{}", if opens { "OK".green() } else { "Failed to open".red() });
         }
     }
+
+    Ok(())
 }
