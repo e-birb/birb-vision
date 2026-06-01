@@ -8,7 +8,8 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  WINDOWS_BACKENDS: media-foundation,directshow,mvs,daheng,icube
+  WINDOWS_X86_64_BACKENDS: media-foundation,directshow,mvs,daheng,icube
+  WINDOWS_I686_BACKENDS: media-foundation,directshow,mvs,icube
   LINUX_BACKENDS: v4l,mvs,daheng,icube
 
 jobs:
@@ -34,7 +35,7 @@ jobs:
     - name: Build
       run: cargo build --target x86_64-pc-windows-gnu --workspace
     - name: Build Example
-      run: cargo build --target x86_64-pc-windows-gnu --features "${WINDOWS_BACKENDS}" --example all_cameras
+      run: cargo build --target x86_64-pc-windows-gnu --features "${WINDOWS_X86_64_BACKENDS}" --example all_cameras
 
   build-i686-pc-windows-gnu:
     runs-on: ubuntu-latest
@@ -47,7 +48,7 @@ jobs:
     - name: Build
       run: cargo build --target i686-pc-windows-gnu --workspace
     - name: Build Example
-      run: cargo build --target i686-pc-windows-gnu --features "${WINDOWS_BACKENDS}" --example all_cameras
+      run: cargo build --target i686-pc-windows-gnu --features "${WINDOWS_I686_BACKENDS}" --example all_cameras
 
   build-x86_64-pc-windows-msvc:
     runs-on: windows-latest
@@ -56,7 +57,7 @@ jobs:
     - name: Build
       run: cargo build --workspace
     - name: Run Example
-      run: cargo run --features "${WINDOWS_BACKENDS}" --example all_cameras
+      run: cargo run --features "${WINDOWS_X86_64_BACKENDS}" --example all_cameras
 
   build-i686-pc-windows-msvc:
     runs-on: windows-latest
@@ -65,4 +66,4 @@ jobs:
     - name: Build
       run: cargo build --workspace
     - name: Run Example
-      run: cargo run --features "${WINDOWS_BACKENDS}" --example all_cameras
+      run: cargo run --features "${WINDOWS_I686_BACKENDS}" --example all_cameras
