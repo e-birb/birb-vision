@@ -83,11 +83,11 @@ impl Drop for Device {
 }
 
 impl CameraDevice for Device {
-    fn get_device_info(&mut self) -> birb_vision_core::DeviceResult<birb_vision_core::context::DeviceInfo> {
+    fn get_device_info(&self) -> birb_vision_core::DeviceResult<birb_vision_core::context::DeviceInfo> {
         Ok(info::to_birb_info(&self.info))
     }
 
-    fn start_grabbing(&mut self) -> birb_vision_core::DeviceResult {
+    fn start_grabbing(&self) -> birb_vision_core::DeviceResult {
         GxError::result(self.cx.sdk(), match self.cx.sdk() {
             SDK::V1(v1) => unsafe { v1.GXStreamOn(self.handle) },
             SDK::V2(v2) => unsafe { v2.GXSendCommand(self.handle, v2::GX_FEATURE_ID_GX_COMMAND_ACQUISITION_START as i32) },
@@ -95,7 +95,7 @@ impl CameraDevice for Device {
         Ok(())
     }
 
-    fn stop_grabbing(&mut self) -> birb_vision_core::DeviceResult {
+    fn stop_grabbing(&self) -> birb_vision_core::DeviceResult {
         GxError::result(self.cx.sdk(), match self.cx.sdk() {
             SDK::V1(v1) => unsafe { v1.GXStreamOff(self.handle) },
             SDK::V2(v2) => unsafe { v2.GXSendCommand(self.handle, v2::GX_FEATURE_ID_GX_COMMAND_ACQUISITION_STOP as i32) },
@@ -103,12 +103,12 @@ impl CameraDevice for Device {
         Ok(())
     }
 
-    fn set_stream_callback(&mut self, f: Box<dyn for<'a> Fn(birb_vision_core::StreamEvent<'a>) + Send + Sync>) -> birb_vision_core::DeviceResult {
+    fn set_stream_callback(&self, f: Box<dyn for<'a> Fn(birb_vision_core::StreamEvent<'a>) + Send + Sync>) -> birb_vision_core::DeviceResult {
         self.callbacks.lock().unwrap().stream_callback = Some(f);
         Ok(())
     }
 
-    fn grab(&mut self) -> birb_vision_core::DeviceResult {
+    fn grab(&self) -> birb_vision_core::DeviceResult {
         // TODO
         Err(DeviceError::NotImplemented)
     }

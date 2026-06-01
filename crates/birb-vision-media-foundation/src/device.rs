@@ -269,7 +269,7 @@ impl MFDevice {
 const FIRST_VIDEO_STREAM: u32 = MF_SOURCE_READER_FIRST_VIDEO_STREAM.0 as u32;
 
 impl CameraDevice for MFDevice {
-    fn get_device_info(&mut self) -> DeviceResult<DeviceInfo> {
+    fn get_device_info(&self) -> DeviceResult<DeviceInfo> {
         let mut info = DeviceInfo::new();
         info.display_name = self.info.name.clone();
         info.other.insert(
@@ -280,17 +280,17 @@ impl CameraDevice for MFDevice {
         Ok(info)
     }
 
-    fn start_grabbing(&mut self) -> DeviceResult<()> {
+    fn start_grabbing(&self) -> DeviceResult<()> {
         self.start_stream().unwrap(); // TODO handle error
         Ok(())
     }
 
-    fn stop_grabbing(&mut self) -> DeviceResult<()> {
+    fn stop_grabbing(&self) -> DeviceResult<()> {
         self.stop_stream().unwrap(); // TODO handle error
         Ok(())
     }
 
-    fn flush(&mut self) -> DeviceResult<()> {
+    fn flush(&self) -> DeviceResult<()> {
         let mut inner = self.callback_inner.lock().unwrap();
         inner.flushing = true;
         self.flush_reader().unwrap();
@@ -357,7 +357,7 @@ impl CameraDevice for MFDevice {
     //    self.finish_poll(inner)
     //}
 
-    fn set_stream_callback(&mut self, f: Box<dyn Fn(StreamEvent) + Send + Sync>) -> DeviceResult {
+    fn set_stream_callback(&self, f: Box<dyn Fn(StreamEvent) + Send + Sync>) -> DeviceResult {
         let mut inner = self.callback_inner.lock().unwrap();
         let inner = &mut *inner;
 
@@ -370,12 +370,12 @@ impl CameraDevice for MFDevice {
         Ok(())
     }
 
-    fn grab(&mut self) -> DeviceResult<()> {
+    fn grab(&self) -> DeviceResult<()> {
         Self::send_read_sample(&self.source_reader);
         Ok(())
     }
 
-    fn all_properties(&mut self) -> DeviceResult<Vec<Node>> {
+    fn all_properties(&self) -> DeviceResult<Vec<Node>> {
         fn to_property_node(dev: &MFDevice, control: MFKnownControl) -> DeviceResult<Option<Node>> {
             let r = dev.get_control_range(control);
             const ELEMENT_NOT_FOUND_ERROR_CODE: i32 = 0x80070490_u32 as i32; // TODO find the correct MF_E_* instead
@@ -455,7 +455,7 @@ impl CameraDevice for MFDevice {
         Ok(properties)
     }
 
-    fn read_property(&mut self, id: &NodeId) -> DeviceResult<PropertyState> {
+    fn read_property(&self, id: &NodeId) -> DeviceResult<PropertyState> {
         let id = MFKnownControl::from_node_id(id)?;
 
         let MFControlNodeId::Known(control, flag) = id else {
@@ -499,7 +499,7 @@ impl CameraDevice for MFDevice {
         Ok(state)
     }
 
-    fn write_property(&mut self, id: &NodeId, value: PropertyValue) -> DeviceResult {
+    fn write_property(&self, id: &NodeId, value: PropertyValue) -> DeviceResult {
         let id = MFKnownControl::from_node_id(id)?;
 
         let (control, flag) = match id {
