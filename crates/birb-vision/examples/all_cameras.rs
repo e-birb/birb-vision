@@ -37,14 +37,11 @@ fn main() -> anyhow::Result<()> {
             print!("  - {}: ", device.display_name.blue());
             std::io::stdout().flush().unwrap();
 
-            let opens = context
-                .create(&device)
-                .ok()
-                .flatten()
-                .is_some();
-            println!("{}", if opens { "OK".green() } else { "Failed to open".red() });
-
-            let device = context.create(&device)?.unwrap();
+            let Some(device) = context.create(&device)? else {
+                println!("{}", "Failed to open".red());
+                continue;
+            };
+            println!("{}", "OK".green());
             let properties = device.all_properties()?;
             println!("    {} properties:", properties.len());
             for prop in properties {
