@@ -14,21 +14,21 @@ pub use io::DeviceIO;
 // (might be self). Teh methods exposed by CameraDevice are instead high-level functions.
 
 pub trait CameraDevice: Send + Sync {
-    fn get_device_info(&mut self) -> DeviceResult<DeviceInfo> {
+    fn get_device_info(&self) -> DeviceResult<DeviceInfo> {
         Err(DeviceError::NotImplemented)
     }
 
-    fn access_mode(&mut self) -> DeviceResult<DeviceAccessMode> {
+    fn access_mode(&self) -> DeviceResult<DeviceAccessMode> {
         Err(DeviceError::NotImplemented)
     }
 
     /// Get all the properties of the device
-    fn all_properties(&mut self) -> DeviceResult<Vec<Node>> {
+    fn all_properties(&self) -> DeviceResult<Vec<Node>> {
         return Ok(vec![]);
     }
 
     /// Roots of all properties
-    fn root_properties(&mut self) -> DeviceResult<Vec<NodeId>> {
+    fn root_properties(&self) -> DeviceResult<Vec<NodeId>> {
         Ok(
             self
                 .all_properties()?
@@ -39,7 +39,7 @@ pub trait CameraDevice: Send + Sync {
     }
 
     /// Root of the interesting properties to be exposed to the user
-    fn user_root_properties(&mut self) -> DeviceResult<Vec<NodeId>> {
+    fn user_root_properties(&self) -> DeviceResult<Vec<NodeId>> {
         self.root_properties()
     }
 
@@ -47,21 +47,21 @@ pub trait CameraDevice: Send + Sync {
     // of properties that may either take a long time, block teh device or
     // need to wait for some event to happen (example frames).
     // Allow read frames with this method? (maybe adding the appropriate node)
-    fn read_property(&mut self, _id: &NodeId) -> DeviceResult<PropertyState> {
+    fn read_property(&self, _id: &NodeId) -> DeviceResult<PropertyState> {
         Err(DeviceError::NotImplemented)
     }
-    fn write_property(&mut self, _id: &NodeId, _value: PropertyValue) -> DeviceResult {
+    fn write_property(&self, _id: &NodeId, _value: PropertyValue) -> DeviceResult {
         Err(DeviceError::NotImplemented)
     }
 
     fn is_grabbing(&self) -> DeviceResult<bool> {
         Err(DeviceError::NotImplemented)
     }
-    fn start_grabbing(&mut self) -> DeviceResult; // TODO a stream object?
-    fn stop_grabbing(&mut self) -> DeviceResult;
+    fn start_grabbing(&self) -> DeviceResult; // TODO a stream object?
+    fn stop_grabbing(&self) -> DeviceResult;
 
     /// Get a reference to the underlying IO object to read/write registers.
-    fn io<'a>(&'a mut self) -> Option<Box<dyn DeviceIO + 'a>> {
+    fn io<'a>(&'a self) -> Option<Box<dyn DeviceIO + 'a>> {
         None
     }
 
@@ -75,9 +75,9 @@ pub trait CameraDevice: Send + Sync {
     ///
     /// # Notes
     /// - This method is similar to [OpenCV's `VideoCapture::grab`](https://github.com/opencv/opencv/blob/ae4a11b0c0986809d2f938f68343c8da99286b29/modules/videoio/include/opencv2/videoio.hpp#L878), but it is not guaranteed to have effect.
-    fn grab(&mut self) -> DeviceResult;
+    fn grab(&self) -> DeviceResult;
 
-    fn flush(&mut self) -> DeviceResult {
+    fn flush(&self) -> DeviceResult {
         Err(DeviceError::NotImplemented)
     }
 
@@ -85,7 +85,7 @@ pub trait CameraDevice: Send + Sync {
     // TODO Is this "no Pin requirement" good?
     //fn poll_events(&self, ctx: &mut std::task::Context) -> Poll<DeviceResult<Event>>;
 
-    fn set_stream_callback(&mut self, f: Box<dyn for<'a> Fn(StreamEvent<'a>) + Send + Sync>) -> DeviceResult;
+    fn set_stream_callback(&self, f: Box<dyn for<'a> Fn(StreamEvent<'a>) + Send + Sync>) -> DeviceResult;
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

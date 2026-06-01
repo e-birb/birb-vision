@@ -91,11 +91,11 @@ impl V4lDevice {
 }
 
 impl CameraDevice for V4lDevice {
-    fn get_device_info(&mut self) -> DeviceResult<DeviceInfo> {
+    fn get_device_info(&self) -> DeviceResult<DeviceInfo> {
         Ok(self.info.deref().clone())
     }
 
-    fn all_properties(&mut self) -> DeviceResult<Vec<Node>> {
+    fn all_properties(&self) -> DeviceResult<Vec<Node>> {
         Ok(self
             .properties
             .iter()
@@ -104,11 +104,11 @@ impl CameraDevice for V4lDevice {
         )
     }
 
-    fn root_properties(&mut self) -> DeviceResult<Vec<NodeId>> {
+    fn root_properties(&self) -> DeviceResult<Vec<NodeId>> {
         Ok(self.all_properties.clone())
     }
 
-    fn read_property(&mut self, id: &NodeId) -> DeviceResult<PropertyState> {
+    fn read_property(&self, id: &NodeId) -> DeviceResult<PropertyState> {
         let node = self.properties.get(id).ok_or(anyhow!("Control {id:?} not found"))?;
 
         if id.as_str() == Some("video-format") {
@@ -130,7 +130,7 @@ impl CameraDevice for V4lDevice {
         control_compat::node_value_to_property_state(node, value)
     }
 
-    fn write_property(&mut self, id: &NodeId, value: PropertyValue) -> DeviceResult {
+    fn write_property(&self, id: &NodeId, value: PropertyValue) -> DeviceResult {
         if id.as_str() == Some("video-format") {
             log::trace!("Setting video format");
             let PropertyValue::Enum(value) = value else {
@@ -157,7 +157,7 @@ impl CameraDevice for V4lDevice {
         Ok(self.stream.lock().unwrap().is_some())
     }
 
-    fn start_grabbing(&mut self) -> DeviceResult {
+    fn start_grabbing(&self) -> DeviceResult {
         if self.stream.lock().unwrap().is_some() { // TODO also check thread, maybe wait if necessary (only one none)?
             return Ok(());
         }
@@ -205,7 +205,7 @@ impl CameraDevice for V4lDevice {
 
         Ok(())
     }
-    fn stop_grabbing(&mut self) -> DeviceResult {
+    fn stop_grabbing(&self) -> DeviceResult {
         self.stream.lock().unwrap().take();
         if let Some(j) = self.thread.lock().unwrap().take() {
             j.join().unwrap();
@@ -213,17 +213,17 @@ impl CameraDevice for V4lDevice {
         Ok(())
     }
 
-    fn grab(&mut self) -> DeviceResult<()> {
+    fn grab(&self) -> DeviceResult<()> {
         // TODO
         Ok(())
     }
 
-    fn flush(&mut self) -> DeviceResult {
+    fn flush(&self) -> DeviceResult {
         // TODO
         Ok(())
     }
 
-    fn set_stream_callback(&mut self, f: Box<dyn Fn(StreamEvent) + Send + Sync>) -> DeviceResult {
+    fn set_stream_callback(&self, f: Box<dyn Fn(StreamEvent) + Send + Sync>) -> DeviceResult {
         *self.callback.lock().unwrap() = f;
         Ok(())
     }

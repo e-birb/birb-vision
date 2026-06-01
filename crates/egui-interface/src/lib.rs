@@ -170,8 +170,8 @@ impl CameraControl {
                     })
                 }).unwrap();
 
-                let mut properties = Properties::parse(&mut *camera);
-                properties.update_all_nodes(&mut *camera);
+                let mut properties = Properties::parse(&*camera);
+                properties.update_all_nodes(&*camera);
 
                 state.on_state_mut(|state| {
                     let re = state.filter_re();
@@ -200,14 +200,14 @@ impl CameraControl {
                             state.on_state_mut(|state| {
                                 for updated in state.updated.drain() {
                                     //println!("Updating node: {:?}", updated);
-                                    state.props.as_mut().unwrap().update_node(&mut *camera, &updated);
+                                    state.props.as_mut().unwrap().update_node(&*camera, &updated);
                                 }
                             });
                         },
                         Command::Write => {
                             if state.on_state_mut(|state| {
                                 let props = state.props.as_mut().unwrap();
-                                props.write_all_nodes(&mut *camera);
+                                props.write_all_nodes(&*camera);
                             }).is_none() {
                                 break;
                             }
@@ -426,7 +426,7 @@ struct Properties {
 }
 
 impl Properties {
-    fn parse(camera: &mut dyn CameraDevice) -> Self {
+    fn parse(camera: &dyn CameraDevice) -> Self {
         let mut leafs: HashMap<NodeId, (Node, Property)> = HashMap::new();
         let nodes = camera.all_properties().unwrap();
         for node in nodes {
@@ -439,7 +439,7 @@ impl Properties {
         }
     }
 
-    fn handle_node(node: &Node, camera: &dyn CameraDevice) -> Property {
+    fn handle_node(node: &Node, _camera: &dyn CameraDevice) -> Property {
         match &node {
             Node::Group(g) => {
                 let mut group = Group {
@@ -537,7 +537,7 @@ impl Properties {
         }
     }
 
-    pub fn update_node(&mut self, camera: &mut dyn CameraDevice, id: &NodeId) {
+    pub fn update_node(&mut self, camera: &dyn CameraDevice, id: &NodeId) {
         let Some((node, property)) = self.leafs.get_mut(id) else {
             log::error!("Node not found: {id:?}");
             return;
@@ -640,13 +640,13 @@ impl Properties {
         }
     }
 
-    pub fn update_all_nodes(&mut self, camera: &mut dyn CameraDevice) {
+    pub fn update_all_nodes(&mut self, camera: &dyn CameraDevice) {
         for id in self.leafs.keys().cloned().collect::<Vec<_>>() {
             self.update_node(camera, &id);
         }
     }
 
-    pub fn write_node(&mut self, camera: &mut dyn CameraDevice, id: &NodeId, force: bool)-> bool {
+    pub fn write_node(&mut self, camera: &dyn CameraDevice, id: &NodeId, force: bool)-> bool {
         let Some((node, property)) = self.leafs.get_mut(id) else {
             log::error!("Node not found: {id:?}");
             return false;
@@ -725,7 +725,7 @@ impl Properties {
         true
     }
 
-    fn write_all_nodes(&mut self, camera: &mut dyn CameraDevice){
+    fn write_all_nodes(&mut self, camera: &dyn CameraDevice){
         for id in self.leafs.keys().cloned().collect::<Vec<_>>() {
             if self.write_node(camera, &id, false) {
                 self.update_node(camera, &id);

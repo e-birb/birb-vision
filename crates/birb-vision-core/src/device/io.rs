@@ -3,13 +3,13 @@ use crate::DeviceResult;
 
 pub trait DeviceIO {
     unsafe fn read_register<'a>(
-        &'a mut self,
+        &'a self,
         address: u64,
         buffer: &'a mut [u8],
     ) -> DeviceResult;
 
     unsafe fn write_register<'a>(
-        &'a mut self,
+        &'a self,
         address: u64,
         buffer: &'a [u8],
     ) -> DeviceResult;
