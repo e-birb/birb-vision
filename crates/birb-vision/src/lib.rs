@@ -4,6 +4,7 @@ mod backend;
 
 pub use backend::*;
 
+#[allow(unused_mut)]
 pub fn all_backends() -> BackendRegistry {
     let mut set = BackendRegistry::new();
 
