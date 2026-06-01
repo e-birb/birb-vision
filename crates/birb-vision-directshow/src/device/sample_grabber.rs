@@ -16,13 +16,6 @@
 use windows::Win32::Foundation::BOOL;
 use windows_core::*;
 
-// SAFETY: COM interface pointers are reference-counted and safe to send/access
-// across threads under the COM apartment model when the underlying COM object supports it.
-// DirectShow filters are free-threaded.
-unsafe impl Send for ISampleGrabber {}
-unsafe impl Sync for ISampleGrabber {}
-unsafe impl Send for ISampleGrabberCB {}
-unsafe impl Sync for ISampleGrabberCB {}
 
 // IID_ISampleGrabber: {6B652FFF-11FE-4fce-92AD-0266B5D7C78F}
 const IID_ISampleGrabber: GUID = GUID::from_u128(0x6B652FFF_11FE_4fce_92AD_0266B5D7C78F);
