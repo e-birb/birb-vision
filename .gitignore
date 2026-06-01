@@ -11,3 +11,6 @@ target/
 *.ttf
 /tmp/
 /tmp*
+
+
+Cargo.lock
