@@ -6,6 +6,6 @@ fn main() {
         use uvc::Context;
         let ctx = Context::new().expect("Could not create context");
 
-        let devices = ctx.devices();
+        let _devices = ctx.devices();
     }
 }

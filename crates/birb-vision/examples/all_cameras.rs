@@ -1,4 +1,4 @@
-use std::{io::Write, sync::{Arc, atomic::{AtomicU32, AtomicUsize}}, time::Duration};
+use std::{io::Write, sync::{Arc, atomic::AtomicU32}, time::Duration};
 
 use birb_vision::all_backends;
 use birb_vision_core::{CameraDeviceEx, StreamEvent};

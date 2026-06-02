@@ -175,7 +175,7 @@ impl VisionContext for iCubeContext {
         self.init_device_list(|device_indices| {
             let mut devices = vec![];
             for device_index in device_indices {
-                let mut device = device_index.open()?;
+                let device = device_index.open()?;
                 devices.push(device.get_device_info()?);
             }
             Ok(devices)

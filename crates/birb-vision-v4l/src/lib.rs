@@ -177,7 +177,7 @@ impl CameraDevice for V4lDevice {
             let format = self.current_format.clone();
             move || while let Some(stream) = stream.upgrade() {
                 let mut stream = stream.lock().unwrap();
-                let Ok((data, meta)) = stream.next() else {
+                let Ok((data, _meta)) = stream.next() else {
                     break;
                 };
                 let format = format.lock().unwrap().clone();

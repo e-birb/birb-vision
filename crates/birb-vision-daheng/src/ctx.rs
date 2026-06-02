@@ -64,7 +64,7 @@ impl Ctx {
                     buffer.as_ptr() as *const INFO,
                     count,
                 ) };
-                info_list.iter().map(|info| (DeviceInfo::V1(info.clone()))).collect()
+                info_list.iter().map(|info| DeviceInfo::V1(info.clone())).collect()
             },
             SDK::V2(_) => {
                 use daheng_sys::v2::GX_DEVICE_BASE_INFO as INFO;
@@ -76,7 +76,7 @@ impl Ctx {
                     buffer.as_ptr() as *const INFO,
                     count,
                 ) };
-                info_list.iter().map(|info| (DeviceInfo::V2(info.clone()))).collect()
+                info_list.iter().map(|info| DeviceInfo::V2(info.clone())).collect()
             },
         };
         Ok(devices)

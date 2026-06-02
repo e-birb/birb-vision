@@ -6,7 +6,7 @@ pub fn decode_mv_image(width: u32, height: u32, data: &[u8], pixel_type: c_int) 
     match pixel_type {
         mvs_sys::MvGvspPixelType_PixelType_Gvsp_Undefined => todo!(),
         mvs_sys::MvGvspPixelType_PixelType_Gvsp_Mono1p => {
-            let data = data
+            let _data = data
                 .iter()
                 .map(|byte| (0..8).map(move |bit| ((byte >> bit) &1) << 7).map(|p| p as u8))// TODO not <<7! this way it never reaches 255!
                 .flatten()
