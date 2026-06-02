@@ -121,3 +121,191 @@ pub struct AM_MEDIA_TYPE {
     pub cbFormat: u32,
     pub pbFormat: *mut u8,
 }
+
+// ─── ISampleGrabberCB implementation ─────────────────────────────────────
+//
+// Instead of polling ISampleGrabber::GetCurrentBuffer from a background
+// thread (which requires cross-apartment COM marshaling that ISampleGrabber
+// does not support), we implement ISampleGrabberCB here and register it
+// via SetCallback.  BufferCB is called directly on the DirectShow streaming
+// thread, so no marshaling is needed.
+
+use std::borrow::Cow;
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::{Arc, Mutex};
+
+use birb_vision_core::{
+    FlatSample, FlatSampleLayout, ImageSampleBuffer, PixelFormat, Sample, SampleType, StreamEvent,
+};
+
+/// A COM object implementing [`ISampleGrabberCB`] (via `BufferCB`).
+///
+/// # Safety / COM rules
+///
+/// The vtable pointer is the first field (`#[repr(C)]`), which is the
+/// standard COM object layout.  The sample grabber calls `AddRef` when
+/// the callback is set, and `Release` when the callback is cleared or the
+/// filter is destroyed.  The `BufferCB` method is invoked on the DirectShow
+/// streaming thread — we must NOT block for long.
+#[repr(C)]
+pub(crate) struct SampleGrabberCB {
+    vtable: &'static ISampleGrabberCB_Vtbl,
+    ref_count: AtomicU32,
+    inner: SampleGrabberCBInner,
+}
+
+struct SampleGrabberCBInner {
+    callback: Arc<Mutex<Box<dyn Fn(StreamEvent) + Send + Sync>>>,
+    width: u32,
+    height: u32,
+}
+
+impl SampleGrabberCB {
+    /// Allocate a new `SampleGrabberCB` and return a raw COM pointer to it.
+    ///
+    /// The returned pointer has a reference count of 1.  The caller (typically
+    /// the sample grabber's `SetCallback`) should take ownership through the
+    /// normal COM `AddRef` / `Release` discipline.
+    pub(crate) fn new_raw(
+        callback: Arc<Mutex<Box<dyn Fn(StreamEvent) + Send + Sync>>>,
+        width: u32,
+        height: u32,
+    ) -> *mut Self {
+        let obj = Box::into_raw(Box::new(Self {
+            vtable: &VTBL,
+            ref_count: AtomicU32::new(1),
+            inner: SampleGrabberCBInner {
+                callback,
+                width,
+                height,
+            },
+        }));
+        obj
+    }
+}
+
+// SAFETY: The vtable functions are safe to call from any thread as long as
+// the underlying data (callback Arc/Mutex) is thread-safe, which it is.
+unsafe impl Send for SampleGrabberCB {}
+unsafe impl Sync for SampleGrabberCB {}
+
+// ── VTable ────────────────────────────────────────────────────────────────
+
+static VTBL: ISampleGrabberCB_Vtbl = ISampleGrabberCB_Vtbl {
+    base__: IUnknown_Vtbl {
+        QueryInterface: cb_query_interface,
+        AddRef: cb_add_ref,
+        Release: cb_release,
+    },
+    SampleCB: cb_sample_cb,
+    BufferCB: cb_buffer_cb,
+};
+
+// IID_IUnknown: {00000000-0000-0000-C000-000000000046}
+const IID_IUnknown: GUID = GUID::from_u128(0x00000000_0000_0000_C000_000000000046);
+
+// ── IUnknown methods ──────────────────────────────────────────────────────
+
+unsafe extern "system" fn cb_query_interface(
+    this: *mut std::ffi::c_void,
+    iid: *const GUID,
+    interface: *mut *mut std::ffi::c_void,
+) -> HRESULT {
+    if iid.is_null() || interface.is_null() {
+        return HRESULT(0x80070057u32 as i32); // E_INVALIDARG
+    }
+
+    let guid = unsafe { &*iid };
+
+    if *guid == IID_IUnknown || *guid == IID_ISampleGrabberCB {
+        // AddRef before returning the interface
+        unsafe {
+            cb_add_ref(this);
+        }
+        unsafe {
+            *interface = this;
+        }
+        HRESULT(0) // S_OK
+    } else {
+        unsafe {
+            *interface = std::ptr::null_mut();
+        }
+        HRESULT(0x80004002u32 as i32) // E_NOINTERFACE
+    }
+}
+
+unsafe extern "system" fn cb_add_ref(this: *mut std::ffi::c_void) -> u32 {
+    let obj = unsafe { &*(this as *const SampleGrabberCB) };
+    obj.ref_count.fetch_add(1, Ordering::SeqCst) + 1
+}
+
+unsafe extern "system" fn cb_release(this: *mut std::ffi::c_void) -> u32 {
+    let obj = unsafe { &*(this as *const SampleGrabberCB) };
+    let remaining = obj.ref_count.fetch_sub(1, Ordering::SeqCst) - 1;
+    if remaining == 0 {
+        // Reconstruct the box and drop it
+        unsafe {
+            let _ = Box::from_raw(this as *mut SampleGrabberCB);
+        }
+    }
+    remaining
+}
+
+// ── ISampleGrabberCB methods ──────────────────────────────────────────────
+
+/// `SampleCB( SampleTime, IMediaSample *pSample )`
+///
+/// We only implement `BufferCB`; this just returns S_OK.
+unsafe extern "system" fn cb_sample_cb(
+    _this: *mut std::ffi::c_void,
+    _sample_time: f64,
+    _p_sample: *mut std::ffi::c_void,
+) -> HRESULT {
+    HRESULT(0) // S_OK — not used
+}
+
+/// `BufferCB( double SampleTime, BYTE *pBuffer, long BufferLen )`
+///
+/// Called by the DirectShow streaming thread for every frame.  We copy the
+/// buffer, build a `FlatSample`, and forward it to the Rust callback.
+unsafe extern "system" fn cb_buffer_cb(
+    this: *mut std::ffi::c_void,
+    _sample_time: f64,
+    p_buffer: *mut u8,
+    buffer_len: i32,
+) -> HRESULT {
+    if this.is_null() {
+        return HRESULT(0x80070057u32 as i32); // E_INVALIDARG
+    }
+
+    let obj = unsafe { &*(this as *const SampleGrabberCB) };
+
+    if buffer_len <= 0 || p_buffer.is_null() {
+        return HRESULT(0); // S_OK — skip empty frame
+    }
+
+    // Copy the buffer (the pointer is only valid during this callback)
+    let data = unsafe {
+        std::slice::from_raw_parts(p_buffer, buffer_len as usize)
+    };
+    let owned = data.to_vec();
+
+    let sample = FlatSample {
+        buffer: ImageSampleBuffer::Cow(Cow::Owned(owned)),
+        layout: FlatSampleLayout {
+            offset: 0,
+            sample_type: SampleType::Plain(PixelFormat::BGR8Packed),
+            width: obj.inner.width,
+            height: obj.inner.height,
+            row_major: true,
+            stride: (obj.inner.width as i32 * 3),
+        },
+    };
+
+    // Forward to the Rust callback.
+    if let Ok(cb) = obj.inner.callback.try_lock() {
+        cb(StreamEvent::Sample(Ok(Sample::ImageSample(sample))));
+    }
+
+    HRESULT(0) // S_OK
+}
