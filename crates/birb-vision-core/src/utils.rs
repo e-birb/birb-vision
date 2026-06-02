@@ -15,7 +15,10 @@ pub fn try_no_panic(f: impl FnOnce() + UnwindSafe) {
         };
 
         if let Err(_) = catch_unwind(move || {
+            #[cfg(feature = "log")]
             log::error!("MVS callback panicked, callbacks shall never panic as exception cannot propagate in this context: {}", error);
+            #[cfg(not(feature = "log"))]
+            let _ = error;
             //drop(e);
         }) {
             eprintln!("MVS callback panicked, callbacks shall never panic as exception cannot propagate in this context. -- Also failed to log or dropping the error! APP STATE MIGHT BE INVALID!");

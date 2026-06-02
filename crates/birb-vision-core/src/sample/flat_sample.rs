@@ -1,9 +1,19 @@
+#[cfg(feature = "conversion")]
 use std::borrow::Cow;
 
-use image::{DynamicImage, Luma, RgbImage};
-use log_once::warn_once;
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "conversion")]
+use image::{DynamicImage, Luma, RgbImage};
+#[cfg(all(feature = "conversion", feature = "log"))]
+use log_once::warn_once;
+
+#[cfg(all(feature = "conversion", not(feature = "log")))]
+macro_rules! warn_once {
+    ($($arg:tt)*) => {};
+}
+
+#[cfg(feature = "conversion")]
 use crate::decoders::{self, yuyv422_to_rgb};
 
 use super::{FourCC, PixelFormat};
@@ -26,6 +36,7 @@ impl<Buffer> std::fmt::Debug for FlatSample<Buffer> {
 impl<Buffer> FlatSample<Buffer> {
 }
 
+#[cfg(feature = "conversion")]
 impl FlatSample<()> {
     /// Tries to decode the sample into a DynamicImage
     ///

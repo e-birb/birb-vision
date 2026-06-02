@@ -1,5 +1,4 @@
 
-use clap::ValueEnum;
 use enum_as_inner::EnumAsInner;
 use serde::{Deserialize, Serialize};
 
@@ -91,7 +90,7 @@ pub trait CameraDevice: Send + Sync {
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[derive(EnumAsInner)]
 #[derive(Serialize, Deserialize)]
-#[derive(ValueEnum)]
+#[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
 pub enum DeviceAccessMode {
 
     /// Exclusive access to the device

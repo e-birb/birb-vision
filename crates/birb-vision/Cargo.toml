@@ -11,12 +11,16 @@ birb-vision-icube = { version = "0.1.0", path = "../birb-vision-icube", optional
 birb-vision-daheng = { version = "0.1.0", path = "../birb-vision-daheng", optional = true }
 birb-vision-media-foundation = { version = "0.1.0", path = "../birb-vision-media-foundation", optional = true }
 birb-vision-directshow = { version = "0.1.0", path = "../birb-vision-directshow", optional = true }
-colored = "2.1.0"
-serde = "1.0.215"
-anyhow = "1.0.91"
+colored = "2.1"
+serde = "1"
+anyhow = "1"
 
 [features]
-#default = ["mvs", "v4l"]
+default = ["conversion"]
+log = ["birb-vision-core/log"]
+conversion = ["birb-vision-core/conversion"]
+timeout = ["birb-vision-core/timeout"]
+clap = ["birb-vision-core/clap"]
 mvs = ["dep:birb-vision-mvs"]
 v4l = ["dep:birb-vision-v4l"]
 icube = ["dep:birb-vision-icube"]
@@ -25,4 +29,4 @@ directshow = ["dep:birb-vision-directshow"]
 daheng = ["dep:birb-vision-daheng"]
 
 [dev-dependencies]
-pollster = "0.4.0"
+pollster = "0.4"

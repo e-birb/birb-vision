@@ -1,4 +1,6 @@
+#[cfg(feature = "conversion")]
 pub use image;
+#[cfg(feature = "conversion")]
 pub mod decoders;
 pub mod channels;
 mod device;

@@ -1,6 +1,8 @@
 use std::{borrow::Cow, fmt::Debug, sync::Arc};
 
 use enum_as_inner::EnumAsInner;
+
+#[cfg(feature = "conversion")]
 use image::DynamicImage;
 
 mod pixel_format;
@@ -51,6 +53,9 @@ impl<'a> Sample<'a> {
     ///
     /// # Returns
     /// - Err(Sample) if the sample is not decodable
+    ///
+    /// Only available with the `conversion` feature enabled.
+    #[cfg(feature = "conversion")]
     pub fn try_decode(self) -> Result<Result<DynamicImage, anyhow::Error>, Self> {
         let Sample::ImageSample(flat_sample) = self;
 
