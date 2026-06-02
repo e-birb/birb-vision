@@ -20,8 +20,6 @@ use windows::Win32::Media::DirectShow::{
 use windows::Win32::System::Com::{
     CoCreateInstance, CLSCTX_INPROC_SERVER,
 };
-use windows::Win32::System::Com::Marshal::CoMarshalInterThreadInterfaceInStream;
-use windows::Win32::System::Com::StructuredStorage::CoGetInterfaceAndReleaseStream;
 use windows_core::Interface;
 
 mod control;
@@ -30,7 +28,8 @@ mod sample_grabber;
 pub use control::DSControl;
 use sample_grabber::{
     CLSID_FilterGraph, CLSID_NullRenderer, CLSID_SampleGrabber,
-    ISampleGrabber, AM_MEDIA_TYPE, MEDIASUBTYPE_RGB24, MEDIATYPE_Video,
+    ISampleGrabber, ISampleGrabberCB, SampleGrabberCB, AM_MEDIA_TYPE,
+    MEDIASUBTYPE_RGB24, MEDIATYPE_Video,
 };
 
 use crate::*;
@@ -84,11 +83,18 @@ pub struct DirectShowDevice {
     callback: Arc<Mutex<Box<dyn Fn(StreamEvent) + Send + Sync>>>,
     /// Graph state, initialised lazily on first start_grabbing / grab call.
     graph_state: Mutex<Option<GraphState>>,
-    /// Signal the polling thread to stop.
-    stop_signal: Arc<AtomicBool>,
-    /// Handle of the background frame-polling thread.
-    poll_thread: Mutex<Option<std::thread::JoinHandle<()>>>,
+    /// Whether the graph is currently in streaming mode (start_grabbing was called).
+    streaming: AtomicBool,
+    /// Raw pointer to the ISampleGrabberCB COM object (kept alive while streaming).
+    cb_cookie: Mutex<Option<std::boxed::Box<SampleGrabberCB>>>,
 }
+
+// SAFETY: COM interface pointers (IUnknown, ISampleGrabber, etc.) are
+// `NonNull<c_void>` under the hood and are not automatically Send/Sync.
+// DirectShow filters are free-threaded COM objects, so they can safely
+// be accessed from any thread after proper COM initialization.
+unsafe impl Send for DirectShowDevice {}
+unsafe impl Sync for DirectShowDevice {}
 
 /// Runtime state held while the filter graph is built and running.
 struct GraphState {
@@ -100,137 +106,9 @@ struct GraphState {
     height: u32,
 }
 
-/// Marshaled stream pointer that can be safely sent across threads.
-///
-/// `CoMarshalInterThreadInterfaceInStream` creates a stream object that
-/// contains marshaled COM interface data, specifically designed to cross
-/// apartment boundaries. The underlying stream is a COM object that supports
-/// being marshaled itself, so the pointer can be safely sent to another thread.
-struct MarshalStream(*mut std::ffi::c_void);
-
-// SAFETY: The IStream returned by CoMarshalInterThreadInterfaceInStream is
-// specifically designed to be passed to another thread for unmarshaling.
-unsafe impl Send for MarshalStream {}
-
-/// Helper sent to the background polling thread.
-///
-/// Holds marshaled COM interface data (`ISampleGrabber`, `IMediaEventEx`)
-/// that are unmarshaled inside `run()` after COM is initialized on this thread.
-/// This follows proper COM apartment rules: interface pointers are never
-/// passed across apartments without marshaling.
-struct GraphPoller {
-    sg_stream: MarshalStream,
-    mev_stream: MarshalStream,
-    callback: Arc<Mutex<Box<dyn Fn(StreamEvent) + Send + Sync>>>,
-    stop_signal: Arc<AtomicBool>,
-    width: u32,
-    height: u32,
-}
-
-// SAFETY: MarshalStream wraps an IStream from CoMarshalInterThreadInterfaceInStream
-// which is specifically designed to be sent across thread boundaries for unmarshaling.
-unsafe impl Send for GraphPoller {}
-
-impl GraphPoller {
-    fn run(self) {
-        // Initialise COM on this thread (required before unmarshaling).
-        let com_init = unsafe {
-            windows::Win32::System::Com::CoInitializeEx(
-                None,
-                windows::Win32::System::Com::COINIT_APARTMENTTHREADED
-                    | windows::Win32::System::Com::COINIT_DISABLE_OLE1DDE,
-            )
-        };
-
-        if let Err(e) = com_init.ok() {
-            log::error!("GraphPoller: CoInitializeEx failed: {e}");
-            return;
-        }
-        let com_ok = true;
-        // Unmarshal COM interfaces from the marshaled streams.
-        // CoGetInterfaceAndReleaseStream unmarshals the interface and then
-        // releases the stream. We transmute the raw pointer back to an IStream
-        // by value (the struct is `#[repr(transparent)]` over the pointer) and
-        // then forget it after the call to avoid a double-free.
-        //
-        // SAFETY: sg_stream/mev_stream were created by CoMarshalInterThreadInterfaceInStream
-        // on the original STA thread and are valid marshaled IStream pointers.
-        let sg = unsafe {
-            let stream: windows::Win32::System::Com::IStream =
-                std::mem::transmute(self.sg_stream.0);
-            let result = CoGetInterfaceAndReleaseStream::<_, ISampleGrabber>(&stream);
-            std::mem::forget(stream);
-            result
-        };
-        let mev = unsafe {
-            let stream: windows::Win32::System::Com::IStream =
-                std::mem::transmute(self.mev_stream.0);
-            let result = CoGetInterfaceAndReleaseStream::<_, IMediaEventEx>(&stream);
-            std::mem::forget(stream);
-            result
-        };
-
-        let (sg, mev) = match (sg, mev) {
-            (Ok(sg), Ok(mev)) => (sg, mev),
-            _ => {
-                log::error!("GraphPoller: failed to unmarshal COM interfaces");
-                if com_ok {
-                    unsafe { windows::Win32::System::Com::CoUninitialize() };
-                }
-                return;
-            }
-        };
-
-        while !self.stop_signal.load(Ordering::SeqCst) {
-            // Wait for an event from the graph (timeout 66 ms ≈ 15 fps)
-            let mut ev_code = 0;
-            let mut ev_param1 = 0;
-            let mut ev_param2 = 0;
-            let hr = unsafe {
-                mev.GetEvent(&mut ev_code, &mut ev_param1, &mut ev_param2, 66)
-            };
-            if hr.is_ok() {
-                let _ = unsafe { mev.FreeEventParams(ev_code, ev_param1, ev_param2) };
-            }
-
-            // Check whether a new frame arrived
-            let mut size = 0;
-            let hr = unsafe { sg.GetCurrentBuffer(&mut size, std::ptr::null_mut()) };
-            if hr.is_err() || size == 0 {
-                continue;
-            }
-
-            // Allocate and read the buffer
-            let mut buf: Vec<u8> = vec![0u8; size as usize];
-            let hr = unsafe { sg.GetCurrentBuffer(&mut size, buf.as_mut_ptr() as *mut i32) };
-            if hr.is_err() {
-                continue;
-            }
-            buf.truncate(size as usize);
-
-            let sample = build_flat_sample(buf, self.width, self.height);
-
-            if let Ok(cb) = self.callback.lock() {
-                cb(StreamEvent::Sample(Ok(Sample::ImageSample(sample))));
-            } else {
-                // Mutex poisoned — the callback panicked, nothing more we can do
-                break;
-            }
-        }
-
-        if com_ok {
-            unsafe { windows::Win32::System::Com::CoUninitialize() };
-        }
-    }
-}
-
-// COM interfaces are reference-counted pointers; they are thread-safe under the COM apartment model.
-unsafe impl Send for DirectShowDevice {}
-unsafe impl Sync for DirectShowDevice {}
-
 impl Drop for DirectShowDevice {
     fn drop(&mut self) {
-        // Best-effort cleanup to avoid leaking the polling thread / holding the device open.
+        // Best-effort cleanup: stop the graph and release COM references.
         let _ = <Self as CameraDevice>::stop_grabbing(self);
     }
 }
@@ -267,8 +145,8 @@ impl DirectShowDevice {
             properties,
             callback: Arc::new(Mutex::new(Box::new(|_| {}))),
             graph_state: Mutex::new(None),
-            stop_signal: Arc::new(AtomicBool::new(false)),
-            poll_thread: Mutex::new(None),
+            streaming: AtomicBool::new(false),
+            cb_cookie: Mutex::new(None),
         })
     }
 
@@ -650,12 +528,8 @@ impl CameraDevice for DirectShowDevice {
     }
 
     fn start_grabbing(&self) -> DeviceResult {
-        // Stop any previous polling thread before building a new graph
-        self.stop_signal.store(true, Ordering::SeqCst);
-        if let Some(handle) = self.poll_thread.lock().map_err(|e| anyhow!("{e}"))?.take() {
-            let _ = handle.join();
-        }
-        self.stop_signal.store(false, Ordering::SeqCst);
+        // Ensure any previous streaming session is fully cleaned up
+        <Self as CameraDevice>::stop_grabbing(self)?;
 
         // Build (or reuse) the filter graph
         let mut gs_opt = self
@@ -668,73 +542,53 @@ impl CameraDevice for DirectShowDevice {
             gs.sample_grabber
                 .SetOneShot(false)
                 .map_err(|e| anyhow!("SetOneShot(false) failed: {e}"))?;
+        }
+
+        // Register the ISampleGrabberCB callback so frames are delivered
+        // directly on the DirectShow streaming thread — no marshaling needed.
+        let cb_ptr = SampleGrabberCB::new_raw(
+            self.callback.clone(),
+            gs.width,
+            gs.height,
+        );
+
+        // Keep the box alive so the COM object isn't dropped while the
+        // sample grabber holds a reference to it.
+        let cb_box = unsafe { Box::from_raw(cb_ptr) };
+
+        // Get a raw ISampleGrabberCB pointer for SetCallback.
+        let cb_interface: &ISampleGrabberCB = unsafe { &*(cb_ptr as *const ISampleGrabberCB) };
+
+        unsafe {
+            gs.sample_grabber
+                .SetCallback(Some(cb_interface), 1) // 1 = BufferCB method
+                .map_err(|e| anyhow!("SetCallback failed: {e}"))?;
+
             gs.media_control
                 .Run()
                 .map_err(|e| anyhow!("Failed to start filter graph: {e}"))?;
         }
 
-        // Spawn a background thread that polls for new frames.
-        //
-        // COM interface pointers cannot be sent across apartment boundaries
-        // directly. We marshal them via CoMarshalInterThreadInterfaceInStream,
-        // which produces an IStream containing marshaled data that the other
-        // thread can unmarshal after initializing COM on that thread.
-        let callback = self.callback.clone();
-        let stop_signal = self.stop_signal.clone();
-
-        let sg_stream = unsafe {
-            // Cast to IUnknown first to satisfy Param<IUnknown> bounds.
-            let unknown: windows_core::IUnknown = gs.sample_grabber.cast()
-                .map_err(|e| anyhow!("Failed to cast ISampleGrabber to IUnknown: {e}"))?;
-            let stream = CoMarshalInterThreadInterfaceInStream(
-                &ISampleGrabber::IID,
-                &unknown,
-            )
-            .map_err(|e| anyhow!("Failed to marshal ISampleGrabber: {e}"))?;
-            // Extract the raw pointer so we can send it across threads.
-            // CoMarshalInterThreadInterfaceInStream returns a stream with refcount 1;
-            // CoGetInterfaceAndReleaseStream on the other side will release it.
-            let ptr = std::mem::transmute::<windows::Win32::System::Com::IStream, *mut std::ffi::c_void>(stream);
-            MarshalStream(ptr)
-        };
-        let mev_stream = unsafe {
-            let stream = CoMarshalInterThreadInterfaceInStream(
-                &IMediaEventEx::IID,
-                &gs.media_event,
-            )
-            .map_err(|e| anyhow!("Failed to marshal IMediaEventEx: {e}"))?;
-            let ptr = std::mem::transmute::<windows::Win32::System::Com::IStream, *mut std::ffi::c_void>(stream);
-            MarshalStream(ptr)
-        };
-
-        let poller = GraphPoller {
-            sg_stream,
-            mev_stream,
-            callback,
-            stop_signal,
-            width: gs.width,
-            height: gs.height,
-        };
-
-        let handle = std::thread::Builder::new()
-            .name("ds-poll".into())
-            .spawn(move || {
-                poller.run();
-            })
-            .map_err(|e| anyhow!("Failed to spawn polling thread: {e}"))?;
-
-        *self.poll_thread.lock().map_err(|e| anyhow!("{e}"))? = Some(handle);
+        *self.cb_cookie.lock().map_err(|e| anyhow!("{e}"))? = Some(cb_box);
+        self.streaming.store(true, Ordering::SeqCst);
 
         Ok(())
     }
 
     fn stop_grabbing(&self) -> DeviceResult {
-        // Signal the polling thread to stop
-        self.stop_signal.store(true, Ordering::SeqCst);
-        if let Some(handle) = self.poll_thread.lock().map_err(|e| anyhow!("{e}"))?.take() {
-            let _ = handle.join();
+        // Clear the streaming flag
+        self.streaming.store(false, Ordering::SeqCst);
+
+        // Remove the callback from the sample grabber (the sample grabber
+        // will Release the callback COM object).
+        if let Some(ref gs) = *self.graph_state.lock().map_err(|e| anyhow!("{e}"))? {
+            unsafe {
+                let _ = gs.sample_grabber.SetCallback(None, 1);
+            }
         }
-        self.stop_signal.store(false, Ordering::SeqCst);
+
+        // Drop our reference to the callback COM object
+        *self.cb_cookie.lock().map_err(|e| anyhow!("{e}"))? = None;
 
         // Stop the filter graph and tear it down so the next start_grabbing
         // creates a fresh graph.
@@ -754,12 +608,9 @@ impl CameraDevice for DirectShowDevice {
             .map_err(|e| anyhow!("{e}"))?;
         let gs = gs_opt.as_mut().ok_or_else(|| anyhow!("Graph state is None after ensure_graph"))?;
 
-        // If a polling thread is already running (continuous streaming), just
-        // read the latest buffered frame — don't touch SetOneShot.
-        let is_streaming = self.poll_thread.lock().map_err(|e| anyhow!("{e}"))?.is_some();
-
-        if is_streaming {
-            // Read the current buffer without changing one-shot mode
+        // If streaming was started via start_grabbing(), just read the latest
+        // buffered frame without changing one-shot mode.
+        if self.streaming.load(Ordering::SeqCst) {
             let mut size = 0;
             unsafe {
                 gs.sample_grabber
