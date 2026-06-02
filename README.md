@@ -1,4 +1,4 @@
-# birb-vision
+# birb-vision [![Rust](https://github.com/e-birb/birb-vision/actions/workflows/rust.yml/badge.svg)](https://github.com/e-birb/birb-vision/actions/workflows/rust.yml)
 
 <div align="center">
   <h3>A unified Rust interface for machine vision cameras</h3>
