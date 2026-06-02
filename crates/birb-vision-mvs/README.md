@@ -87,6 +87,8 @@ When a new version of this crate is released, the **major** version will match t
 
 > This is currently not an official Hikvision product, nor is it endorsed by Hikvision. I hope that they will approve this project and provide first party support for this crate in the future.
 
+> The Hikrobot MVS SDK is not redistributed by this crate. Users must install the official SDK separately and comply with its license terms. See the repository `THIRD_PARTY_NOTICES.md` for details about the generated `mvs-sys` bindings.
+
 > ⚠️**Warning**⚠️: Version `~4` of the MVS SDK [^1] is required, use `mvs-sys` directly for a more generic support.
 
 > ⚠️**Warning**⚠️: **DO NOT USE MULTIPLE VERSIONS OF THIS CRATE** in your binaries. Doing so might initialize and finalyze the MVS SDK multiple times, which may result in **unexpected behavior**. [`cargo tree`](https://doc.rust-lang.org/cargo/commands/cargo-tree.html) might turn useful for you.  

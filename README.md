@@ -122,3 +122,13 @@ cargo run --example all_cameras --features "directshow,media-foundation,mvs"
 ## Project Status
 
 birb-vision is in **active development**. The core trait design is **unstable**, most backends implement the full API surface.
+
+## License
+
+This repository is licensed under the Apache License, Version 2.0. See
+[`LICENSE`](./LICENSE).
+
+Some crates expose or include vendor SDK interface material for interoperability
+with industrial camera SDKs. Those SDKs are not redistributed here and must be
+installed separately. See [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md)
+for Hikrobot MVS and Daheng Galaxy SDK notes.
