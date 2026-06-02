@@ -1,7 +1,7 @@
-use std::{io::Write, time::Duration};
+use std::{io::Write, sync::{Arc, atomic::{AtomicU32, AtomicUsize}}, time::Duration};
 
 use birb_vision::all_backends;
-use birb_vision_core::CameraDeviceEx;
+use birb_vision_core::{CameraDeviceEx, StreamEvent};
 use colored::Colorize;
 
 
@@ -76,6 +76,20 @@ fn main() -> anyhow::Result<()> {
 
             sample.save(format!("frame-{}.png", count))?;
             println!("    Saved frame to frame-{}.png", count);
+
+            // let's try to use a callback instead of polling:
+            let count = Arc::new(AtomicU32::new(0));
+            device.set_stream_callback(Box::new({
+                let count = count.clone();
+                move |e| if let StreamEvent::Sample(_) = e {
+                    count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                }
+            }))?;
+            device.start_grabbing()?;
+            std::thread::sleep(Duration::from_secs(2));
+            device.stop_grabbing()?;
+            let count = count.load(std::sync::atomic::Ordering::SeqCst);
+            println!("    Stream callback received {} frames in 2 seconds", count);
         }
     }
 
