@@ -7,6 +7,9 @@
   </p>
 </div>
 
+> [!IMPORTANT]
+> This project is a work in progress. The core API is unstable, some backends are experimental or temporarily broken. It should not be treated as production-ready yet.
+
 `birb-vision` provides a single, coherent API to interact with a wide range of camera systems: from USB webcams to GigE Vision industrial cameras. It abstracts away vendor-specific SDKs behind a common trait-based interface, making it easy to write portable vision applications.
 
 ## Philosophy
