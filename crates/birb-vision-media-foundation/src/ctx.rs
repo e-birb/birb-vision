@@ -125,7 +125,8 @@ impl MediaFoundationContext {
 
         unsafe { MFEnumDeviceSources(&attributes, unused_mf_activate.as_mut_ptr(), &mut count) }?;
 
-        println!("Found {} devices", count);
+        // TODO remove or log
+        eprintln!("Found {} devices", count);
 
         let device_list = if count != 0 {
             unsafe {
